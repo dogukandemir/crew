@@ -239,19 +239,20 @@ function RoomDesks({
         const deskY = room.y + desk.y;
         return (
           <g key={desk.agentId}>
-            {/* The bay this desk sits in: a partition either side, which is what
-                makes one place end and the next begin. A room says "Engineering";
-                only these say whose spot is whose. */}
+            {/* The bay this desk sits in: ONE partition, at the desk's left, which
+                is what makes one place end and the next begin. Two per desk read as
+                a room full of panels — bays are a run, not a cage. */}
             <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
-            <Partition at={{ x: deskX + DESK_W + 14 - mh(1), y: deskY + mh(0.4) }} />
             <Workstation x={deskX} y={deskY} busy={busy} glow={mix('#7cc4ff', accent, 0.5)} />
           </g>
         );
       })}
-      {/* Corner dressing: every real office has a sad plant and a cabinet. */}
+      {/* Corner dressing: every real office has a sad plant and a cabinet. One of
+          each per room — the floor lamps that used to sit in every corner were
+          decoration with no job, and a floor of identical lamps is what made the
+          place feel crowded. */}
       <Plant x={room.x + room.w - ROOM_PAD - 14} y={room.y + room.h - 26} />
       {room.seats > 3 && <Cabinet x={room.x + ROOM_PAD} y={room.y + room.h - 40} />}
-      <FloorLamp x={room.x + ROOM_PAD + 10} y={room.y + ROOM_HEADER + 20} accent="#ffcf8f" />
       {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
     </g>
   );

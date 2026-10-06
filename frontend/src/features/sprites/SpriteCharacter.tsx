@@ -76,15 +76,16 @@ export function SpriteCharacter({
       // `walking` is a destination as much as a movement: an agent sent to the
       // review table keeps that activity after it arrives. Only real movement
       // plays the walk cycle, exactly as the rig did.
-      let facing: 'front' | 'side' = 'front';
+      //
+      // The walking figure is the FRONT view, mirrored for direction — the way the
+      // vector rig walked. The atlas's profile view carries the hair across two
+      // thirds of the head, and at this size that reads as a face with something
+      // over it, which is what it looked like on the floor.
       let pose: 'stand' | 'walkA' | 'walkB' | 'sit' = 'stand';
       if (atDesk) pose = 'sit';
-      else if (mov.moving) {
-        facing = 'side';
-        pose = Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB';
-      }
+      else if (mov.moving) pose = Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB';
 
-      const e = cell(facing, pose) ?? cell('front', 'stand');
+      const e = cell('front', pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
         // origin. `height` is how tall the figure should be there, and the same

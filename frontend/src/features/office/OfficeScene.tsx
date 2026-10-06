@@ -27,7 +27,7 @@ import {
 import type { FloorPulse } from '../../sim/rooms';
 import type { Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
-import { SPRITE_UNIT, scaleForWidth, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
+import { SPRITE_UNIT, spriteTiles, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import type { ReactNode } from 'react';
@@ -364,19 +364,30 @@ function roomItems(
     at(`${room.id}-board`, boardX, boardY, <Whiteboard key={`${room.id}-board`} x={boardX} y={boardY} w={74} h={38} />);
     at(`${room.id}-hood`, room.x + 18, hoodY, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 18} y={hoodY} />);
     at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} />);
-    at(`${room.id}-bench`, benchX, benchY, <AtlasSprite key={`${room.id}-bench`} name="prop.labbench" x={benchX} y={benchY} scale={scaleForWidth('prop.labbench', benchW)} />);
+    // TILED, not stretched. `scaleForWidth` scales both axes, so asking the 2 m bench
+    // to span this room drew a 1.7 m tall pale slab — the brightest object on the
+    // floor, in a dark office. Copies of the art stay a bench at every room width, and
+    // one tile per stool means the stools still line a bench rather than the floor.
+    const benchRun = spriteTiles('prop.labbench', benchW);
+    const benchLeft = benchX + benchRun.start;
+    for (let i = 0; i < benchRun.count; i += 1) {
+      const bx = benchLeft + i * benchRun.tile;
+      at(`${room.id}-bench-${i}`, bx, benchY, <AtlasSprite key={`${room.id}-bench-${i}`} name="prop.labbench" x={bx} y={benchY} />);
+    }
     // Gear stands ON the bench, which is what the anchor's `z` is for: the worktop's
     // height, at a point on the worktop. Drawn on the floor it was a microscope
-    // hovering at the cupboard doors.
-    at(`${room.id}-scope`, room.x + 44, benchY + mh(0.25), <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={room.x + 44} y={benchY + mh(0.25)} z={LAB_BENCH_TOP} />);
-    at(`${room.id}-centrifuge`, room.x + benchW - 20, benchY + mh(0.3), <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={room.x + benchW - 20} y={benchY + mh(0.3)} z={LAB_BENCH_TOP} />);
+    // hovering at the cupboard doors — and placed off the run it floats in the air.
+    const benchRight = benchLeft + benchRun.span;
+    at(`${room.id}-scope`, benchLeft + 44, benchY + mh(0.25), <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={benchLeft + 44} y={benchY + mh(0.25)} z={LAB_BENCH_TOP} />);
+    at(`${room.id}-centrifuge`, benchRight - 26, benchY + mh(0.3), <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={benchRight - 26} y={benchY + mh(0.3)} z={LAB_BENCH_TOP} />);
     // Stools on the bench's OPEN side, which is the room's interior: a stool pushed
     // back from the bench, not one inside it. A stool is drawn around its own centre,
     // so the seat comes back by half a stool before the art goes down.
     const stool = spriteCentreOffset('prop.stool');
     const stoolY = benchY - mh(0.35);
-    for (const dx of [110, 170, 230]) {
-      at(`${room.id}-stool-${dx}`, room.x + dx, stoolY, <AtlasSprite key={`${room.id}-stool-${dx}`} name="prop.stool" x={room.x + dx - stool.x} y={stoolY - stool.y} />);
+    for (let i = 0; i < benchRun.count; i += 1) {
+      const sx = benchLeft + i * benchRun.tile + benchRun.tile / 2;
+      at(`${room.id}-stool-${i}`, sx, stoolY, <AtlasSprite key={`${room.id}-stool-${i}`} name="prop.stool" x={sx - stool.x} y={stoolY - stool.y} />);
     }
   }
 

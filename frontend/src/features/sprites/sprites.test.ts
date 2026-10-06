@@ -16,6 +16,7 @@ import {
   hasSprite,
   lookIndex,
   scaleForWidth,
+  spriteTiles,
   spriteCentreOffset,
   spriteFootprint,
   spriteWidth,
@@ -170,6 +171,21 @@ describe('the sprite atlas', () => {
     // An unknown name is not a crash and not a substitution.
     expect(scaleForWidth('prop.nonexistent', 100)).toBe(1);
     expect(spriteCentreOffset('prop.nonexistent')).toEqual({ x: 0, y: 0 });
+  });
+
+  it('tiles a prop that has to be longer than its own art, instead of stretching it', () => {
+    // The lab bench is 2 m of art. Stretched to 4 m it is 1.7 m TALL — the pale slab
+    // the laboratory turned into; tiled it stays a bench at any room width.
+    const tile = spriteWidth('prop.labbench')!;
+    const run = spriteTiles('prop.labbench', tile * 2.3);
+    expect(run.count).toBe(3);
+    expect(run.tile).toBeCloseTo(tile, 6);
+    expect(run.span).toBeCloseTo(tile * 3, 6);
+    // Centred on the run it was asked for, so the overhang is symmetric.
+    expect(run.start).toBeCloseTo((tile * 2.3 - tile * 3) / 2, 6);
+    // A prop that fits is one tile and is NOT scaled by this path at all.
+    expect(spriteTiles('prop.labbench', tile).count).toBe(1);
+    expect(spriteTiles('prop.labbench', tile * 0.4).count).toBe(1);
   });
 });
 

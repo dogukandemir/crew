@@ -72,6 +72,21 @@ export function scaleForWidth(name: string, units: number): number {
  * becomes a hand-tuned offset that drifts the moment the art changes — which is how a
  * row of chairs ended up 20 cm clear of its own table.
  */
+/**
+ * How many copies of a sprite span `units`, and where the run starts.
+ *
+ * `scaleForWidth` scales BOTH axes, so a 2 m lab bench asked to span a 4 m room is
+ * drawn 1.7 m tall — a pale slab, and the brightest thing on the floor. Anything that
+ * has to be longer than its own art is tiled, not stretched; this is the arithmetic
+ * for that, so the caller cannot get it wrong by hand.
+ */
+export function spriteTiles(name: string, units: number): { count: number; start: number; span: number; tile: number } {
+  const tile = spriteWidth(name) ?? units;
+  const count = Math.max(1, Math.ceil(units / tile));
+  const span = count * tile;
+  return { count, start: (units - span) / 2, span, tile };
+}
+
 export function spriteFootprint(name: string): { a: number; b: number } | undefined {
   const e = entry(name);
   if (!e || e.a === undefined || e.b === undefined) return undefined;

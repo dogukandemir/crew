@@ -9,9 +9,11 @@
  * `image-rendering: pixelated` is not decoration — a browser smoothing a 24×40
  * sprite into a 30-pixel box is what turns pixel art into a blur.
  */
+import { useId } from 'react';
 import atlasUrl from './atlas.png';
 import { project } from '../office/iso';
 import { SPRITE_UNIT_X, SPRITE_UNIT_Y, entry } from './sprites';
+import { ATLAS } from './atlas.gen';
 
 export function Sprite({
   name,
@@ -33,6 +35,8 @@ export function Sprite({
   opacity?: number;
   className?: string;
 }) {
+  // Hooks first: an early return after a hook would change the hook order.
+  const rawId = useId();
   const e = entry(name);
   if (!e) return null;
 
@@ -44,23 +48,35 @@ export function Sprite({
   const w = e.w * SPRITE_UNIT_X;
   const h = e.h * SPRITE_UNIT_Y;
 
-  const image = (
-    <image
-      href={atlasUrl}
-      x={left}
-      y={top}
-      width={w}
-      height={h}
-      opacity={opacity}
-      preserveAspectRatio="none"
-      className={className}
-      style={{ imageRendering: 'pixelated' }}
-    />
+  // The SHEET, not the cell. An SVG <image> draws the whole file it is pointed at,
+  // so a cell is selected by scaling the sheet up to the atlas's own pixel size and
+  // sliding it so the wanted cell lands under a clip window the size of that cell.
+  // Sizing the <image> to the cell — which is what this did first — squashes all
+  // 793 sprites into every one of them, and the office turns into static.
+  const clipId = `sprite-${rawId.replace(/:/g, '')}`;
+  const sprite = (
+    <>
+      <clipPath id={clipId}>
+        <rect x={left} y={top} width={w} height={h} />
+      </clipPath>
+      <image
+        href={atlasUrl}
+        x={left - e.x * SPRITE_UNIT_X}
+        y={top - e.y * SPRITE_UNIT_Y}
+        width={ATLAS.width * SPRITE_UNIT_X}
+        height={ATLAS.height * SPRITE_UNIT_Y}
+        opacity={opacity}
+        preserveAspectRatio="none"
+        clipPath={`url(#${clipId})`}
+        className={className}
+        style={{ imageRendering: 'pixelated' }}
+      />
+    </>
   );
 
-  if (!flip) return image;
+  if (!flip) return sprite;
   // Mirror about the sprite's own centre. Mirroring the surrounding group is what
   // turns a name tag and a speech bubble backwards.
   const cx = left + w / 2;
-  return <g transform={`translate(${cx} 0) scale(-1 1) translate(${-cx} 0)`}>{image}</g>;
+  return <g transform={`translate(${cx} 0) scale(-1 1) translate(${-cx} 0)`}>{sprite}</g>;
 }

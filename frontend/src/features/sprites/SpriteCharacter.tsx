@@ -15,7 +15,7 @@
  * the SVG rig wrote limb rotations: React does not re-render for animation, and a
  * two-frame walk cycle is what four hand-drawn poses buy.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ActivityKind } from '../../sim/activity';
 import atlasUrl from '../sprites/atlas.png';
 import { ATLAS, type AtlasEntry } from '../sprites/atlas.gen';
@@ -52,7 +52,9 @@ export function SpriteCharacter({
   faded?: boolean;
 }) {
   const img = useRef<SVGImageElement>(null);
+  const clipRect = useRef<SVGRectElement>(null);
   const mirror = useRef<SVGGElement>(null);
+  const clipId = `char-${useId().replace(/:/g, '')}`;
 
   useEffect(() => {
     const atlas = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
@@ -82,16 +84,24 @@ export function SpriteCharacter({
       }
 
       const e = cell(facing, pose) ?? cell('front', 'stand');
-      if (e && img.current) {
+      if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
         // origin. `height` is how tall the figure should be there; the horizontal
         // axis is a different world scale, so it takes the ratio of the two.
         const ky = height / 40;
         const kx = ky * (SPRITE_UNIT_X / SPRITE_UNIT_Y);
-        img.current.setAttribute('x', (-e.ax * kx).toFixed(2));
-        img.current.setAttribute('y', (-e.ay * ky).toFixed(2));
-        img.current.setAttribute('width', (e.w * kx).toFixed(2));
-        img.current.setAttribute('height', (e.h * ky).toFixed(2));
+        const x0 = -e.ax * kx;
+        const y0 = -e.ay * ky;
+        // The sheet slides under a window the size of the cell: an <image> has no
+        // idea what a cell is. See Sprite.tsx.
+        clipRect.current.setAttribute('x', x0.toFixed(2));
+        clipRect.current.setAttribute('y', y0.toFixed(2));
+        clipRect.current.setAttribute('width', (e.w * kx).toFixed(2));
+        clipRect.current.setAttribute('height', (e.h * ky).toFixed(2));
+        img.current.setAttribute('x', (x0 - e.x * kx).toFixed(2));
+        img.current.setAttribute('y', (y0 - e.y * ky).toFixed(2));
+        img.current.setAttribute('width', (ATLAS.width * kx).toFixed(2));
+        img.current.setAttribute('height', (ATLAS.height * ky).toFixed(2));
       }
 
       if (mirror.current) {
@@ -109,10 +119,14 @@ export function SpriteCharacter({
 
   return (
     <g ref={mirror} opacity={faded ? 0.55 : 1}>
+      <clipPath id={clipId}>
+        <rect ref={clipRect} x={-12} y={-39} width={24} height={40} />
+      </clipPath>
       <image
         ref={img}
         href={atlasUrl}
         preserveAspectRatio="none"
+        clipPath={`url(#${clipId})`}
         style={{ imageRendering: 'pixelated' }}
       />
     </g>

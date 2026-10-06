@@ -51,6 +51,7 @@ import {
 } from './props';
 import { Partition, UNITS_PER_METRE } from './props';
 import { Sprite as AtlasSprite } from '../sprites/Sprite';
+import { routeBetween } from '../../sim/paths';
 import { cn } from '../../lib/cn';
 
 const FLOOR = '#161c27';
@@ -237,7 +238,20 @@ function RoomDesks({
           before the desks that stand in front of it — in SVG the paint order is the
           element order, and a sprite added after another is simply on top of it. */}
       {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
-      {room.desks.map((desk) => {
+      {/* ORDER IS POSITION, not the order things were written in.
+          In SVG the element order is the paint order, so a room is drawn back to
+          front: the board on the far wall, then the desks sorted by their own y so
+          a desk nearer the viewer paints after one behind it, then whatever stands
+          nearest. The room as a whole is one unit of that order and the floor plan
+          is what makes that safe — rooms never overlap, so two of them can never
+          need to interleave.
+          The honest limit: a person is drawn in the cast layer after every room, so
+          somebody standing behind a desk paints over it. Fixing that needs every
+          prop and every person in one list keyed by depth — a real change to how
+          this scene is built, not a line to move. */}
+      {[...room.desks]
+        .sort((a, b) => a.y - b.y)
+        .map((desk) => {
         const act = activities[desk.agentId];
         const busy = act?.kind === 'typing' || act?.kind === 'tool';
         const deskX = room.x + desk.x;
@@ -663,25 +677,43 @@ export function OfficeScene({
           />
         ))}
 
-        {/* Somebody working in another department: show the route they took. */}
+        {/* Somebody working in another department: the route they took, ON THE FLOOR.
+            This was a quadratic curve arcing over the furniture — which is a cable
+            between two rooms, not a walk. It is now the same polyline the walker
+            actually follows, corridor corner by corridor corner, projected tile by
+            tile and laid a hair above the floor. */}
         {people.map((id) => {
           const target = targets[id];
           const homeId = office.roomOf[id];
-          if (!target || target.roomId === homeId) return null;
+          if (!target || !homeId || target.roomId === homeId) return null;
           const home = office.rooms.find((r) => r.id === homeId);
           const away = office.rooms.find((r) => r.id === target.roomId);
           if (!home || !away) return null;
-          const a = project(home.x + home.w / 2, home.y + home.h / 2, 2);
-          const b = project(away.x + away.w / 2, away.y + away.h / 2, 2);
+          const route = routeBetween(
+            office,
+            homeId,
+            target.roomId,
+            { x: home.x + home.w / 2, y: home.y + home.h / 2 },
+            { x: away.x + away.w / 2, y: away.y + away.h / 2 },
+          );
+          if (route.length < 2) return null;
+          const d = route
+            .map((p, i) => {
+              const s = project(p.x, p.y, 1);
+              return `${i === 0 ? 'M' : 'L'} ${s.x} ${s.y}`;
+            })
+            .join(' ');
           return (
             <path
               key={`link-${id}`}
-              d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 60} ${b.x} ${b.y}`}
+              d={d}
               fill="none"
               stroke={away.accent}
-              strokeWidth={1.5}
-              strokeDasharray="6 6"
-              opacity={0.5}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="5 5"
+              opacity={0.55}
             />
           );
         })}

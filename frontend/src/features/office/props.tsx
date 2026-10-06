@@ -150,14 +150,18 @@ export const SEAT_Z = mh(0.5);
  * the sitter. Getting either wrong is what makes a character look like they are
  * sitting in mid-air next to their own chair.
  */
-export function Chair({ at, color: _color = '#1c1f26' }: { at: { x: number; y: number }; color?: string }) {
+export function Chair({ at, color: _color = '#1c1f26', turned = false }: { at: { x: number; y: number }; color?: string; turned?: boolean }) {
   // One sprite, anchored where the sitter is, at 0.68: the atlas chair fills its
   // metre, and a metre of chair next to a 1.45 m desk is a chair the size of the
   // desk. The old drawn chair was 0.44 m across, and that is what fits.
+  //
+  // `turned` is the chair facing the table rather than the viewer. A chair at a
+  // desk faces the desk, so what the room shows is its back; a chair on the near
+  // side of a meeting table faces away too, and one on the far side faces us.
   return (
     <g>
       <GroundShadow cx={at.x} cy={at.y} r={14} opacity={0.28} />
-      <Sprite name="prop.chair" x={at.x} y={at.y} scale={0.68} />
+      <Sprite name={turned ? 'prop.chair.turned' : 'prop.chair'} x={at.x} y={at.y} scale={0.68} />
     </g>
   );
 }
@@ -194,8 +198,8 @@ export function Workstation({
     <g>
       <GroundShadow cx={mid} cy={y + DESK_SLAB_D / 2} r={DESK_W * 0.42} />
       {/* The chair is its own sprite: the sim seats a body on it, so it has to be
-          placeable on its own. */}
-      <Chair at={{ x: mid, y: sitY }} />
+          placeable on its own. It faces the desk, like every chair at a desk. */}
+      <Chair at={{ x: mid, y: sitY }} turned />
       {/* The atlas desk is drawn at its own size — 2 m across, in its own
           proportions — so it is centred on the desk the simulation actually
           assigned rather than aligned to its corner. The offset is the sprite's own
@@ -282,7 +286,7 @@ export function MeetingTable({ x, y, w = 210, d = 96, seats = 4 }: { x: number; 
         scale={s}
       />
       {Array.from({ length: seats }, (_, i) => (
-        <Chair key={`s${i}`} at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" />
+        <Chair key={`s${i}`} at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" turned />
       ))}
       <Chair at={{ x: x + step, y: y - 26 }} />
       <Chair at={{ x: x + w - step, y: y - 26 }} />

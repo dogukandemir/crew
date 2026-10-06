@@ -85,7 +85,11 @@ export function SpriteCharacter({
       if (atDesk) pose = 'sit';
       else if (mov.moving) pose = Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB';
 
-      const e = cell('front', pose) ?? cell('front', 'stand');
+      // A sitter faces their desk, so from the room you see their BACK. The atlas
+      // has carried char.N.back.sit all along and nothing asked for it, which is
+      // why every seated figure looked like it was sitting facing the camera with
+      // its chair behind it.
+      const e = cell(atDesk ? 'back' : 'front', pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
         // origin. `height` is how tall the figure should be there, and the same

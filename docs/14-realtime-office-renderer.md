@@ -258,3 +258,22 @@ rather than a plausible-looking one.
 
 What a "squad" is, and why pairing needs one, is in §9. What this system cannot honestly claim is also
 in §9: it never invents a recipient, never invents collaboration, and never invents conversation.
+
+## 12. Furniture is derived from the pose table, not eyeballed
+
+A character who sits in mid-air next to their own chair is not a styling problem, it is an arithmetic
+one. The pose table is the single source of truth for a body's measurements, so the furniture that
+holds a body is built from it:
+
+| Rule | Why |
+|---|---|
+| A chair's seat top is `mh(HIP_SIT)` — 0.5 m — and the chair is centred on the sitter | the pose table puts a seated body's hips there; anywhere else and they float |
+| Only the desk's owner is ever drawn seated | `Target.seated` is set for your own desk and for a break chair, and for nothing else |
+| A monitor is lit only while its owner is typing or running a tool | one agent, one desk, one computer: a glance tells you who is actually computing |
+| The break corner's chairs come from `breakSeats()` | the simulation seats people on that list and the renderer draws chairs from it, so the two cannot disagree |
+| A shared table is stated, never dramatised | "on a break with <names>" is a fact; what they said is not knowable and is not invented |
+
+The same discipline applies to the drawing itself. Height is a real screen height in this projection,
+so a horizontal edge that dips below the eyes is a band across the face — the hair cap's lower edge is
+tested by eye against the eye line, and the eyes are drawn without brows because at the size a floor
+of characters is actually seen, brows plus a fringe read as one dark bar.

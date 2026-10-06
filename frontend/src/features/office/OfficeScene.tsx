@@ -232,6 +232,10 @@ function RoomDesks({
 }) {
   return (
     <g>
+      {/* Back to front. The board lives on the room's far wall, so it is painted
+          before the desks that stand in front of it — in SVG the paint order is the
+          element order, and a sprite added after another is simply on top of it. */}
+      {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
       {room.desks.map((desk) => {
         const act = activities[desk.agentId];
         const busy = act?.kind === 'typing' || act?.kind === 'tool';
@@ -252,7 +256,6 @@ function RoomDesks({
           decoration with no job, and a floor of identical lamps is what made the
           place feel crowded. */}
       <Plant x={room.x + room.w - ROOM_PAD - 14} y={room.y + room.h - 26} />
-      {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
     </g>
   );
 }
@@ -309,6 +312,10 @@ function LabFurniture({ room }: { room: Room }) {
   );
   return (
     <g>
+      {/* In SVG the paint order IS the element order, so everything here is drawn
+          back to front: the board lives on the far wall (smallest y) and so comes
+          before the benches, or it paints over them. */}
+      <Whiteboard x={room.x + room.w - 46} y={room.y + 8} w={74} h={38} />
       {/* Fume hood against the far wall, with its glass front. */}
       <Box x={room.x + 22} y={room.y + 12} w={96} d={34} h={mh(1.55)} color="#333b4b" top="#42506a" />
       <Panel
@@ -341,7 +348,6 @@ function LabFurniture({ room }: { room: Room }) {
           <Box x={room.x + dx - 11} y={room.y + 68} w={26} d={22} h={6} lift={mh(0.55)} color="#8a93a5" top="#b8c2d0" />
         </g>
       ))}
-      <Whiteboard x={room.x + room.w - 46} y={room.y + 8} w={74} h={38} />
     </g>
   );
 }
@@ -352,8 +358,9 @@ function RoomFurniture({ room, office }: { room: Room; office: Office }) {
   if (room.kind === 'commons') {
     return (
       <g>
-        <MeetingTable x={room.x + 24} y={room.y + room.h - 124} w={room.w - 48} d={92} seats={3} />
+        {/* Back to front, again: the board on the far wall first. */}
         <Whiteboard x={room.x + room.w / 2} y={room.y + WALL_T + 8} w={168} h={58} />
+        <MeetingTable x={room.x + 24} y={room.y + room.h - 124} w={room.w - 48} d={92} seats={3} />
         <Plant x={room.x + room.w - 26} y={room.y + 30} />
       </g>
     );

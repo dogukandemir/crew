@@ -234,11 +234,13 @@ export function Partition({ at, tiles = 1 }: { at: { x: number; y: number }; til
 }
 
 /** A whiteboard / glass board on a wall, with scribbles. */
-export function Whiteboard({ x, y, w: _w = 120, h: _h = 56 }: { x: number; y: number; w?: number; h?: number }) {
-  // The board's height comes from the sprite now, not from the caller. A caller
-  // that asked for 168 units gets a board 2 m across, which is what the atlas has;
-  // if a wall ever needs a different board it belongs in the atlas too.
-  return <Sprite name="prop.whiteboard" x={x} y={y} />;
+export function Whiteboard({ x, y, w = 120, h: _h = 56 }: { x: number; y: number; w?: number; h?: number }) {
+  // The atlas has ONE board, two metres across, so the width a caller asks for
+  // becomes a scale. Without this the lab's 74-unit board was drawn at two metres
+  // and read as a wall of its own — the board stopping respecting its caller is
+  // what "why did the lab change" was. The height is the atlas's: a board of a
+  // different SHAPE belongs in the atlas, not in a stretched sprite.
+  return <Sprite name="prop.whiteboard" x={x} y={y} scale={w / (2 * UNITS_PER_METRE)} />;
 }
 
 /** The coffee counter idle characters gather at. */

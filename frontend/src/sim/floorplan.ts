@@ -12,14 +12,23 @@ import type { Point } from './geometry';
 
 export const DESK_W = 104;
 export const DESK_H = 92;
-export const DESK_GAP_X = 16;
-export const DESK_GAP_Y = 14;
-export const ROOM_PAD = 14;
+/**
+ * The whole plan is generated from these numbers.
+ *
+ * They are the difference between a floor that reads as an office and one that
+ * reads as a storage rack, and they were tight: a desk three metres from a door
+ * still felt crowded, because the rooms are only just bigger than their contents.
+ * Widened once, together, so the ratio between desks and floor changed rather than
+ * one gap growing.
+ */
+export const DESK_GAP_X = 30;
+export const DESK_GAP_Y = 26;
+export const ROOM_PAD = 28;
 export const ROOM_HEADER = 30;
 /** Wall gap between neighbouring rooms on the same shelf row. */
-export const ROOM_COL_GAP = 34;
+export const ROOM_COL_GAP = 60;
 /** Corridor band between two shelf rows. */
-export const ROW_GAP = 108;
+export const ROW_GAP = 152;
 /** Vertical corridor running down the left-hand side of the floor. */
 export const SPINE_W = 96;
 export const MAX_ROW_WIDTH = 720;

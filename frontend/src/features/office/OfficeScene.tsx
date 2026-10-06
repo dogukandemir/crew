@@ -279,7 +279,11 @@ function roomItems(
   stagger: number,
 ): Drawable[] {
   const out: Drawable[] = [];
-  const at = (key: string, x: number, y: number, node: ReactNode) => out.push({ key, depth: x + y, node });
+  // Each thing is wrapped in a group that carries its depth: the layer's children
+  // are what get compared, so the attribute has to be on them and not on the
+  // component inside, which knows nothing about the floor around it.
+  const at = (key: string, x: number, y: number, node: ReactNode) =>
+    out.push({ key, depth: x + y, node: <g key={key} data-depth={x + y}>{node}</g> });
 
   if (room.kind === 'department' || room.kind === 'orchestrator') {
     if (room.seats > 5) {

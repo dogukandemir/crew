@@ -525,7 +525,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         <span className="office-sep" />
 
         {office.rooms
-          .filter((r) => r.kind === 'department' || r.kind === 'orchestrator')
+          .filter((r) => r.kind !== 'bench')
           .map((r) => (
             <Chip
               key={r.id}

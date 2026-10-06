@@ -35,7 +35,7 @@ export function mix(a: string, b: string, t: number): string {
   return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
 }
 
-/** A solid box standing on the floor. */
+/** A solid box standing on the floor, optionally lifted off it. */
 export function Box({
   x,
   y,
@@ -44,8 +44,9 @@ export function Box({
   h,
   color,
   top,
+  lift = 0,
   opacity = 1,
-  stroke,
+  ink = true,
 }: {
   x: number;
   y: number;
@@ -55,12 +56,16 @@ export function Box({
   color: string;
   /** Override the lit top face (e.g. a polished surface). */
   top?: string;
+  /** Raise the box off the ground (a seat on a stem, a counter top). */
+  lift?: number;
   opacity?: number;
-  stroke?: string;
+  /** Outline the shape, which is what makes the props match the drawn cast. */
+  ink?: boolean;
 }) {
-  const faces = boxFaces(x, y, w, d, h);
+  const faces = boxFaces(x, y, w, d, h, lift);
+  const stroke = ink ? shade(color, 0.42) : undefined;
   return (
-    <g opacity={opacity} stroke={stroke} strokeWidth={stroke ? 1 : undefined}>
+    <g opacity={opacity} stroke={stroke} strokeWidth={ink ? 0.8 : undefined} strokeLinejoin="round">
       {/* Sides first so the lit top face wins any overlap at the shared edges. */}
       <polygon points={faces.front} fill={shade(color, 0.58)} />
       <polygon points={faces.right} fill={shade(color, 0.76)} />
@@ -121,7 +126,9 @@ export function Panel({
           strokeWidth={1.5}
         />
       )}
-      {children}
+      {/* Children live in the panel's own space: (0,0) is its top-left corner,
+          whatever the projection did to place it. */}
+      <g transform={`translate(${(p.x - w / 2).toFixed(2)} ${(baseY - h).toFixed(2)})`}>{children}</g>
     </g>
   );
 }
@@ -129,10 +136,48 @@ export function Panel({
 const DESK_SLAB_D = 58;
 export const DESK_H_M = 0.74;
 export const DESK_Z = mh(DESK_H_M);
+/** How far south of the desk cell its occupant sits. */
+export const SIT_BACK = 30;
+/** The seated hip height from the pose table — a chair has to meet it exactly. */
+export const SEAT_Z = mh(0.5);
 
 /**
- * A workstation: the desk, the monitor on it, and the chair the occupant sits on.
- * `busy` lights the monitor, which is how a glance tells you who is working.
+ * An office chair, placed where its occupant actually is.
+ *
+ * The pose table puts a seated body's hips at `HIP_SIT` (0.5 m) off the floor, so
+ * the seat's top face is set to exactly that height and the chair is centred on
+ * the sitter. Getting either wrong is what makes a character look like they are
+ * sitting in mid-air next to their own chair.
+ */
+export function Chair({ at, color = '#1c1f26' }: { at: { x: number; y: number }; color?: string }) {
+  return (
+    <g>
+      <GroundShadow cx={at.x} cy={at.y} r={22} opacity={0.28} />
+      {/* Base, then stem, then the seat slab — a chair, not a block. */}
+      <Box x={at.x - 16} y={at.y - 8} w={32} d={15} h={4} color="#20242e" />
+      <Box x={at.x - 3} y={at.y - 3} w={6} d={6} h={SEAT_Z - 10} lift={4} color="#262b36" />
+      <Box
+        x={at.x - 22}
+        y={at.y - 17}
+        w={44}
+        d={34}
+        h={5.5}
+        lift={SEAT_Z - 5.5}
+        color={color}
+        top={shade(color, 1.4)}
+      />
+      {/* Backrest on the far side of the sitter, so it shows behind their back. */}
+      <Box x={at.x - 19} y={at.y + 16} w={38} d={8} h={42} lift={SEAT_Z} color={color} top={shade(color, 1.3)} />
+    </g>
+  );
+}
+
+/**
+ * A workstation. One per agent, and only its owner is ever drawn seated here:
+ * visiting a colleague means standing beside their desk, not taking their chair.
+ *
+ * `busy` means the owner is using the computer right now, which is the only
+ * thing that lights the screen. Everybody else's monitor reads as powered down.
  */
 export function Workstation({
   x,
@@ -150,13 +195,12 @@ export function Workstation({
   screen?: boolean;
 }) {
   const mid = x + DESK_W / 2;
-  const chairZ = mh(0.45);
+  const sitY = y + DESK_H - SIT_BACK;
+  const screenPoint = project(mid, y + 17);
   return (
     <g>
-      <GroundShadow cx={x + DESK_W / 2} cy={y + DESK_SLAB_D / 2} r={DESK_W * 0.42} />
-      {/* Chair behind the occupant (the +y side is nearer the viewer). */}
-      <Box x={mid - 26} y={y + 64} w={52} d={44} h={chairZ} color="#1c1f26" />
-      <Box x={mid - 26} y={y + 100} w={52} d={8} h={chairZ + 46} color="#1c1f26" />
+      <GroundShadow cx={mid} cy={y + DESK_SLAB_D / 2} r={DESK_W * 0.42} />
+      <Chair at={{ x: mid, y: sitY }} />
       {/* Desk. */}
       <Box x={x} y={y} w={DESK_W} d={DESK_SLAB_D} h={DESK_Z} color={color} top={shade(color, 1.2)} />
       {screen && (
@@ -168,24 +212,38 @@ export function Workstation({
             w={80}
             h={46}
             tilt={DESK_Z + 6}
-            fill={busy ? mix('#101b2c', glow, 0.4) : '#131c29'}
-            edge="#4d5a73"
+            fill={busy ? mix('#0f1a2a', glow, 0.45) : '#0a0d13'}
+            edge={busy ? mix('#4d5a73', glow, 0.45) : '#242b38'}
           >
-            {/* A screen is never quite off: a lit line or two reads as content. */}
-            <rect x={mid - 36} y={y + 17 - 46 + 6} width={72} height={34} rx={2} fill={busy ? glow : '#2b6ea8'} opacity={busy ? 0.3 : 0.22} />
-            {[0, 1, 2].map((row) => (
-              <rect
-                key={row}
-                x={mid - 32}
-                y={y + 17 - 46 + 11 + row * 9}
-                width={(busy ? 58 : 44) * [1, 0.8, 0.62][row]}
-                height={3}
-                rx={1.5}
-                fill={busy ? '#cfe6ff' : '#7ea6c9'}
-                opacity={busy ? 0.85 : 0.5}
-              />
-            ))}
+            {busy ? (
+              <>
+                {/* In use: a lit screen with something on it. */}
+                <rect x={6} y={6} width={68} height={34} rx={2} fill={glow} opacity={0.22} />
+                {[0, 1, 2, 3].map((row) => (
+                  <rect
+                    key={row}
+                    x={10}
+                    y={11 + row * 8}
+                    width={60 * [1, 0.78, 0.9, 0.55][row]}
+                    height={2.6}
+                    rx={1.3}
+                    fill="#dceaff"
+                    opacity={0.75}
+                  />
+                ))}
+              </>
+            ) : (
+              /* Powered down: a dark panel and one standby dot. Nothing else. */
+              <circle cx={70} cy={37} r={1.6} fill="#7a4040" opacity={0.7} />
+            )}
           </Panel>
+          {/* The power light on the bezel: the fastest read of who is computing. */}
+          <circle
+            cx={screenPoint.x + 32}
+            cy={screenPoint.y - DESK_Z - 8}
+            r={2.4}
+            fill={busy ? '#7ce0a8' : '#333b4a'}
+          />
         </>
       )}
       {/* Keyboard and the small desk clutter that makes a desk feel used. */}
@@ -295,11 +353,50 @@ export function MeetingTable({ x, y, w = 210, d = 96, seats = 4 }: { x: number; 
       <Box x={x + w * 0.62} y={y + d * 0.5} w={16} d={16} h={z + 10} color="#8a93a5" />
       {Array.from({ length: seats }, (_, i) => (
         <g key={i}>
-          <Box x={x + step * (i + 1) - 22} y={y + d + 6} w={44} d={40} h={chairZ} color="#1c1f26" />
+          <Chair at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" />
         </g>
       ))}
-      <Box x={x + step - 22} y={y - 46} w={44} d={40} h={chairZ} color="#1c1f26" />
-      <Box x={x + w - step - 22} y={y - 46} w={44} d={40} h={chairZ} color="#1c1f26" />
+      <Chair at={{ x: x + step, y: y - 26 }} />
+      <Chair at={{ x: x + w - step, y: y - 26 }} />
+    </g>
+  );
+}
+
+/**
+ * A round table: a cylinder, so it has a lit elliptical top and a visible side.
+ *
+ * Used in the break corner, where the point is that people sit *together* — the
+ * chairs come from `breakSeats()` in the floor plan, which is the same list the
+ * simulation seats people on, so a chair and its sitter can never disagree.
+ */
+export function RoundTable({ at, r = 34, color = '#4a3f2e' }: { at: { x: number; y: number }; r?: number; color?: string }) {
+  const c = project(at.x, at.y);
+  const ry = r * 0.5;
+  const h = mh(0.74);
+  const top = c.y - h;
+  return (
+    <g>
+      <ellipse cx={c.x} cy={c.y} rx={r} ry={ry} fill="#05070c" opacity={0.34} />
+      {/* The visible side: the lower half of the top swept down to the floor. */}
+      <path
+        d={`M ${c.x - r} ${top} A ${r} ${ry} 0 0 0 ${c.x + r} ${top} L ${c.x + r} ${c.y} A ${r} ${ry} 0 0 1 ${c.x - r} ${c.y} Z`}
+        fill={shade(color, 0.62)}
+        stroke={shade(color, 0.42)}
+        strokeWidth={0.8}
+      />
+      <ellipse
+        cx={c.x}
+        cy={top}
+        rx={r}
+        ry={ry}
+        fill={shade(color, 1.3)}
+        stroke={shade(color, 0.5)}
+        strokeWidth={0.8}
+      />
+      <ellipse cx={c.x} cy={top} rx={r * 0.66} ry={ry * 0.66} fill={shade(color, 1.06)} />
+      {/* A mug and a plate: a table in an office is never clear. */}
+      <ellipse cx={c.x - r * 0.42} cy={top - ry * 0.32} rx={5.4} ry={2.7} fill="#b8c2d0" stroke="#7d8798" strokeWidth={0.6} />
+      <ellipse cx={c.x + r * 0.4} cy={top + ry * 0.3} rx={6.8} ry={3.2} fill="#9aa5b8" stroke="#6d7788" strokeWidth={0.6} />
     </g>
   );
 }

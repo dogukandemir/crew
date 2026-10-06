@@ -86,23 +86,33 @@ export interface BoxFaces {
 /**
  * The three visible faces of a box standing on the floor.
  *
+ * `lift` raises the whole box off the ground — that is what turns a slab into a
+ * seat on a stem, and a counter top into something you can see the front of.
+ *
  * Light comes from the upper left, so the top face keeps its colour and the two
  * visible sides are darkened by `FACE_SHADE` — that contrast is what makes a flat
  * rectangle read as a solid object.
  */
-export function boxFaces(x: number, y: number, w: number, d: number, h: number): BoxFaces {
-  const top = floorRect(x, y, w, d, h);
+export function boxFaces(
+  x: number,
+  y: number,
+  w: number,
+  d: number,
+  h: number,
+  lift = 0,
+): BoxFaces {
+  const top = floorRect(x, y, w, d, lift + h);
   const right = polyPoints([
-    project(x + w, y, h),
-    project(x + w, y + d, h),
-    project(x + w, y + d, 0),
-    project(x + w, y, 0),
+    project(x + w, y, lift + h),
+    project(x + w, y + d, lift + h),
+    project(x + w, y + d, lift),
+    project(x + w, y, lift),
   ]);
   const front = polyPoints([
-    project(x, y + d, h),
-    project(x + w, y + d, h),
-    project(x + w, y + d, 0),
-    project(x, y + d, 0),
+    project(x, y + d, lift + h),
+    project(x + w, y + d, lift + h),
+    project(x + w, y + d, lift),
+    project(x, y + d, lift),
   ]);
   return { top, right, front };
 }

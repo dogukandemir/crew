@@ -216,9 +216,20 @@ function Head({
   const kind = hairKind(look.hair.style);
   const hairInk = shade(hair, 0.42);
 
-  const capPath = (depth: number) =>
-    `M ${cx - r - 1} ${cy - 5} A ${r + 1} ${r + 1} 0 0 1 ${cx + r + 1} ${cy - 5}` +
-    ` L ${cx + r - 1} ${cy - 5 + depth} Q ${cx} ${cy + depth + 2} ${cx - r + 1} ${cy - 5 + depth} Z`;
+  /**
+   * The hair cap.
+   *
+   * Its lower edge has to stay clear of the eyes. A fringe that dips into the
+   * middle of the face is what made every character look like they were wearing
+   * a dark band across their eyes, so the sweep stops above them.
+   */
+  const capPath = (depth: number) => {
+    const edge = cy - 6 + depth * 0.3;
+    return (
+      `M ${cx - r - 1} ${cy - 6} A ${r + 1} ${r + 1} 0 0 1 ${cx + r + 1} ${cy - 6}` +
+      ` L ${cx + r - 2} ${edge} Q ${cx} ${edge + 1.6} ${cx - r + 2} ${edge} Z`
+    );
+  };
 
   return (
     <g>
@@ -266,24 +277,18 @@ function Head({
         <path d={`M ${cx + r - 1} ${cy - 2} Q ${cx + r + 9} ${cy + 6} ${cx + r + 5} ${cy + 18} Q ${cx + r + 1} ${cy + 8} ${cx + r - 3} ${cy + 2} Z`} fill={hair} stroke={hairInk} strokeWidth={1.1} />
       )}
 
-      {/* Face: big eyes, brows, a small smile, blush. */}
+      {/* Face: two big eyes, a small smile, blush. No brows — at the size this
+          is actually drawn, brows plus a fringe are a band across the eyes. */}
       {[1, -1].map((side) => (
         <g key={side}>
-          <ellipse cx={cx + side * 5.7} cy={cy + 2.2} rx={3.1} ry={3.5} fill={FACE.eyeWhite} stroke={INK} strokeWidth={1} />
-          <ellipse cx={cx + side * 5.5} cy={cy + 2.6} rx={1.8} ry={2.1} fill={FACE.pupil} />
-          <circle cx={cx + side * 4.8} cy={cy + 1.6} r={0.8} fill="#fff" opacity={0.95} />
-          <path
-            d={`M ${cx + side * 8.4} ${cy - 4.4} Q ${cx + side * 5.6} ${cy - 6.2} ${cx + side * 2.9} ${cy - 4.2}`}
-            fill="none"
-            stroke={shade(hair, 0.3)}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-          <ellipse cx={cx + side * 10} cy={cy + 7.4} rx={2.6} ry={1.5} fill={FACE.blush} opacity={0.4} />
+          <ellipse cx={cx + side * 5.9} cy={cy + 1.8} rx={3.3} ry={3.7} fill={FACE.eyeWhite} stroke={INK} strokeWidth={0.9} />
+          <ellipse cx={cx + side * 5.7} cy={cy + 2.2} rx={1.9} ry={2.2} fill={FACE.pupil} />
+          <circle cx={cx + side * 4.9} cy={cy + 1} r={0.85} fill="#fff" opacity={0.95} />
+          <ellipse cx={cx + side * 10.2} cy={cy + 6.8} rx={2.6} ry={1.4} fill={FACE.blush} opacity={0.38} />
         </g>
       ))}
       <path
-        d={`M ${cx - 2.6} ${cy + 8.6} Q ${cx} ${cy + 11.4} ${cx + 2.6} ${cy + 8.6}`}
+        d={`M ${cx - 2.6} ${cy + 8.2} Q ${cx} ${cy + 11} ${cx + 2.6} ${cy + 8.2}`}
         fill="none"
         stroke={FACE.mouth}
         strokeWidth={1.4}
@@ -301,13 +306,15 @@ function Head({
         <ellipse cx={cx} cy={cy + 10.5} rx={3.6} ry={2.4} fill={hair} stroke={hairInk} strokeWidth={1} />
       )}
 
-      {/* Glasses */}
+      {/* Glasses: thin, with a translucent lens. Anything heavier turns the
+          pair into a visor at the size these are drawn. */}
       {look.glasses && (
-        <g fill="none" stroke={INK} strokeWidth={1.5}>
-          <circle cx={cx - 5.7} cy={cy + 2.2} r={4.4} />
-          <circle cx={cx + 5.7} cy={cy + 2.2} r={4.4} />
-          <path d={`M ${cx - 1.3} ${cy + 2} L ${cx + 1.3} ${cy + 2}`} />
-          <path d={`M ${cx - 10} ${cy + 1} L ${cx - r + 0.5} ${cy} M ${cx + 10} ${cy + 1} L ${cx + r - 0.5} ${cy}`} />
+        <g fill="none" stroke={INK} strokeWidth={1.05} opacity={0.92}>
+          <circle cx={cx - 5.9} cy={cy + 1.8} r={4.5} fill="rgba(176,208,236,0.16)" />
+          <circle cx={cx + 5.9} cy={cy + 1.8} r={4.5} fill="rgba(176,208,236,0.16)" />
+          <path d={`M ${cx - 1.4} ${cy + 1.6} Q ${cx} ${cy + 0.7} ${cx + 1.4} ${cy + 1.6}`} />
+          <path d={`M ${cx - 10.3} ${cy + 1} L ${cx - r + 0.5} ${cy - 0.6}`} />
+          <path d={`M ${cx + 10.3} ${cy + 1} L ${cx + r - 0.5} ${cy - 0.6}`} />
         </g>
       )}
 

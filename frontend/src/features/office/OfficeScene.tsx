@@ -14,10 +14,12 @@ import { useMemo } from 'react';
 import type { OrgNode } from '../../api/types';
 import type { Activity } from '../../sim/activity';
 import {
+  BREAK_TABLE_R,
   DESK_W,
   ROOM_PAD,
   ROOM_HEADER,
   SPINE_W,
+  breakSeats,
   type Office,
   type Room,
 } from '../../sim/floorplan';
@@ -30,6 +32,7 @@ import { lookFor } from '../characters/look';
 import { mh, boxFaces, floorRect, polyPoints, project } from './iso';
 import {
   Cabinet,
+  Chair,
   CoffeeBar,
   Crate,
   FloorLamp,
@@ -37,6 +40,7 @@ import {
   MeetingTable,
   Plant,
   Printer,
+  RoundTable,
   Whiteboard,
   Workstation,
   mix,
@@ -45,8 +49,10 @@ import {
 import { cn } from '../../lib/cn';
 
 const FLOOR = '#161c27';
-const WALK = '#1e2635';
-const WALL_H = mh(0.95);
+const WALK = '#212a3a';
+/** The kerb along a road: what makes a corridor read as a way, not a gap. */
+const KERB = '#3f4d67';
+const WALL_H = mh(0.72);
 const WALL_T = 7;
 const SLAB = 34;
 /** Air around the building, so the slab reads as a thing sitting in space. */
@@ -67,11 +73,11 @@ function emojiKind(activity: Activity): 'talk' | 'report' | 'escalation' {
 /* ── Signage ──────────────────────────────────────────────────────────────── */
 
 function Sign({ room, pulse }: { room: Room; pulse?: FloorPulse['rooms'][string] }) {
-  const p = project(room.x + room.w / 2, room.y, WALL_H + 16);
+  const p = project(room.x + room.w / 2, room.y, WALL_H + 30);
   const busy = (pulse?.producing ?? 0) > 0;
-  const name = room.name.length > 22 ? `${room.name.slice(0, 21)}…` : room.name;
-  const w = Math.max(96, name.length * 8.4 + 34);
-  const h = 34;
+  const name = room.name.length > 20 ? `${room.name.slice(0, 19)}…` : room.name;
+  const w = Math.max(88, name.length * 7.4 + 30);
+  const h = 30;
 
   return (
     <g>
@@ -142,49 +148,56 @@ function Sign({ room, pulse }: { room: Room; pulse?: FloorPulse['rooms'][string]
 
 function RoomShell({
   room,
+  office,
   pulse,
   activities,
   focused,
   newRoom,
 }: {
   room: Room;
+  office: Office;
   pulse?: FloorPulse['rooms'][string];
   activities: Record<string, Activity>;
   focused: boolean;
   newRoom: boolean;
 }) {
-  const wall = mix('#1b2230', room.accent, 0.26);
+  const wall = mix('#2a3346', room.accent, 0.3);
   const accentSoft = mix('#12161f', room.accent, 0.45);
+  const inner = mix('#1e2634', room.accent, 0.16);
 
   return (
     <g className={cn('room', focused && 'is-focused', newRoom && 'is-new')}>
+      {/* The room's own floor, lighter than the walkway outside it, so a
+          department reads as a place with edges. */}
+      <polygon points={floorRect(room.x, room.y, room.w, room.h, 0)} fill={inner} />
       <polygon
         points={floorRect(room.x + 5, room.y + 5, room.w - 10, room.h - 10, 1)}
         fill={room.accent}
-        opacity={focused ? 0.2 : 0.14}
+        opacity={focused ? 0.24 : 0.17}
       />
       <polygon
         points={floorRect(room.x + 5, room.y + 5, room.w - 10, room.h - 10, 1)}
         fill="none"
         stroke={room.accent}
         strokeWidth={focused ? 2 : 1}
-        opacity={focused ? 0.85 : 0.5}
+        opacity={focused ? 0.85 : 0.55}
       />
 
-      {/* Two partition walls on the far edges, so they never hide the room. */}
-      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).front} fill={shade(wall, 0.55)} />
-      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).right} fill={shade(wall, 0.74)} />
+      {/* Two partition walls on the far edges, so they never hide the room.
+          Kept light: a dark wall reads as a bar across the floor, not a room. */}
+      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).front} fill={shade(wall, 0.74)} />
+      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).right} fill={shade(wall, 0.88)} />
       <polygon
         points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).top}
-        fill={shade(wall, 1.1)}
+        fill={shade(wall, 1.22)}
         stroke={accentSoft}
         strokeWidth={1.5}
       />
-      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).front} fill={shade(wall, 0.55)} />
-      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).right} fill={shade(wall, 0.74)} />
+      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).front} fill={shade(wall, 0.72)} />
+      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).right} fill={shade(wall, 0.86)} />
       <polygon
         points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).top}
-        fill={shade(wall, 1.1)}
+        fill={shade(wall, 1.22)}
         stroke={accentSoft}
         strokeWidth={1.5}
       />
@@ -193,7 +206,7 @@ function RoomShell({
         <RoomDesks room={room} activities={activities} accent={room.accent} />
       ) : null}
 
-      <RoomFurniture room={room} />
+      <RoomFurniture room={room} office={office} />
       <Sign room={room} pulse={pulse} />
     </g>
   );
@@ -234,7 +247,7 @@ function RoomDesks({
 }
 
 /** The shared rooms: the review table, the coffee corner, the bench. */
-function RoomFurniture({ room }: { room: Room }) {
+function RoomFurniture({ room, office }: { room: Room; office: Office }) {
   if (room.kind === 'commons') {
     return (
       <g>
@@ -247,9 +260,19 @@ function RoomFurniture({ room }: { room: Room }) {
   if (room.kind === 'break') {
     return (
       <g>
-        <CoffeeBar x={room.x + 20} y={room.y + 26} w={room.w - 40} />
-        <Plant x={room.x + 26} y={room.y + room.h - 28} />
-        <Crate x={room.x + room.w - 62} y={room.y + room.h - 48} w={38} />
+        <CoffeeBar x={room.x + 18} y={room.y + 16} w={Math.min(150, room.w - 40)} />
+        {office.breakTables.map((table, i) => (
+          <g key={`t${i}`}>
+            <RoundTable at={table} r={BREAK_TABLE_R} />
+            {/* The chairs come from the same list the simulation seats people
+                on, so a chair is never empty while somebody sits beside it. */}
+            {breakSeats([table]).map((seat) => (
+              <Chair key={`${i}-${seat.index}`} at={seat.point} color="#2a2f3a" />
+            ))}
+          </g>
+        ))}
+        <Plant x={room.x + 26} y={room.y + room.h - 26} />
+        <Crate x={room.x + room.w - 58} y={room.y + 24} w={34} h={mh(0.4)} />
       </g>
     );
   }
@@ -271,6 +294,7 @@ function RoomFurniture({ room }: { room: Room }) {
 function Sprite({
   agent,
   activity,
+  reason,
   motion,
   atDesk,
   selected,
@@ -280,6 +304,7 @@ function Sprite({
 }: {
   agent: OrgNode;
   activity: Activity;
+  reason?: string;
   motion: SvgMotionRef;
   atDesk: boolean;
   selected: boolean;
@@ -306,7 +331,7 @@ function Sprite({
     >
       <title>{`${agent.name}${agent.grade !== undefined ? ` · G${agent.grade}` : ''} — ${
         agent.role ?? 'agent'
-      }\n${activity.note}\nclick for thinking & output`}</title>
+      }\n${activity.note}${reason ? `\n${reason}` : ''}\nclick for thinking & output`}</title>
 
       <ellipse className="sprite-shadow" cx={0} cy={0} rx={CHAR_W * 0.34} ry={CHAR_W * 0.17} />
       {selected && <ellipse className="sprite-ring" cx={0} cy={0} rx={CHAR_W * 0.46} ry={CHAR_W * 0.23} />}
@@ -449,27 +474,55 @@ export function OfficeScene({
           />
         ))}
 
-        {/* Walkways: the spine and one corridor per shelf row. */}
-        <polygon points={floorRect(6, -8, SPINE_W - 12, office.height + 16, 1)} fill={WALK} />
+        {/* Roads: the spine and one lane per shelf row, kerbed so they read as
+            the ways between units rather than as gaps in the floor. */}
+        <polygon
+          points={floorRect(6, -8, SPINE_W - 12, office.height + 16, 1)}
+          fill={WALK}
+          stroke={KERB}
+          strokeWidth={1.5}
+        />
         <polyline
           points={polyPoints([project(SPINE_W / 2, -8, 1), project(SPINE_W / 2, office.height + 8, 1)])}
           fill="none"
-          stroke="#3d4a63"
+          stroke="#5b6b8a"
           strokeWidth={2}
           strokeDasharray="14 12"
         />
         {corridors.map((y) => (
           <g key={`c${y}`}>
-            <polygon points={floorRect(-8, y - aisle / 2, office.width + 16, aisle, 1)} fill={WALK} />
+            <polygon
+              points={floorRect(-8, y - aisle / 2, office.width + 16, aisle, 1)}
+              fill={WALK}
+              stroke={KERB}
+              strokeWidth={1.5}
+            />
             <polyline
               points={polyPoints([project(-8, y, 1), project(office.width + 8, y, 1)])}
               fill="none"
-              stroke="#3d4a63"
+              stroke="#5b6b8a"
               strokeWidth={2}
               strokeDasharray="14 12"
             />
           </g>
         ))}
+
+        {/* A spur from every unit's door to the lane that serves it, so each
+            department is visibly plugged into the same road network. */}
+        {office.rooms.map((room) => {
+          const lane = office.corridorY[room.id];
+          const from = room.door.y;
+          if (!Number.isFinite(lane) || lane <= from) return null;
+          return (
+            <polygon
+              key={`spur-${room.id}`}
+              points={floorRect(room.door.x - 19, from - 4, 38, lane - from + 6, 1)}
+              fill={WALK}
+              stroke={KERB}
+              strokeWidth={1.2}
+            />
+          );
+        })}
 
         {/* Where new hires come in. */}
         <GroundShadow cx={office.entrance.x} cy={office.entrance.y} r={26} opacity={0.5} />
@@ -487,6 +540,7 @@ export function OfficeScene({
           <RoomShell
             key={room.id}
             room={room}
+            office={office}
             pulse={pulse.rooms[room.id]}
             activities={activities}
             focused={focusRoomId === room.id}
@@ -523,15 +577,14 @@ export function OfficeScene({
           const motion = motions.get(id);
           if (!agent || !activity || !motion) return null;
           const target = targets[id];
-          const desk = office.deskOf[id];
-          const atDesk = !!target && target.roomId === office.roomOf[id] && Math.hypot(target.point.x - desk.x, target.point.y - desk.y) < 1.5;
           return (
             <Sprite
               key={id}
               agent={agent}
               activity={activity}
+              reason={target?.reason}
               motion={motion}
-              atDesk={atDesk}
+              atDesk={!!target?.seated}
               selected={selected === id}
               dimmed={attentionOnly && activity.kind !== 'blocked' && activity.kind !== 'waiting'}
               onSelect={() => onSelectAgent(id)}

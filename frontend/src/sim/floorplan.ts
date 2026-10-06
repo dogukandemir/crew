@@ -51,9 +51,102 @@ export const ROW_GAP = 152;
 export const SPINE_W = 96;
 export const MAX_ROW_WIDTH = 720;
 export const ENTRANCE_MARGIN = 44;
-/** Visual height of walls / desks in the 3D scene, in px. */
-export const WALL_H = 30;
-export const DESK_TOP_Z = 17;
+
+/** A room's place on the floor. Allocated once, and then never moved. */
+export interface RoomSlot {
+  row: number;
+  x: number;
+  y: number;
+  /** The width and height the slot was allocated for, so growth can be detected. */
+  w: number;
+  h: number;
+}
+
+export interface Placement {
+  slots: Record<string, RoomSlot>;
+  rows: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Where every room sits — and, the part that matters, that it stays there.
+ *
+ * A room is placed ONCE. A hire re-grids the desks inside a department's slot; it does
+ * not move the slot. What this replaced packed every room from scratch on every
+ * update, so one new agent widened a department, slid every room after it along the
+ * shelf, and could push a whole row onto the next one. In a live office that reads as
+ * the building jumping every time somebody is hired — and it makes a room impossible
+ * to point at ("engineering is bottom left" stops being true).
+ *
+ * `prev` is the placement from the last update. A room that already has a slot keeps
+ * it, verbatim, including its row and its y. Only rooms without one are allocated:
+ * into the first shelf with room, else onto a new shelf. A room whose slot grew taller
+ * than it was allocated for does reflow the shelves below it, which is physics — and
+ * it is the one case where a room that did not grow can move.
+ */
+export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: Placement['slots'] = {}): Placement {
+  const slots: Record<string, RoomSlot> = {};
+  const rowCursor: number[] = [];
+  const rowTallest: number[] = [];
+
+  // 1. Rooms that already have a slot claim their space back, exactly as it was.
+  // `prev` is a Placement's slots, so its x already carries the spine shift from pass
+  // 3 — take it back out here, or every update shifts the whole floor by SPINE_W
+  // again. (This is what the placement test caught, and only the test could: on a
+  // single render there is nothing to compare against.)
+  for (const room of sizes) {
+    const was = prev[room.id];
+    if (!was) continue;
+    slots[room.id] = { ...was, x: was.x - SPINE_W, w: room.w, h: room.h };
+    rowCursor[was.row] = Math.max(rowCursor[was.row] ?? 0, was.x - SPINE_W + room.w + ROOM_COL_GAP);
+    rowTallest[was.row] = Math.max(rowTallest[was.row] ?? 0, room.h);
+  }
+
+  // 2. New rooms go into the first shelf that can still hold them, else a new shelf.
+  for (const room of sizes) {
+    if (slots[room.id]) continue;
+    let row = -1;
+    for (let r = 0; r < rowCursor.length; r += 1) {
+      if ((rowCursor[r] ?? 0) + room.w <= MAX_ROW_WIDTH) {
+        row = r;
+        break;
+      }
+    }
+    if (row === -1) {
+      row = rowCursor.length;
+      rowCursor[row] = 0;
+      rowTallest[row] = 0;
+    }
+    slots[room.id] = { row, x: rowCursor[row] ?? 0, y: 0, w: room.w, h: room.h };
+    rowCursor[row] = (rowCursor[row] ?? 0) + room.w + ROOM_COL_GAP;
+    rowTallest[row] = Math.max(rowTallest[row] ?? 0, room.h);
+  }
+
+  // 3. The shelves stack: each shelf's y follows the tallest room above it. A slot's y
+  // is recomputed only when a shelf above actually changed height, so the common case
+  // — a new room on the same shelf, or a new shelf at the bottom — moves nothing.
+  const rowY: number[] = [];
+  let y = 0;
+  for (let r = 0; r < rowTallest.length; r += 1) {
+    rowY[r] = y;
+    y += (rowTallest[r] ?? 0) + ROW_GAP;
+  }
+  for (const room of sizes) {
+    const slot = slots[room.id];
+    slot.x += SPINE_W;
+    slot.y = rowY[slot.row] ?? 0;
+  }
+
+  const contentWidth = Math.max(0, ...sizes.map((r) => slots[r.id].x - SPINE_W + r.w));
+  const contentHeight = Math.max(0, ...sizes.map((r) => slots[r.id].y + r.h));
+  return {
+    slots,
+    rows: rowTallest.length,
+    width: SPINE_W + contentWidth + 40,
+    height: contentHeight + ROW_GAP * 0.55,
+  };
+}
 
 /** Department accents: muted, distinguishable on a dark floor, no neon. */
 export const ROOM_ACCENTS = [

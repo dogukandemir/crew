@@ -261,22 +261,28 @@ export function CoffeeBar({ x, y, w = 150 }: { x: number; y: number; w?: number 
   );
 }
 
-/** A table with chairs, for review and stand-ups. */
+/**
+ * A table with chairs, for review and stand-ups.
+ *
+ * A SURFACE, in StarNet's taxonomy — the thing you place that gives a place to work
+ * — so it is a sprite, and the chairs around it are the same chair sprite the desks
+ * use. The caller's width becomes a scale: the atlas has one table, three metres
+ * across, and a room that asks for two gets two.
+ */
 export function MeetingTable({ x, y, w = 210, d = 96, seats = 4 }: { x: number; y: number; w?: number; d?: number; seats?: number }) {
-  const z = mh(0.75);
-  const chairZ = mh(0.45);
   const step = w / (seats + 1);
+  const s = w / (3 * UNITS_PER_METRE);
   return (
     <g>
       <GroundShadow cx={x + w / 2} cy={y + d / 2} r={Math.max(w, d) * 0.5} />
-      <Box x={x} y={y} w={w} d={d} h={z} color="#3b3428" top="#5a4f3c" />
-      {/* Papers and a mug ring left on the table. */}
-      <Box x={x + w * 0.3} y={y + d * 0.3} w={34} d={26} h={z + 3} color="#e8edf5" />
-      <Box x={x + w * 0.62} y={y + d * 0.5} w={16} d={16} h={z + 10} color="#8a93a5" />
+      <Sprite
+        name="prop.table.3"
+        x={x + w / 2 - 1.5 * UNITS_PER_METRE * s}
+        y={y + d / 2 - 0.5 * UNITS_PER_METRE * s}
+        scale={s}
+      />
       {Array.from({ length: seats }, (_, i) => (
-        <g key={i}>
-          <Chair at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" />
-        </g>
+        <Chair key={`s${i}`} at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" />
       ))}
       <Chair at={{ x: x + step, y: y - 26 }} />
       <Chair at={{ x: x + w - step, y: y - 26 }} />
@@ -291,34 +297,15 @@ export function MeetingTable({ x, y, w = 210, d = 96, seats = 4 }: { x: number; 
  * chairs come from `breakSeats()` in the floor plan, which is the same list the
  * simulation seats people on, so a chair and its sitter can never disagree.
  */
-export function RoundTable({ at, r = 34, color = '#4a3f2e' }: { at: { x: number; y: number }; r?: number; color?: string }) {
-  const c = project(at.x, at.y);
-  const ry = r * 0.5;
-  const h = mh(0.74);
-  const top = c.y - h;
+export function RoundTable({ at, r = 34, color: _color = '#4a3f2e' }: { at: { x: number; y: number }; r?: number; color?: string }) {
+  // A surface like the rest: round in plan is what the atlas draws, and the radius
+  // the floor plan hands out (the same one the simulation seats people around)
+  // becomes the scale.
+  const s = (2 * r) / (1.4 * UNITS_PER_METRE);
   return (
     <g>
-      <ellipse cx={c.x} cy={c.y} rx={r} ry={ry} fill="#05070c" opacity={0.34} />
-      {/* The visible side: the lower half of the top swept down to the floor. */}
-      <path
-        d={`M ${c.x - r} ${top} A ${r} ${ry} 0 0 0 ${c.x + r} ${top} L ${c.x + r} ${c.y} A ${r} ${ry} 0 0 1 ${c.x - r} ${c.y} Z`}
-        fill={shade(color, 0.62)}
-        stroke={shade(color, 0.42)}
-        strokeWidth={0.8}
-      />
-      <ellipse
-        cx={c.x}
-        cy={top}
-        rx={r}
-        ry={ry}
-        fill={shade(color, 1.3)}
-        stroke={shade(color, 0.5)}
-        strokeWidth={0.8}
-      />
-      <ellipse cx={c.x} cy={top} rx={r * 0.66} ry={ry * 0.66} fill={shade(color, 1.06)} />
-      {/* A mug and a plate: a table in an office is never clear. */}
-      <ellipse cx={c.x - r * 0.42} cy={top - ry * 0.32} rx={5.4} ry={2.7} fill="#b8c2d0" stroke="#7d8798" strokeWidth={0.6} />
-      <ellipse cx={c.x + r * 0.4} cy={top + ry * 0.3} rx={6.8} ry={3.2} fill="#9aa5b8" stroke="#6d7788" strokeWidth={0.6} />
+      <GroundShadow cx={at.x} cy={at.y} r={r * 1.1} />
+      <Sprite name="prop.roundtable" x={at.x - (1.4 * UNITS_PER_METRE * s) / 2} y={at.y - (1.4 * UNITS_PER_METRE * s) / 2} scale={s} />
     </g>
   );
 }

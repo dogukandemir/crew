@@ -49,7 +49,8 @@ import {
   mix,
   shade,
 } from './props';
-import { Partition } from './props';
+import { Partition, UNITS_PER_METRE } from './props';
+import { Sprite as AtlasSprite } from '../sprites/Sprite';
 import { cn } from '../../lib/cn';
 
 const FLOOR = '#161c27';
@@ -301,52 +302,33 @@ function Conveyor({ from, to, half = 11, tie = 96 }: { from: { x: number; y: num
   );
 }
 
-/** The lab: benches, a fume hood, glassware and the gear that reads as science. */
+/**
+ * The lab: two benches facing each other, a fume hood, glassware, stools.
+ *
+ * Surfaces and props, both from the atlas — the benches were the last thing on the
+ * floor still drawn out of boxes, which is what made the lab look like a different
+ * game from the rooms beside it. The placement maths is the same as ever: a caller's
+ * width becomes a scale, because the atlas has one bench and one hood.
+ */
 function LabFurniture({ room }: { room: Room }) {
-  const benchZ = mh(0.9);
   const benchW = room.w - 44;
   const benchA = room.y + 50;
   const benchB = room.y + 96;
-  const tube = (x: number, y: number, h: number, color: string) => (
-    <Box key={`${x}-${y}`} x={room.x + x} y={room.y + y} w={9} d={9} h={benchZ + h} color={color} />
-  );
+  const benchS = benchW / (2 * UNITS_PER_METRE);
+  const benchX = (w: number, s: number) => room.x + 22 + (w - 2 * UNITS_PER_METRE * s) / 2;
   return (
     <g>
-      {/* In SVG the paint order IS the element order, so everything here is drawn
-          back to front: the board lives on the far wall (smallest y) and so comes
-          before the benches, or it paints over them. */}
+      {/* Back to front: far wall first. */}
       <Whiteboard x={room.x + room.w - 46} y={room.y + 8} w={74} h={38} />
-      {/* Fume hood against the far wall, with its glass front. */}
-      <Box x={room.x + 22} y={room.y + 12} w={96} d={34} h={mh(1.55)} color="#333b4b" top="#42506a" />
-      <Panel
-        at={{ x: room.x + 70, y: room.y + 46 }}
-        w={80}
-        h={44}
-        tilt={mh(0.95)}
-        fill="#14222c"
-        edge="#4d6b73"
-      >
-        <rect x={5} y={5} width={70} height={34} rx={2} fill="#1d3b45" opacity={0.6} />
-      </Panel>
-      {/* Two benches facing each other across the aisle. */}
-      <Box x={room.x + 22} y={benchA} w={benchW} d={34} h={benchZ} color="#39414f" top="#4e586b" />
-      <Box x={room.x + 22} y={benchB} w={benchW} d={34} h={benchZ} color="#39414f" top="#4e586b" />
-      {/* Gear on the benches: a microscope, a rack of tubes, flasks, a sink. */}
-      <Box x={room.x + 34} y={benchA + 8} w={20} d={18} h={benchZ + 10} color="#2b3242" top="#5a6478" />
-      <Box x={room.x + 38} y={benchA + 2} w={12} d={10} h={benchZ + 30} color="#c9d3e0" />
-      {[40, 52, 64, 76].map((dx) => tube(dx, benchA + 14, 10, '#5fbf8f'))}
-      {[110, 122, 134].map((dx) => tube(dx, benchA + 14, 14, '#6fc3d0'))}
-      <Box x={room.x + benchW - 40} y={benchA + 10} w={30} d={20} h={benchZ + 16} color="#2b3242" />
-      {[150, 162, 174].map((dx) => tube(dx, benchB + 12, 12, '#c97bb6'))}
-      {/* A sink in the near bench. */}
-      <Box x={room.x + 44} y={benchB + 8} w={34} d={20} h={benchZ - 2} color="#4a5468" top="#7d8798" />
-      <Box x={room.x + 56} y={benchB + 4} w={5} d={5} h={benchZ + 22} color="#9aa5b8" />
-      {/* Stools in the aisle between the benches. */}
+      <AtlasSprite name="prop.fumehood" x={room.x + 34} y={room.y + 40} scale={1.1} />
+      <AtlasSprite name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} scale={1.1} />
+      <AtlasSprite name="prop.labbench" x={benchX(benchW, benchS)} y={benchA + 14} scale={benchS} />
+      <AtlasSprite name="prop.labbench" x={benchX(benchW, benchS)} y={benchB + 14} scale={benchS} />
+      {/* Gear that stands on the benches rather than in them. */}
+      <AtlasSprite name="prop.microscope" x={room.x + 44} y={benchA + 20} />
+      <AtlasSprite name="prop.centrifuge" x={room.x + benchW - 20} y={benchA + 24} />
       {[70, 130, 190].map((dx) => (
-        <g key={`stool-${dx}`}>
-          <Box x={room.x + dx} y={room.y + 74} w={4} d={4} h={mh(0.55)} color="#7d8798" />
-          <Box x={room.x + dx - 11} y={room.y + 68} w={26} d={22} h={6} lift={mh(0.55)} color="#8a93a5" top="#b8c2d0" />
-        </g>
+        <AtlasSprite key={`stool-${dx}`} name="prop.stool" x={room.x + dx} y={room.y + 76} scale={0.5} />
       ))}
     </g>
   );

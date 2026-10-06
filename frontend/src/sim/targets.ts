@@ -11,7 +11,7 @@
  */
 import type { Task, TaskState } from '../api/types';
 import type { Point } from './geometry';
-import { DESK_W, breakSeats, type Office } from './floorplan';
+import { DESK_W, breakSeats, isResearchTask, type Office } from './floorplan';
 import { anchorOf } from './paths';
 import { currentTaskFor, type Activity } from './activity';
 
@@ -247,6 +247,23 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
       continue;
     }
 
+    // R&D work is done at the lab bench, not at a desk. Grounded in the task's
+    // own title, which is a word the organization actually used.
+    if (office.labRoomId) {
+      const research = currentTaskFor(agentId, tasks);
+      if (research && isResearchTask(research.title) && research.state !== 'completed') {
+        out[agentId] = {
+          agentId,
+          roomId: office.labRoomId,
+          point: office.labBench,
+          reason: `in the lab: ${research.title}`,
+          faceTowards: { x: office.labBench.x, y: office.labBench.y - 26 },
+        };
+        shared[office.labRoomId] = [...(shared[office.labRoomId] ?? []), agentId];
+        continue;
+      }
+    }
+
     // Working on someone else's task: go and stand in that department.
     const task = currentTaskFor(agentId, tasks);
     const visit = task?.department_id;
@@ -285,8 +302,8 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
       const byTable: Record<number, string[]> = {};
       const standing: string[] = [];
       sorted.forEach((id, i) => {
-        // More people than chairs: the extras stay on their feet by the counter
-        // rather than being stacked on somebody's lap.
+        // More people than chairs: the extras stay on their feet, and the
+        // foosball table and the vending machine take them.
         const seat = seats[i];
         if (!seat) {
           standing.push(id);
@@ -312,9 +329,44 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
           out[id].reason = `on a break with ${others.join(' & ')}`;
         }
       }
-      // Whoever did not get a chair is still in the corner: let the shared-spot
-      // ring spread them out instead of piling them on one point.
-      if (standing.length > 0) shared.__break = standing;
+      const layout = office.breakLayout;
+      const rest = [...standing];
+      const nameOf = (id: string) => office.agentOf[id]?.name ?? 'someone';
+
+      // Two can take the foosball table, one at each end, facing across it.
+      const players = rest.splice(0, layout.foosballEnds.length);
+      players.forEach((id, i) => {
+        out[id] = {
+          ...out[id],
+          roomId: '__break',
+          point: layout.foosballEnds[i],
+          faceTowards: {
+            x: (layout.foosballEnds[0].x + layout.foosballEnds[1].x) / 2,
+            y: (layout.foosballEnds[0].y + layout.foosballEnds[1].y) / 2,
+          },
+          reason: 'at the foosball table',
+        };
+      });
+      if (players.length === 2) {
+        out[players[0]].reason = `playing foosball with ${nameOf(players[1])}`;
+        out[players[1]].reason = `playing foosball with ${nameOf(players[0])}`;
+      }
+
+      // Then a short queue at the vending machine, because it is free.
+      const queue = rest.splice(0, layout.vendingQueue.length);
+      queue.forEach((id, i) => {
+        out[id] = {
+          ...out[id],
+          roomId: '__break',
+          point: layout.vendingQueue[i],
+          faceTowards: { x: layout.vending.x + layout.vending.w / 2, y: layout.vending.y + layout.vending.d },
+          reason: i === 0 ? 'at the vending machine' : 'queuing for the vending machine',
+        };
+      });
+
+      // Anybody left over stands by the counter: let the shared-spot ring spread
+      // them out instead of piling them on one point.
+      if (rest.length > 0) shared.__break = rest;
       else delete shared.__break;
     } else {
       delete shared.__break;

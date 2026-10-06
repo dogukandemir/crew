@@ -71,6 +71,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
   const walkers = useRef<Map<string, Walker>>(new Map());
   const spriteEls = useRef<Map<string, SVGGElement>>(new Map());
+  /** One striped route element per character, written by the walk loop. */
+  const trailEls = useRef<Map<string, SVGPathElement>>(new Map());
   /** Per-character frame data the SVG rig reads; never React state. */
   const motions = useRef<Map<string, SvgMotionRef>>(new Map());
   /** Latest targets, for the walk loop to read who is facing whom. */
@@ -315,6 +317,27 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           el.classList.toggle('is-walking', next.moving);
         }
 
+        // The route ahead of them, as a striped line on the floor. Only while
+        // they are actually walking; a person standing still has no route.
+        const trail = trailEls.current.get(id);
+        if (trail) {
+          if (next.moving && next.route.length > next.seg + 1) {
+            const points = [{ x: next.x, y: next.y }, ...next.route.slice(next.seg + 1)];
+            trail.setAttribute(
+              'd',
+              points
+                .map((p, i) => {
+                  const sp = project(p.x, p.y);
+                  return `${i === 0 ? 'M' : 'L'} ${sp.x.toFixed(1)} ${sp.y.toFixed(1)}`;
+                })
+                .join(' '),
+            );
+            trail.setAttribute('opacity', '0.75');
+          } else if (trail.getAttribute('opacity') !== '0') {
+            trail.setAttribute('opacity', '0');
+          }
+        }
+
         // Hand the same movement to the character rig, so the walk cycle is
         // driven by ground actually covered rather than by a timer.
         const m = motionFor(id);
@@ -341,6 +364,17 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         const p = project(w.x, w.y);
         el.setAttribute('transform', `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
       }
+    },
+    [],
+  );
+
+  const registerTrail = useCallback(
+    (id: string) => (el: SVGPathElement | null) => {
+      if (!el) {
+        trailEls.current.delete(id);
+        return;
+      }
+      trailEls.current.set(id, el);
     },
     [],
   );
@@ -617,6 +651,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
               newRoomIds={newRoomIds}
               motions={motions.current}
               registerSprite={registerSprite}
+              registerTrail={registerTrail}
               onSelectAgent={selectAgent}
               viewport={size}
               camera={cam}

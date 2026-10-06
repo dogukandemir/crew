@@ -81,21 +81,76 @@ export function breakSeats(tables: BreakTable[]): BreakSeat[] {
   return out;
 }
 
-/** Where the tables stand inside the break room. */
-function breakTablePositions(room: Room): BreakTable[] {
-  const cx = room.x + room.w / 2;
-  // Below the coffee bar, in a line, with the chairs still clear of the room's
-  // south wall. Three tables when the room can hold them.
-  const y = room.y + room.h * 0.66;
-  const gap = BREAK_TABLE_R * 2 + 52;
-  return [
-    { x: cx - gap, y },
-    { x: cx, y },
-    { x: cx + gap, y },
-  ];
+/**
+ * The break corner, laid out in one place.
+ *
+ * The simulation seats people on these spots and the renderer draws the props
+ * that own them, so the vending machine somebody is standing at is always the
+ * vending machine that is actually drawn there.
+ */
+export interface BreakLayout {
+  /** Round tables, in a line. */
+  tables: BreakTable[];
+  vending: { x: number; y: number; w: number; d: number };
+  /** Where you stand to buy something: two can queue. */
+  vendingQueue: Point[];
+  foosball: { x: number; y: number; w: number; d: number };
+  /** One stand at each end of the table, facing across it. */
+  foosballEnds: Point[];
 }
 
-export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break';
+export const EMPTY_BREAK_LAYOUT: BreakLayout = {
+  tables: [],
+  vending: { x: 0, y: 0, w: 0, d: 0 },
+  vendingQueue: [],
+  foosball: { x: 0, y: 0, w: 0, d: 0 },
+  foosballEnds: [],
+};
+
+export function breakLayout(room: { x: number; y: number; w: number; h: number }): BreakLayout {
+  const vending = { x: room.x + 14, y: room.y + 22, w: 56, d: 34 };
+  const foosball = { x: room.x + room.w - 106, y: room.y + 88, w: 100, d: 60 };
+  const midY = foosball.y + foosball.d / 2;
+  // Two round tables, clear of the vending machine and clear of the foosball.
+  const gap = BREAK_TABLE_R * 2 + 52;
+  const cx = room.x + 74;
+  return {
+    tables: [
+      { x: cx, y: room.y + room.h * 0.66 },
+      { x: cx + gap, y: room.y + room.h * 0.66 },
+    ],
+    vending,
+    vendingQueue: [
+      { x: vending.x + vending.w / 2, y: vending.y + vending.d + 24 },
+      { x: vending.x + vending.w / 2 + 36, y: vending.y + vending.d + 26 },
+    ],
+    foosball,
+    foosballEnds: [
+      { x: foosball.x - 24, y: midY },
+      { x: foosball.x + foosball.w + 24, y: midY },
+    ],
+  };
+}
+
+export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break' | 'lab';
+
+/**
+ * Work that belongs at a lab bench rather than at a desk.
+ *
+ * Read off the org's own words — a department's name and mission, an agent's
+ * role, a task's title — so the lab is used because the organization is doing
+ * research, not because a timer said so.
+ */
+const RE_RND = /research|r&d|lab\b|laborator|science|scientist|innovat|experiment|discover|analysis|analyst/i;
+const RE_RND_TASK = /research|experiment|study|analys|benchmark|prototype|evaluat|survey|measur/i;
+
+export function isResearchWork(...texts: (string | undefined)[]): boolean {
+  return texts.some((t) => !!t && RE_RND.test(t));
+}
+
+export function isResearchTask(title: string | undefined): boolean {
+  return !!title && RE_RND_TASK.test(title);
+}
 
 export interface Desk {
   agentId: string;
@@ -138,6 +193,12 @@ export interface Office {
   breakSpot: Point;
   /** The break corner's round tables, and the chairs around them. */
   breakTables: BreakTable[];
+  /** The break corner's full layout: tables, vending machine, foosball. */
+  breakLayout: BreakLayout;
+  /** The lab, when the organization does any research at all. */
+  labRoomId: string | null;
+  /** The bench in the lab where research work is done. */
+  labBench: Point;
   /** Agent id → where their body belongs, in world coordinates. */
   deskOf: Record<string, Point>;
   /** Agent id → the room their desk sits in. */
@@ -307,6 +368,26 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     );
   }
 
+  // 3.5 The lab — where research and R&D work is actually done. It exists only
+  // when the organization has a department whose own words say it does research.
+  const wantsLab = isResearchWork(...departments.flatMap((d) => [d.name, d.mission]));
+  if (wantsLab) {
+    const size = roomSize(2, 1);
+    rooms.push(
+      shell({
+        id: '__lab',
+        kind: 'lab',
+        name: 'Lab',
+        subtitle: 'R&D bench',
+        accent: '#6fc3d0',
+        w: size.w,
+        h: size.h,
+        cols: 2,
+        rows: 1,
+      }),
+    );
+  }
+
   // 4. One room per department.
   departments.forEach((dept, i) => {
     const roster = others
@@ -412,6 +493,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   const find = (k: RoomKind) => rooms.find((r) => r.kind === k);
   const commons = find('commons');
   const breakRoom = find('break');
+  const labRoom = find('lab');
 
   return {
     rooms,
@@ -424,7 +506,12 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     breakSpot: breakRoom
       ? { x: breakRoom.x + breakRoom.w / 2, y: breakRoom.y + breakRoom.h - 24 }
       : { x: SPINE_W / 2, y: height - 20 },
-    breakTables: breakRoom ? breakTablePositions(breakRoom) : [],
+    breakTables: breakRoom ? breakLayout(breakRoom).tables : [],
+    breakLayout: breakRoom ? breakLayout(breakRoom) : EMPTY_BREAK_LAYOUT,
+    labRoomId: labRoom?.id ?? null,
+    labBench: labRoom
+      ? { x: labRoom.x + labRoom.w * 0.34, y: labRoom.y + labRoom.h * 0.5 }
+      : { x: 0, y: 0 },
     deskOf,
     roomOf,
     managerOf,

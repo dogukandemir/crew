@@ -108,7 +108,7 @@ describe('the break corner', () => {
   it('does not stack people when there are more of them than chairs', () => {
     const { targets } = setUp(12, ['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'a10', 'a11']);
     const seats = breakSeats(buildOffice(org(12)).breakTables);
-    expect(seats.length).toBe(9);
+    expect(seats.length).toBe(6);
     const taken = seats.filter((seat) =>
       Object.values(targets).some(
         (t) => Math.abs(t.point.x - seat.point.x) < 0.01 && Math.abs(t.point.y - seat.point.y) < 0.01,

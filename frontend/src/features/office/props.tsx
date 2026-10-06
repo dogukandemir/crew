@@ -12,7 +12,7 @@
  */
 import type { ReactNode } from 'react';
 import { DESK_H, DESK_W } from '../../sim/floorplan';
-import { UNITS_PER_METRE, boxFaces, floorRect, mh, project } from './iso';
+import { UNITS_PER_METRE, boxFaces, floorRect, mh, polyPoints, project } from './iso';
 
 /** Scale a hex colour's brightness. */
 export function shade(hex: string, factor: number): string {
@@ -457,6 +457,116 @@ export function Printer({ x, y }: { x: number; y: number }) {
       <Box x={x} y={y} w={62} d={46} h={mh(0.55)} color="#39414f" />
       <Box x={x + 8} y={y + 6} w={46} d={30} h={mh(0.75)} color="#2b3242" top="#4a5468" />
       <Box x={x + 22} y={y + 12} w={18} d={12} h={mh(0.85)} color="#e8edf5" />
+    </g>
+  );
+}
+
+/**
+ * A vending machine: the one genuinely lit thing in a break corner.
+ *
+ * The glass front shows shelves of snacks, and the brand strip glows, so at a
+ * glance you can see somebody standing at it getting something.
+ */
+export function VendingMachine({ x, y, accent = '#5b8def' }: { x: number; y: number; accent?: string }) {
+  const w = 56;
+  const d = 34;
+  const h = mh(1.9);
+  const mid = x + w / 2;
+  const face = project(mid, y + d);
+  const glassW = w - 10;
+  const glassH = h - 30;
+  const glassBase = h * 0.17;
+  return (
+    <g>
+      <GroundShadow cx={mid} cy={y + d / 2} r={32} />
+      <Box x={x} y={y} w={w} d={d} h={h} color="#2b3242" top="#39435a" />
+      <Panel
+        at={{ x: mid, y: y + d }}
+        w={glassW}
+        h={glassH}
+        tilt={glassBase}
+        fill={mix('#0d1626', accent, 0.3)}
+        edge={mix('#4d5a73', accent, 0.5)}
+      >
+        {[0, 1, 2].map((row) => (
+          <g key={row}>
+            <rect x={3} y={9 + row * 19} width={glassW - 14} height={13} rx={2} fill="#080e18" opacity={0.75} />
+            {[0, 1, 2].map((col) => (
+              <rect
+                key={col}
+                x={6 + col * 12}
+                y={11 + row * 19}
+                width={8}
+                height={9}
+                rx={1.5}
+                fill={['#d97a6c', '#e0a458', '#5fbf8f', '#6fc3d0', '#c97bb6', '#5b8def'][(row * 3 + col) % 6]}
+              />
+            ))}
+          </g>
+        ))}
+        <rect x={0} y={0} width={glassW} height={glassH} fill={accent} opacity={0.07} />
+      </Panel>
+      {/* Lit brand strip along the top, and the collection slot underneath. */}
+      <rect x={face.x - glassW / 2} y={face.y - glassBase - glassH - 15} width={glassW} height={9} rx={3} fill={accent} opacity={0.85} />
+      <rect x={face.x - 16} y={face.y - glassBase - 2} width={32} height={7} rx={2} fill="#0c1017" stroke="#3a4152" strokeWidth={0.8} />
+    </g>
+  );
+}
+
+/**
+ * A foosball table: a cabinet, a pitch, and rods of little players.
+ *
+ * Drawn with real rods across the pitch so it reads as something two people
+ * stand at either end of, which is what makes it useful on a floor.
+ */
+export function FoosballTable({ x, y, w = 176, d = 104 }: { x: number; y: number; w?: number; d?: number }) {
+  const z = mh(0.9);
+  const rods = [0.26, 0.42, 0.58, 0.74];
+  return (
+    <g>
+      <GroundShadow cx={x + w / 2} cy={y + d / 2} r={Math.max(w, d) * 0.5} />
+      <Box x={x} y={y} w={w} d={d} h={z} color="#2f3a4a" top="#3d4a5c" />
+      {/* The pitch, and its centre line. */}
+      <polygon points={floorRect(x + 11, y + 11, w - 22, d - 22, z + 1)} fill="#1e4032" />
+      <polyline
+        points={polyPoints([project(x + 11, y + d / 2, z + 1), project(x + w - 11, y + d / 2, z + 1)])}
+        fill="none"
+        stroke="#e8edf5"
+        strokeWidth={2}
+        opacity={0.45}
+      />
+      {rods.map((t, row) => {
+        const ry = y + d * t;
+        const rod = project(x + w / 2, ry, z + 32);
+        return (
+          <g key={row}>
+            <polyline
+              points={polyPoints([project(x + 8, ry, z + 32), project(x + w - 8, ry, z + 32)])}
+              fill="none"
+              stroke="#c9d3e0"
+              strokeWidth={2.4}
+              strokeLinecap="round"
+            />
+            {[0.26, 0.5, 0.74].map((u, i) => {
+              const p = project(x + w * u, ry, z + 32);
+              return (
+                <rect
+                  key={i}
+                  x={p.x - 3}
+                  y={p.y - 13}
+                  width={6}
+                  height={13}
+                  rx={2}
+                  fill={row % 2 === 0 ? '#d97a6c' : '#5b8def'}
+                />
+              );
+            })}
+            {/* Handles sticking out of the cabinet. */}
+            <circle cx={rod.x - w / 2 + 4} cy={rod.y} r={3.4} fill="#12161f" />
+            <circle cx={rod.x + w / 2 - 4} cy={rod.y} r={3.4} fill="#12161f" />
+          </g>
+        );
+      })}
     </g>
   );
 }

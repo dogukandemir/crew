@@ -100,7 +100,7 @@ describe('movement rules', () => {
       {
         id: 't1',
         project_id: 'p1',
-        title: 'Research',
+        title: 'Ship the pricing page',
         state: 'running',
         assignee_agent_id: 'a1',
         department_id: 'd1',
@@ -109,6 +109,39 @@ describe('movement rules', () => {
     const t = run({ a1: act('typing') }, { tasks });
     expect(t.a1.roomId).toBe('d1');
     expect(t.a1.point).toEqual(OFFICE.deskOf.a1);
+  });
+
+  it('sends research work to the lab bench instead of a desk', () => {
+    expect(OFFICE.labRoomId).toBe('__lab');
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        project_id: 'p1',
+        title: 'Benchmark the pricing models',
+        state: 'running',
+        assignee_agent_id: 'a1',
+        department_id: 'd1',
+      },
+    ];
+    const t = run({ a1: act('typing') }, { tasks });
+    expect(t.a1.roomId).toBe('__lab');
+    expect(t.a1.reason).toContain('in the lab');
+    expect(t.a1.reason).toContain('Benchmark the pricing models');
+  });
+
+  it('does not send ordinary work to the lab', () => {
+    const tasks: Task[] = [
+      {
+        id: 't1',
+        project_id: 'p1',
+        title: 'Write the release notes',
+        state: 'running',
+        assignee_agent_id: 'a1',
+        department_id: 'd1',
+      },
+    ];
+    const t = run({ a1: act('typing') }, { tasks });
+    expect(t.a1.roomId).toBe('d1');
   });
 
   it('sends a long-idle agent to the break corner', () => {

@@ -31,16 +31,20 @@ import { SvgCharacter } from '../characters/SvgCharacter';
 import { lookFor } from '../characters/look';
 import { mh, boxFaces, floorRect, polyPoints, project } from './iso';
 import {
+  Box,
   Cabinet,
   Chair,
   CoffeeBar,
   Crate,
   FloorLamp,
+  FoosballTable,
   GroundShadow,
   MeetingTable,
+  Panel,
   Plant,
   Printer,
   RoundTable,
+  VendingMachine,
   Whiteboard,
   Workstation,
   mix,
@@ -72,8 +76,10 @@ function emojiKind(activity: Activity): 'talk' | 'report' | 'escalation' {
 
 /* ── Signage ──────────────────────────────────────────────────────────────── */
 
-function Sign({ room, pulse }: { room: Room; pulse?: FloorPulse['rooms'][string] }) {
-  const p = project(room.x + room.w / 2, room.y, WALL_H + 30);
+function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['rooms'][string]; stagger?: number }) {
+  // Boards on the same shelf row are lifted in turn, so neighbours never cover
+  // each other's name.
+  const p = project(room.x + room.w / 2, room.y, WALL_H + 30 + stagger * 34);
   const busy = (pulse?.producing ?? 0) > 0;
   const name = room.name.length > 20 ? `${room.name.slice(0, 19)}…` : room.name;
   const w = Math.max(88, name.length * 7.4 + 30);
@@ -153,6 +159,7 @@ function RoomShell({
   activities,
   focused,
   newRoom,
+  stagger,
 }: {
   room: Room;
   office: Office;
@@ -160,6 +167,7 @@ function RoomShell({
   activities: Record<string, Activity>;
   focused: boolean;
   newRoom: boolean;
+  stagger: number;
 }) {
   const wall = mix('#2a3346', room.accent, 0.3);
   const accentSoft = mix('#12161f', room.accent, 0.45);
@@ -207,7 +215,7 @@ function RoomShell({
       ) : null}
 
       <RoomFurniture room={room} office={office} />
-      <Sign room={room} pulse={pulse} />
+      <Sign room={room} pulse={pulse} stagger={stagger} />
     </g>
   );
 }
@@ -246,8 +254,91 @@ function RoomDesks({
   );
 }
 
+/** A conveyor: two rails and the ties across them. StarNet's floor is a station. */
+function Conveyor({ from, to, half = 11, tie = 30 }: { from: { x: number; y: number }; to: { x: number; y: number }; half?: number; tie?: number }) {
+  const dir = { x: to.x - from.x, y: to.y - from.y };
+  const len = Math.hypot(dir.x, dir.y) || 1;
+  const n = { x: -dir.y / len, y: dir.x / len };
+  const rail = (s: number) =>
+    polyPoints([
+      project(from.x + n.x * s, from.y + n.y * s, 1),
+      project(to.x + n.x * s, to.y + n.y * s, 1),
+    ]);
+  const count = Math.max(2, Math.round(len / tie));
+  const ties: string[] = [];
+  for (let i = 0; i <= count; i += 1) {
+    const t = i / count;
+    const px = from.x + dir.x * t;
+    const py = from.y + dir.y * t;
+    ties.push(
+      polyPoints([
+        project(px + n.x * half, py + n.y * half, 1),
+        project(px - n.x * half, py - n.y * half, 1),
+      ]),
+    );
+  }
+  return (
+    <g>
+      <polyline points={rail(-half)} fill="none" stroke="#46577a" strokeWidth={1.7} />
+      <polyline points={rail(half)} fill="none" stroke="#46577a" strokeWidth={1.7} />
+      {ties.map((points, i) => (
+        <polyline key={i} points={points} fill="none" stroke="#38455e" strokeWidth={1.2} />
+      ))}
+    </g>
+  );
+}
+
+/** The lab: benches, a fume hood, glassware and the gear that reads as science. */
+function LabFurniture({ room }: { room: Room }) {
+  const benchZ = mh(0.9);
+  const benchW = room.w - 44;
+  const benchA = room.y + 50;
+  const benchB = room.y + 96;
+  const tube = (x: number, y: number, h: number, color: string) => (
+    <Box key={`${x}-${y}`} x={room.x + x} y={room.y + y} w={9} d={9} h={benchZ + h} color={color} />
+  );
+  return (
+    <g>
+      {/* Fume hood against the far wall, with its glass front. */}
+      <Box x={room.x + 22} y={room.y + 12} w={96} d={34} h={mh(1.55)} color="#333b4b" top="#42506a" />
+      <Panel
+        at={{ x: room.x + 70, y: room.y + 46 }}
+        w={80}
+        h={44}
+        tilt={mh(0.95)}
+        fill="#14222c"
+        edge="#4d6b73"
+      >
+        <rect x={5} y={5} width={70} height={34} rx={2} fill="#1d3b45" opacity={0.6} />
+      </Panel>
+      {/* Two benches facing each other across the aisle. */}
+      <Box x={room.x + 22} y={benchA} w={benchW} d={34} h={benchZ} color="#39414f" top="#4e586b" />
+      <Box x={room.x + 22} y={benchB} w={benchW} d={34} h={benchZ} color="#39414f" top="#4e586b" />
+      {/* Gear on the benches: a microscope, a rack of tubes, flasks, a sink. */}
+      <Box x={room.x + 34} y={benchA + 8} w={20} d={18} h={benchZ + 10} color="#2b3242" top="#5a6478" />
+      <Box x={room.x + 38} y={benchA + 2} w={12} d={10} h={benchZ + 30} color="#c9d3e0" />
+      {[40, 52, 64, 76].map((dx) => tube(dx, benchA + 14, 10, '#5fbf8f'))}
+      {[110, 122, 134].map((dx) => tube(dx, benchA + 14, 14, '#6fc3d0'))}
+      <Box x={room.x + benchW - 40} y={benchA + 10} w={30} d={20} h={benchZ + 16} color="#2b3242" />
+      {[150, 162, 174].map((dx) => tube(dx, benchB + 12, 12, '#c97bb6'))}
+      {/* A sink in the near bench. */}
+      <Box x={room.x + 44} y={benchB + 8} w={34} d={20} h={benchZ - 2} color="#4a5468" top="#7d8798" />
+      <Box x={room.x + 56} y={benchB + 4} w={5} d={5} h={benchZ + 22} color="#9aa5b8" />
+      {/* Stools in the aisle between the benches. */}
+      {[70, 130, 190].map((dx) => (
+        <g key={`stool-${dx}`}>
+          <Box x={room.x + dx} y={room.y + 74} w={4} d={4} h={mh(0.55)} color="#7d8798" />
+          <Box x={room.x + dx - 11} y={room.y + 68} w={26} d={22} h={6} lift={mh(0.55)} color="#8a93a5" top="#b8c2d0" />
+        </g>
+      ))}
+      <Whiteboard x={room.x + room.w - 46} y={room.y + 8} w={74} h={38} />
+    </g>
+  );
+}
+
 /** The shared rooms: the review table, the coffee corner, the bench. */
 function RoomFurniture({ room, office }: { room: Room; office: Office }) {
+  if (room.kind === 'lab') return <LabFurniture room={room} />;
   if (room.kind === 'commons') {
     return (
       <g>
@@ -258,10 +349,18 @@ function RoomFurniture({ room, office }: { room: Room; office: Office }) {
     );
   }
   if (room.kind === 'break') {
+    const layout = office.breakLayout;
     return (
       <g>
-        <CoffeeBar x={room.x + 18} y={room.y + 16} w={Math.min(150, room.w - 40)} />
-        {office.breakTables.map((table, i) => (
+        <CoffeeBar x={room.x + room.w - 124} y={room.y + 14} w={112} />
+        <VendingMachine x={layout.vending.x} y={layout.vending.y} accent="#5b8def" />
+        <FoosballTable
+          x={layout.foosball.x}
+          y={layout.foosball.y}
+          w={layout.foosball.w}
+          d={layout.foosball.d}
+        />
+        {layout.tables.map((table, i) => (
           <g key={`t${i}`}>
             <RoundTable at={table} r={BREAK_TABLE_R} />
             {/* The chairs come from the same list the simulation seats people
@@ -271,8 +370,8 @@ function RoomFurniture({ room, office }: { room: Room; office: Office }) {
             ))}
           </g>
         ))}
-        <Plant x={room.x + 26} y={room.y + room.h - 26} />
-        <Crate x={room.x + room.w - 58} y={room.y + 24} w={34} h={mh(0.4)} />
+        <Plant x={room.x + 16} y={room.y + room.h - 26} />
+        <Crate x={room.x + room.w - 58} y={room.y + room.h - 52} w={32} h={mh(0.4)} />
       </g>
     );
   }
@@ -313,8 +412,8 @@ function Sprite({
   register: (el: SVGGElement | null) => void;
 }) {
   const look = useMemo(
-    () => lookFor(agent.id, agent.role ?? 'agent', agent.grade),
-    [agent.id, agent.role, agent.grade],
+    () => lookFor(agent.id, agent.role ?? 'agent', agent.grade, agent.name),
+    [agent.id, agent.role, agent.grade, agent.name],
   );
 
   const speech = activity.speech;
@@ -386,6 +485,8 @@ export interface OfficeSceneProps {
   newRoomIds: Set<string>;
   motions: Map<string, SvgMotionRef>;
   registerSprite: (id: string) => (el: SVGGElement | null) => void;
+  /** The striped route each walker is currently taking, written by the rAF loop. */
+  registerTrail: (id: string) => (el: SVGPathElement | null) => void;
   onSelectAgent: (id: string) => void;
   viewport: { w: number; h: number };
   camera: { x: number; y: number; scale: number };
@@ -402,6 +503,7 @@ export function OfficeScene({
   newRoomIds,
   motions,
   registerSprite,
+  registerTrail,
   onSelectAgent,
   viewport,
   camera,
@@ -429,6 +531,23 @@ export function OfficeScene({
   );
 
   const far = camera.scale < 0.4;
+
+  /** Boards on one shelf row are lifted alternately so they cannot overlap. */
+  const staggers = useMemo(() => {
+    const byRow: Record<number, string[]> = {};
+    for (const room of office.rooms) byRow[room.row] = [...(byRow[room.row] ?? []), room.id];
+    const out: Record<string, number> = {};
+    for (const ids of Object.values(byRow)) {
+      const sorted = ids
+        .map((id) => office.rooms.find((r) => r.id === id)!)
+        .sort((a, b) => a.x - b.x)
+        .map((r) => r.id);
+      sorted.forEach((id, i) => {
+        out[id] = i % 2;
+      });
+    }
+    return out;
+  }, [office.rooms]);
 
   return (
     <svg
@@ -474,21 +593,15 @@ export function OfficeScene({
           />
         ))}
 
-        {/* Roads: the spine and one lane per shelf row, kerbed so they read as
-            the ways between units rather than as gaps in the floor. */}
+        {/* Roads: the spine and one lane per shelf row, kerbed and railed so
+            they read as the ways between units rather than as gaps in the floor. */}
         <polygon
           points={floorRect(6, -8, SPINE_W - 12, office.height + 16, 1)}
           fill={WALK}
           stroke={KERB}
           strokeWidth={1.5}
         />
-        <polyline
-          points={polyPoints([project(SPINE_W / 2, -8, 1), project(SPINE_W / 2, office.height + 8, 1)])}
-          fill="none"
-          stroke="#5b6b8a"
-          strokeWidth={2}
-          strokeDasharray="14 12"
-        />
+        <Conveyor from={{ x: SPINE_W / 2, y: -8 }} to={{ x: SPINE_W / 2, y: office.height + 8 }} half={18} />
         {corridors.map((y) => (
           <g key={`c${y}`}>
             <polygon
@@ -497,30 +610,31 @@ export function OfficeScene({
               stroke={KERB}
               strokeWidth={1.5}
             />
-            <polyline
-              points={polyPoints([project(-8, y, 1), project(office.width + 8, y, 1)])}
-              fill="none"
-              stroke="#5b6b8a"
-              strokeWidth={2}
-              strokeDasharray="14 12"
-            />
+            <Conveyor from={{ x: -8, y }} to={{ x: office.width + 8, y }} half={18} />
           </g>
         ))}
 
         {/* A spur from every unit's door to the lane that serves it, so each
-            department is visibly plugged into the same road network. */}
+            department is visibly plugged into the same network. */}
         {office.rooms.map((room) => {
           const lane = office.corridorY[room.id];
           const from = room.door.y;
           if (!Number.isFinite(lane) || lane <= from) return null;
           return (
-            <polygon
-              key={`spur-${room.id}`}
-              points={floorRect(room.door.x - 19, from - 4, 38, lane - from + 6, 1)}
-              fill={WALK}
-              stroke={KERB}
-              strokeWidth={1.2}
-            />
+            <g key={`spur-${room.id}`}>
+              <polygon
+                points={floorRect(room.door.x - 19, from - 4, 38, lane - from + 6, 1)}
+                fill={WALK}
+                stroke={KERB}
+                strokeWidth={1.2}
+              />
+              <Conveyor
+                from={{ x: room.door.x, y: from }}
+                to={{ x: room.door.x, y: lane + 4 }}
+                half={13}
+                tie={24}
+              />
+            </g>
           );
         })}
 
@@ -545,6 +659,7 @@ export function OfficeScene({
             activities={activities}
             focused={focusRoomId === room.id}
             newRoom={newRoomIds.has(room.id)}
+            stagger={staggers[room.id] ?? 0}
           />
         ))}
 
@@ -570,6 +685,13 @@ export function OfficeScene({
             />
           );
         })}
+
+        {/* Where people are walking: a striped route on the floor, so a glance
+            shows not just that somebody is moving but where they are going.
+            Drawn under the cast, written by the walk loop, never by React. */}
+        {people.map((id) => (
+          <path key={`trail-${id}`} className="sprite-trail" ref={registerTrail(id)} fill="none" />
+        ))}
 
         {people.map((id) => {
           const agent = office.agentOf[id];

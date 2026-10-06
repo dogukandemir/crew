@@ -24,8 +24,20 @@
 import { ATLAS, type AtlasEntry } from './atlas.gen';
 import { UNITS_PER_METRE } from '../office/iso';
 
-/** World units per sprite pixel. */
-export const SPRITE_UNIT = UNITS_PER_METRE / (ATLAS.world.tilePixels / 2);
+/** World units per sprite pixel, horizontally (the floor's 2:1 axis). */
+export const SPRITE_UNIT_X = UNITS_PER_METRE / (ATLAS.world.tilePixels / 2);
+
+/**
+ * World units per sprite pixel, vertically.
+ *
+ * NOT the same number, and that is the whole point. spriteforge draws a metre of
+ * FLOOR as 16 px of screen x (the 2:1 tile) and a metre of HEIGHT as 24 px of
+ * screen y, so a sprite's two axes are different world scales. Rendering with one
+ * uniform factor — which is what this did first — lands every object 1.5× too tall
+ * for its own footprint: desks like slabs, plants like trees, and nothing lining up
+ * with the rooms the simulation builds.
+ */
+export const SPRITE_UNIT_Y = UNITS_PER_METRE / ATLAS.world.heightPixelsPerMetre;
 
 const BY_NAME = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
 

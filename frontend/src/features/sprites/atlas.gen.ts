@@ -9,7 +9,11 @@
 export type AtlasEntry = { name: string; x: number; y: number; w: number; h: number; ax: number; ay: number };
 
 export const ATLAS = {
-  world: { pixelsPerMetre: 32, tilePixels: 32 },
+  world: {
+    pixelsPerMetre: 32,
+    tilePixels: 32,
+    heightPixelsPerMetre: 24,
+  },
   width: 512,
   height: 1717,
   looks: 64,

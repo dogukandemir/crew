@@ -11,7 +11,7 @@
  */
 import atlasUrl from './atlas.png';
 import { project } from '../office/iso';
-import { SPRITE_UNIT, entry } from './sprites';
+import { SPRITE_UNIT_X, SPRITE_UNIT_Y, entry } from './sprites';
 
 export function Sprite({
   name,
@@ -37,10 +37,12 @@ export function Sprite({
   if (!e) return null;
 
   const p = project(x, y, z);
-  const left = p.x - e.ax * SPRITE_UNIT;
-  const top = p.y - e.ay * SPRITE_UNIT;
-  const w = e.w * SPRITE_UNIT;
-  const h = e.h * SPRITE_UNIT;
+  // Two scales on purpose: a sprite's horizontal axis is floor (2:1, 16 px per
+  // metre) and its vertical axis is height (24 px per metre). See SPRITE_UNIT_Y.
+  const left = p.x - e.ax * SPRITE_UNIT_X;
+  const top = p.y - e.ay * SPRITE_UNIT_Y;
+  const w = e.w * SPRITE_UNIT_X;
+  const h = e.h * SPRITE_UNIT_Y;
 
   const image = (
     <image

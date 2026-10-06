@@ -197,7 +197,16 @@ export function Workstation({
       {/* The chair is its own sprite: the sim seats a body on it, so it has to be
           placeable on its own. */}
       <Chair at={{ x: mid, y: sitY }} />
-      <Sprite name={screen && busy ? 'prop.desk.busy' : 'prop.desk'} x={x} y={y} />
+      {/* The atlas desk is drawn at its own size — 2 m across, in its own
+          proportions — so it is centred on the desk the simulation actually
+          assigned rather than aligned to its corner. The offset is the sprite's own
+          half-footprint: one metre along x, half a metre along y. The chair and the
+          sitter still come from DESK_W, which is what the sim moves around. */}
+      <Sprite
+        name={screen && busy ? 'prop.desk.busy' : 'prop.desk'}
+        x={x + DESK_W / 2 - UNITS_PER_METRE}
+        y={y + DESK_SLAB_D / 2 - UNITS_PER_METRE / 2}
+      />
     </g>
   );
 }

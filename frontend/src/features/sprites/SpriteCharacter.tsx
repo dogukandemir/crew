@@ -19,7 +19,7 @@ import { useEffect, useRef } from 'react';
 import type { ActivityKind } from '../../sim/activity';
 import atlasUrl from '../sprites/atlas.png';
 import { ATLAS, type AtlasEntry } from '../sprites/atlas.gen';
-import { lookIndex } from '../sprites/sprites';
+import { SPRITE_UNIT_X, SPRITE_UNIT_Y, lookIndex } from '../sprites/sprites';
 
 export interface SpriteMotion {
   facing: 1 | -1;
@@ -84,13 +84,14 @@ export function SpriteCharacter({
       const e = cell(facing, pose) ?? cell('front', 'stand');
       if (e && img.current) {
         // The cell is drawn in the caller's local space with the feet on the
-        // origin: the anchor is the pixel that touches the floor, so it is the
-        // point that has to land on (0, 0).
-        const k = height / 40;
-        img.current.setAttribute('x', (-e.ax * k).toFixed(2));
-        img.current.setAttribute('y', (-e.ay * k).toFixed(2));
-        img.current.setAttribute('width', (e.w * k).toFixed(2));
-        img.current.setAttribute('height', (e.h * k).toFixed(2));
+        // origin. `height` is how tall the figure should be there; the horizontal
+        // axis is a different world scale, so it takes the ratio of the two.
+        const ky = height / 40;
+        const kx = ky * (SPRITE_UNIT_X / SPRITE_UNIT_Y);
+        img.current.setAttribute('x', (-e.ax * kx).toFixed(2));
+        img.current.setAttribute('y', (-e.ay * ky).toFixed(2));
+        img.current.setAttribute('width', (e.w * kx).toFixed(2));
+        img.current.setAttribute('height', (e.h * ky).toFixed(2));
       }
 
       if (mirror.current) {

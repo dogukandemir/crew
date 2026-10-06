@@ -49,6 +49,7 @@ import {
   mix,
   shade,
 } from './props';
+import { Partition } from './props';
 import { cn } from '../../lib/cn';
 
 const FLOOR = '#161c27';
@@ -234,14 +235,17 @@ function RoomDesks({
       {room.desks.map((desk) => {
         const act = activities[desk.agentId];
         const busy = act?.kind === 'typing' || act?.kind === 'tool';
+        const deskX = room.x + desk.x;
+        const deskY = room.y + desk.y;
         return (
-          <Workstation
-            key={desk.agentId}
-            x={room.x + desk.x}
-            y={room.y + desk.y}
-            busy={busy}
-            glow={mix('#7cc4ff', accent, 0.5)}
-          />
+          <g key={desk.agentId}>
+            {/* The bay this desk sits in: a partition either side, which is what
+                makes one place end and the next begin. A room says "Engineering";
+                only these say whose spot is whose. */}
+            <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
+            <Partition at={{ x: deskX + DESK_W + 14 - mh(1), y: deskY + mh(0.4) }} />
+            <Workstation x={deskX} y={deskY} busy={busy} glow={mix('#7cc4ff', accent, 0.5)} />
+          </g>
         );
       })}
       {/* Corner dressing: every real office has a sad plant and a cabinet. */}

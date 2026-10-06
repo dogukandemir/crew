@@ -221,6 +221,19 @@ export function Plant({ x, y, scale: _scale = 1 }: { x: number; y: number; scale
   );
 }
 
+/**
+ * A bay partition: the low panel that bounds one unit's workspace.
+ *
+ * StarNet's unit is a bay, and a bay is what its own partitions enclose — a room
+ * only says which department, not where one person's place ends and the next
+ * begins. `prop.partition.1` is one bay's worth, `.2` two, `prop.partition` a run
+ * of three, all of them drawn from the atlas like everything else here.
+ */
+export function Partition({ at, tiles = 1 }: { at: { x: number; y: number }; tiles?: 1 | 2 | 3 }) {
+  const name = tiles === 1 ? 'prop.partition.1' : tiles === 2 ? 'prop.partition.2' : 'prop.partition';
+  return <Sprite name={name} x={at.x} y={at.y} />;
+}
+
 /** A whiteboard / glass board on a wall, with scribbles. */
 export function Whiteboard({ x, y, w: _w = 120, h: _h = 56 }: { x: number; y: number; w?: number; h?: number }) {
   // The board's height comes from the sprite now, not from the caller. A caller

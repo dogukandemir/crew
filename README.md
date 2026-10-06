@@ -41,17 +41,40 @@ scripts/          Dev/ops helpers
 ## Quick start (dev)
 
 ```bash
-# backend
+# 1. backend  (API + orchestrator; serves the REST contract and the event socket)
 cd backend
 uv sync
-cp ../.env.example .env          # fill in your provider keys
-uv run uvicorn crew.api.main:app --reload --port 8787
+cp ../.env.example .env          # add ONE provider key for real agent runs
+uv run python -m crew serve      # http://127.0.0.1:8787  (docs at /docs)
 
-# frontend
-cd frontend
+# 2. frontend (tabbed control room)
+cd ../frontend
 npm install
 npm run dev                      # http://localhost:5173
+
+# 3. optional: same pipeline with zero spend and zero keys (deterministic fake runner)
+CREW_OFFLINE_LLM=true uv run python -m crew serve
 ```
+
+Useful commands:
+
+```bash
+uv run pytest                    # 54 tests, no network required
+uv run pytest -m live -s         # real provider run (needs a key; costs a few cents)
+uv run ruff check src tests
+uv run python -m crew status     # env, data dir, model tiers, sandbox mode
+uv run python -m crew audit verify
+```
+
+Configure a project you want to try end to end:
+
+1. Create a project (UI tab, or `POST /api/projects`).
+2. State a goal: `POST /api/projects/{id}/runs {"goal": "...", "mode": "autonomous"}`.
+3. Watch the tabs: **Org** (it hires itself), **Tasks**, **Agents** (live timelines),
+   **Reward** (score changes), **Events** (the raw stream).
+
+Read [docs/13](docs/13-backend-implementation-notes.md) before changing code: it lists what is
+implemented, what is deliberately stubbed, and the bugs already found and fixed.
 
 ## Status
 

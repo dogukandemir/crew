@@ -187,6 +187,9 @@ export function hairKind(style: HairStyle): HairKind {
       return 'bun';
     case 'ponytail':
       return 'ponytail';
+    case 'braid':
+      // A plait hangs like a ponytail, which is the nearest shape the rig has.
+      return 'ponytail';
     case 'long':
       return 'long';
     default:

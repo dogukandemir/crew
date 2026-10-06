@@ -83,7 +83,7 @@ function Agent({
   onSelect: (id: string | null) => void;
 }) {
   const group = useRef<THREE.Group>(null);
-  const look = useMemo(() => lookFor(agent.id, agent.role, agent.grade), [agent.id, agent.role, agent.grade]);
+  const look = useMemo(() => lookFor(agent.id, agent.role, agent.grade, agent.name), [agent.id, agent.role, agent.grade, agent.name]);
   const motion = useRef<RigMotion>({ moving: false, speed: 0, selected });
   motion.current.selected = selected;
   const walker = useRef<Walker>(newWalker(agent.desk.x, agent.desk.y));

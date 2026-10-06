@@ -100,7 +100,11 @@ export function SvgCharacter({ look, activity, atDesk, motion, size = 46, faded 
       last = now;
 
       const mov = motion.current;
-      const poseNow = mov.moving ? poseForContext('walking', false) : poseForContext(activity, atDesk);
+      // `walking` is a destination as well as a pose: an agent sent to the review
+      // table keeps that activity after it arrives, and it must not walk on the
+      // spot for the rest of the day. Only actual movement plays the walk cycle.
+      const poseContext = mov.moving ? 'walking' : activity === 'walking' ? 'idle' : activity;
+      const poseNow = poseForContext(poseContext, atDesk);
       current.current = blendPose(current.current, poseNow, Math.min(1, dt * POSE_RATE));
 
       const p = to2d(current.current, fig);
@@ -253,15 +257,35 @@ function Head({
       <circle cx={cx - r + 1} cy={cy + 1} r={2.6} fill={skin} stroke={INK} strokeWidth={1.1} />
       <circle cx={cx + r - 1} cy={cy + 1} r={2.6} fill={skin} stroke={INK} strokeWidth={1.1} />
 
-      {/* Hair on top */}
+      {/* Hair on top. A highlight and a part line are what make a dark dome on a
+          round head read as hair rather than as a helmet. */}
       {kind !== 'none' && (
-        <path
-          d={capPath(kind === 'cap' ? 5 : 8)}
-          fill={hair}
-          stroke={hairInk}
-          strokeWidth={1.2}
-          strokeLinejoin="round"
-        />
+        <>
+          <path
+            d={capPath(kind === 'cap' ? 5 : 8)}
+            fill={hair}
+            stroke={hairInk}
+            strokeWidth={1.2}
+            strokeLinejoin="round"
+          />
+          <path
+            d={`M ${cx - r * 0.58} ${cy - r * 0.52} Q ${cx - 1} ${cy - r * 0.92} ${cx + r * 0.5} ${cy - r * 0.6}`}
+            fill="none"
+            stroke={lift(hair, 0.55)}
+            strokeWidth={1.7}
+            strokeLinecap="round"
+            opacity={0.7}
+          />
+          {(kind === 'capFringe' || kind === 'sideSweep') && (
+            <path
+              d={`M ${cx - 2.5} ${cy - 5.5} Q ${cx + 1.5} ${cy - 11} ${cx + 6.5} ${cy - 13}`}
+              fill="none"
+              stroke={hairInk}
+              strokeWidth={1}
+              opacity={0.55}
+            />
+          )}
+        </>
       )}
       {kind === 'sideSweep' && (
         <path d={`M ${cx - r - 1} ${cy - 3} Q ${cx - 2} ${cy - 12} ${cx + r + 1} ${cy - 4} Q ${cx + 4} ${cy - 2} ${cx - r - 1} ${cy - 3} Z`} fill={hair} stroke={hairInk} strokeWidth={1.1} />

@@ -16,14 +16,24 @@
  * company actually looks.
  */
 
-export type HairStyle = 'buzz' | 'short' | 'wave' | 'bun' | 'ponytail' | 'long' | 'curly' | 'bald';
+export type HairStyle = 'buzz' | 'short' | 'wave' | 'bun' | 'ponytail' | 'long' | 'curly' | 'braid' | 'bald';
 export type FacialHair = 'none' | 'stubble' | 'beard' | 'goatee';
 export type Frame = 'slim' | 'average' | 'broad';
 export type TopKind = 'tee' | 'shirt' | 'blouse' | 'hoodie' | 'blazer' | 'labcoat' | 'hivis';
 export type BottomKind = 'trousers' | 'skirt' | 'dress';
+/**
+ * Which hair set somebody draws from.
+ *
+ * The org data carries no gender, so this is a *styling* choice, not a claim: a
+ * recognisable first name decides it where the system knows the name, and
+ * otherwise it is derived from the agent id like every other trait, so the same
+ * person still looks the same on every reload.
+ */
+export type Presentation = 'feminine' | 'masculine';
 
 export interface CharacterLook {
   seed: number;
+  presentation: Presentation;
   /** Overall stature multiplier (0.93 short … 1.07 tall). */
   height: number;
   frame: Frame;
@@ -53,17 +63,26 @@ const SKIN = [
   '#65402c',
 ] as const;
 
+/**
+ * Hair colours. Deliberately spread across black, brown, blonde, ginger, auburn,
+ * grey and white — a floor where everybody's hair is dark brown reads as a row of
+ * identical helmets, which is exactly how the first pass looked.
+ */
 const HAIR = [
-  '#1a1512',
-  '#2b1f18',
-  '#3d2b1f',
-  '#54371f',
-  '#7a4b25',
-  '#a8743c',
-  '#c9a227',
+  '#151114',
+  '#241a15',
+  '#3c2718',
+  '#5c3c1f',
+  '#7d5126',
+  '#a06a2c',
+  '#c9a03f',
+  '#e2c477',
+  '#a8401f',
+  '#6d3320',
   '#8f8f96',
-  '#d9d9de',
+  '#dcdce2',
   '#4a2f3a',
+  '#2f3d4a',
 ] as const;
 
 const TOPS = [
@@ -143,44 +162,79 @@ function dressCode(role: string, grade: number | undefined, r: () => number): To
 }
 
 // Bald is the *absence* of hair and is handled separately below, not as a style.
-const HAIR_STYLES: HairStyle[] = ['buzz', 'short', 'wave', 'bun', 'ponytail', 'long', 'curly'];
+// The two sets are what makes a floor read as a mixed group at a glance. Neither
+// is a claim about anybody: see `Presentation`.
+const HAIR_FEMININE: HairStyle[] = ['long', 'ponytail', 'bun', 'wave', 'braid', 'curly', 'short'];
+const HAIR_MASCULINE: HairStyle[] = ['short', 'buzz', 'wave', 'curly', 'short', 'short'];
 
-export function lookFor(agentId: string, role = 'agent', grade?: number): CharacterLook {
+/** First names that read clearly enough to pick a hair set, and their set. */
+const FEMININE_NAMES = [
+  'ada', 'cleo', 'iris', 'zeynep', 'elif', 'ayse', 'ayşe', 'fatma', 'emine', 'meryem',
+  'selin', 'esra', 'melis', 'ceren', 'sara', 'sarah', 'emma', 'olivia', 'sophia', 'mia',
+  'lena', 'nora', 'ava', 'maya', 'chloe', 'clara', 'julia', 'anna', 'maria', 'nina',
+  'priya', 'yuki', 'mei', 'aisha', 'leyla', 'melisa', 'gamze', 'damla', 'ipek',
+];
+const MASCULINE_NAMES = [
+  'bo', 'alex', 'dev', 'ahmet', 'mehmet', 'mustafa', 'ali', 'huseyin', 'hüseyin', 'hasan',
+  'emre', 'kerem', 'can', 'cem', 'burak', 'jack', 'liam', 'noah', 'ethan', 'luca',
+  'diego', 'omar', 'adam', 'daniel', 'marco', 'ivan', 'raj', 'kenji', 'wei', 'yusuf',
+  'mert', 'tolga', 'onur', 'baran', 'arda',
+];
+
+/** Which hair set a name suggests, or undefined when the name says nothing. */
+export function presentationFromName(name: string | undefined): Presentation | undefined {
+  if (!name) return undefined;
+  const first = name.trim().toLowerCase().split(/\s+/)[0];
+  if (!first) return undefined;
+  if (FEMININE_NAMES.includes(first)) return 'feminine';
+  if (MASCULINE_NAMES.includes(first)) return 'masculine';
+  return undefined;
+}
+
+export function lookFor(agentId: string, role = 'agent', grade?: number, name?: string): CharacterLook {
   const seed = hash(`${agentId}:look`);
   const r = rng(seed);
+
+  const presentation: Presentation =
+    presentationFromName(name) ?? (chance(r, 0.5) ? 'feminine' : 'masculine');
 
   const height = Number(between(r, 0.93, 1.07).toFixed(3));
   const frame: Frame = pick(['slim', 'average', 'average', 'broad'] as const, r);
   const skin = pick(SKIN, r);
 
-  // Bald is a small minority and skews older, which reads naturally on a floor.
-  const hairStyle: HairStyle = chance(r, 0.07) ? 'bald' : pick(HAIR_STYLES, r);
-  const greyHair = hairStyle !== 'bald' && (grade ?? 2) >= 4 && chance(r, 0.28);
+  // Hair comes from the person's own set. Bald stays a small minority and skews
+  // older, which reads naturally on a floor.
+  const set = presentation === 'feminine' ? HAIR_FEMININE : HAIR_MASCULINE;
+  const hairStyle: HairStyle = chance(r, 0.06) ? 'bald' : pick(set, r);
+  const greyHair = hairStyle !== 'bald' && (grade ?? 2) >= 4 && chance(r, 0.18);
   const hairColor = greyHair ? '#b9b9c2' : pick(HAIR, r);
 
-  const facialHair: FacialHair = chance(r, 0.45)
-    ? pick(['stubble', 'beard', 'goatee'] as const, r)
-    : 'none';
+  const facialHair: FacialHair =
+    presentation === 'masculine' && chance(r, 0.5)
+      ? pick(['stubble', 'beard', 'goatee'] as const, r)
+      : 'none';
 
   const kind = dressCode(role, grade, r);
   const topColor = pick(TOPS, r);
 
   // A dress or skirt is a personal choice, not a job title.
-  const wantsSkirt = chance(r, 0.26);
+  const wantsSkirt = presentation === 'feminine' ? chance(r, 0.6) : chance(r, 0.05);
   const bottomKind: BottomKind = wantsSkirt ? (chance(r, 0.4) ? 'dress' : 'skirt') : 'trousers';
 
   const tiesToTop = kind === 'hivis' || kind === 'labcoat';
 
   return {
     seed,
+    presentation,
     height,
     frame,
     skin,
     hair: { style: hairStyle, color: hairColor },
     facialHair,
     glasses: chance(r, 0.32),
-    headset: RE_SUPPORT.test(role) || chance(r, 0.06),
-    cap: RE_OPS.test(role) ? chance(r, 0.8) : chance(r, 0.05),
+    headset: RE_SUPPORT.test(role) || chance(r, 0.05),
+    // A hard hat is issued kit for the people who need one, never a hairstyle.
+    cap: RE_OPS.test(role) ? chance(r, 0.75) : false,
     badge: chance(r, 0.94) ? pick(BADGES, r) : null,
     top: {
       kind,

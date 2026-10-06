@@ -37,7 +37,7 @@ export const ACTIVITY_ORDER: ActivityKind[] = [
   'idle',
 ];
 
-export type WalkTarget = 'desk' | 'commons' | 'orchestrator';
+export type WalkTarget = 'desk' | 'commons' | 'orchestrator' | 'peer';
 
 export interface Activity {
   kind: ActivityKind;
@@ -47,8 +47,37 @@ export interface Activity {
   note: string;
   /** Where the character should be standing. */
   where: WalkTarget;
+  /**
+   * The colleague this activity is aimed at, when the harness named one. The
+   * floor plan resolves the name to a desk, which is what lets a character walk
+   * over and ask a question instead of miming it alone.
+   */
+  peerName?: string;
   /** ms timestamp of the event that drove this, when there was one. */
   at?: number;
+}
+
+/**
+ * The colleague a message was addressed to.
+ *
+ * The harness writes `ask_colleague` as `agent.message` with a payload of
+ * `{to, text, direction}`; a report goes `{direction: 'up'}`. Reading the name
+ * out of the payload is what grounds "Ada walks over to Bo" in a real tool call
+ * rather than in decoration. An unusable name is ignored, not guessed at.
+ */
+function peerNameOf(event: EventRow): string | undefined {
+  const payload = event.payload;
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as Record<string, unknown>;
+
+  const to = record.to;
+  if (typeof to === 'string') {
+    const name = to.trim();
+    if (name.length > 0 && name.length <= 40) return name;
+  }
+  // A message reported upward goes to whoever runs the floor.
+  if (record.direction === 'up') return 'manager';
+  return undefined;
 }
 
 /** Recency windows (ms). */
@@ -185,7 +214,15 @@ export function deriveActivity({ agent, task, events, now, arriving }: ActivityI
     now,
   );
   if (talk) {
-    return { kind: 'talking', bubble: '💬', note: talk.title, where: 'desk', at: Date.parse(talk.ts) };
+    const peerName = peerNameOf(talk);
+    return {
+      kind: 'talking',
+      bubble: '💬',
+      note: talk.title,
+      where: peerName ? 'peer' : 'desk',
+      peerName,
+      at: Date.parse(talk.ts),
+    };
   }
 
   if (task && ACTIVE_TASK_STATES.includes(task.state)) {

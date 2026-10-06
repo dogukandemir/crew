@@ -26,6 +26,7 @@ import { distance, type Point } from '../../sim/geometry';
 import { panBy, zoomAt, type Transform } from './viewport';
 import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
 import type { SvgMotionRef } from '../characters/SvgCharacter';
+import type { Target } from '../../sim/targets';
 import './office2d.css';
 
 const ARRIVAL_MS = 3200;
@@ -76,6 +77,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const spriteEls = useRef<Map<string, HTMLDivElement>>(new Map());
   /** Per-character frame data the SVG rig reads; never React state. */
   const motions = useRef<Map<string, SvgMotionRef>>(new Map());
+  /** Latest targets, for the walk loop to read who is facing whom. */
+  const targetsRef = useRef<Record<string, Target>>({});
 
   /** One stable motion box per agent, created on first use. */
   const motionFor = useCallback((id: string): SvgMotionRef => {
@@ -250,6 +253,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   }, [targets, visibleIds, office, arrivingIds]);
 
   // ── The walk loop: one rAF for every character ─────────────────────────────
+  targetsRef.current = targets;
+
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -266,7 +271,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         if (next.moving !== el.classList.contains('is-walking')) {
           el.classList.toggle('is-walking', next.moving);
         }
-        const flip = String(next.facing);
+        const facingAt = !next.moving ? targetsRef.current[id]?.faceTowards : undefined;
+        const flip = String(facingAt ? (facingAt.x >= next.x ? 1 : -1) : next.facing);
         if (el.style.getPropertyValue('--flip') !== flip) el.style.setProperty('--flip', flip);
 
         // Hand the same movement to the character rig, so the walk cycle is

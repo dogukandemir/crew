@@ -277,3 +277,30 @@ The same discipline applies to the drawing itself. Height is a real screen heigh
 so a horizontal edge that dips below the eyes is a band across the face — the hair cap's lower edge is
 tested by eye against the eye line, and the eyes are drawn without brows because at the size a floor
 of characters is actually seen, brows plus a fringe read as one dark bar.
+
+## 13. Rooms the organization asks for
+
+Three of the floor's rooms are not decoration; they exist because the org said so, and people use
+them because of what the log says they are doing.
+
+| Room | Exists when | Used when |
+|---|---|---|
+| **Lab** | a department's name or mission reads as research | an agent's current task reads as research (`benchmark`, `experiment`, `analysis`, `prototype`, `study`, `measure`…), and the reason names the task |
+| **Break corner** | always | somebody has been genuinely idle past the threshold: chairs first, then the two ends of the foosball table, then the vending machine queue, then the counter |
+| **Review table** | always | a task is in `verifying` |
+
+The break corner is one layout, not two. `breakLayout()` in the floor plan returns the tables, the
+vending machine, its queue spots, the foosball table and its two ends; the simulation seats people on
+those points and the renderer draws the props that own them, so they cannot drift apart. What is said
+about somebody there is a fact and nothing more — "on a break with <names>" or "playing foosball with
+<name>" — because two idle people standing at a table is knowable and a conversation is not.
+
+**Poses are chosen by movement, not by intent.** `walking` is a destination as well as a pose: an agent
+sent to the review table keeps that activity after it arrives. The rig therefore plays the walk cycle
+only while the walker is actually moving, or the whole floor walks on the spot.
+
+**Hair, not helmets.** Hair comes in two sets chosen by a recognisable first name (else derived from
+the agent id, so it is stable), across a palette that spans black through blonde and ginger to grey.
+Two details matter more than the palette: the fringe must clear the eye line, and a dark dome needs a
+highlight and a part line, or a head reads as a hard hat. An actual hard hat is issued kit for the
+roles that need one, never a random draw.

@@ -1,0 +1,119 @@
+/**
+ * A character, drawn as a sprite from the atlas on the office floor.
+ *
+ * This is the sprite-drawing half of the pair with `SvgCharacter`: the same
+ * activity, the same motion ref, the same local space (the feet at the origin, the
+ * figure growing upward in negative y). What changes is that the figure is one
+ * atlas cell instead of an articulated rig.
+ *
+ * Identity is by name-hash into the atlas's 64 looks. The vector `lookFor` can
+ * express far more combinations than a fixed atlas can carry; the trade is that the
+ * atlas cannot be arbitrary, so a look is a *member of a cast* rather than a
+ * formula. It is still deterministic per agent — the same person every session.
+ *
+ * The rAF loop writes the cell's x/y/width/height attributes directly, the same way
+ * the SVG rig wrote limb rotations: React does not re-render for animation, and a
+ * two-frame walk cycle is what four hand-drawn poses buy.
+ */
+import { useEffect, useRef } from 'react';
+import type { ActivityKind } from '../../sim/activity';
+import atlasUrl from '../sprites/atlas.png';
+import { ATLAS, type AtlasEntry } from '../sprites/atlas.gen';
+import { lookIndex } from '../sprites/sprites';
+
+export interface SpriteMotion {
+  facing: 1 | -1;
+  moving: boolean;
+  /** Simulation units per second. */
+  speed: number;
+}
+
+export interface SpriteMotionRef {
+  current: SpriteMotion;
+}
+
+/** Seconds per frame of the two-frame walk. */
+const STRIDE = 0.22;
+
+export function SpriteCharacter({
+  name,
+  activity,
+  atDesk,
+  motion,
+  /** Drawn height in local pixels — the figure's feet land on the local origin. */
+  height,
+  faded,
+}: {
+  name: string;
+  activity: ActivityKind;
+  atDesk: boolean;
+  motion: SpriteMotionRef;
+  height: number;
+  faded?: boolean;
+}) {
+  const img = useRef<SVGImageElement>(null);
+  const mirror = useRef<SVGGElement>(null);
+
+  useEffect(() => {
+    const atlas = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
+    const look = lookIndex(name);
+    const cell = (facing: string, pose: string): AtlasEntry | undefined =>
+      atlas.get(`char.${look}.${facing}.${pose}`);
+
+    let raf = 0;
+    let last = performance.now();
+    let phase = 0;
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      const mov = motion.current;
+      phase += dt;
+
+      // `walking` is a destination as much as a movement: an agent sent to the
+      // review table keeps that activity after it arrives. Only real movement
+      // plays the walk cycle, exactly as the rig did.
+      let facing: 'front' | 'side' = 'front';
+      let pose: 'stand' | 'walkA' | 'walkB' | 'sit' = 'stand';
+      if (atDesk) pose = 'sit';
+      else if (mov.moving) {
+        facing = 'side';
+        pose = Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB';
+      }
+
+      const e = cell(facing, pose) ?? cell('front', 'stand');
+      if (e && img.current) {
+        // The cell is drawn in the caller's local space with the feet on the
+        // origin: the anchor is the pixel that touches the floor, so it is the
+        // point that has to land on (0, 0).
+        const k = height / 40;
+        img.current.setAttribute('x', (-e.ax * k).toFixed(2));
+        img.current.setAttribute('y', (-e.ay * k).toFixed(2));
+        img.current.setAttribute('width', (e.w * k).toFixed(2));
+        img.current.setAttribute('height', (e.h * k).toFixed(2));
+      }
+
+      if (mirror.current) {
+        // Mirror about the figure's own centre — the local origin. Mirroring the
+        // caller's group would flip the name tag and the bubble with it.
+        mirror.current.setAttribute('transform', `scale(${mov.facing < 0 ? -1 : 1} 1)`);
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [name, activity, atDesk, motion, height]);
+
+  return (
+    <g ref={mirror} opacity={faded ? 0.55 : 1}>
+      <image
+        ref={img}
+        href={atlasUrl}
+        preserveAspectRatio="none"
+        style={{ imageRendering: 'pixelated' }}
+      />
+    </g>
+  );
+}

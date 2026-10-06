@@ -27,8 +27,7 @@ import type { FloorPulse } from '../../sim/rooms';
 import type { Target } from '../../sim/targets';
 import type { SvgMotionRef } from '../characters/SvgCharacter';
 import { Bubble } from './Bubble';
-import { SvgCharacter } from '../characters/SvgCharacter';
-import { lookFor } from '../characters/look';
+import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import { mh, boxFaces, floorRect, polyPoints, project } from './iso';
 import {
   Box,
@@ -411,11 +410,6 @@ function Sprite({
   onSelect: () => void;
   register: (el: SVGGElement | null) => void;
 }) {
-  const look = useMemo(
-    () => lookFor(agent.id, agent.role ?? 'agent', agent.grade, agent.name),
-    [agent.id, agent.role, agent.grade, agent.name],
-  );
-
   const speech = activity.speech;
 
   return (
@@ -436,12 +430,12 @@ function Sprite({
       {selected && <ellipse className="sprite-ring" cx={0} cy={0} rx={CHAR_W * 0.46} ry={CHAR_W * 0.23} />}
 
       <g className="sprite-body" transform={`translate(${(-CHAR_W / 2).toFixed(2)} ${(-FEET_Y).toFixed(2)})`}>
-        <SvgCharacter
-          look={look}
+        <SpriteCharacter
+          name={agent.id}
           activity={activity.kind}
           atDesk={atDesk}
           motion={motion}
-          size={CHAR_SIZE}
+          height={FEET_Y}
           faded={activity.kind === 'offline'}
         />
       </g>

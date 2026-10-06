@@ -39,10 +39,30 @@ export const ACTIVITY_ORDER: ActivityKind[] = [
 
 export type WalkTarget = 'desk' | 'commons' | 'orchestrator' | 'peer';
 
+/**
+ * What kind of thing is being said, which decides the bubble's colour.
+ *
+ * The distinction matters to a viewer: a report to a manager, a directive coming
+ * back down, an escalation and a chat between colleagues should not look the
+ * same. The kind is read off the event — its type and the payload's own
+ * `direction`/`informal` fields — never off the text.
+ */
+export type SpeechKind = 'talk' | 'gossip' | 'report' | 'directive' | 'escalation' | 'delegation';
+
+export interface Speech {
+  kind: SpeechKind;
+  /** The actual words from the event payload. Never generated here. */
+  text: string;
+  /** Who it was said to, when the payload named someone. */
+  to?: string;
+}
+
 export interface Activity {
   kind: ActivityKind;
   /** Emoji shown in the bubble above the character, if any. */
   bubble?: string;
+  /** Words in the speech bubble above the character, if anyone spoke. */
+  speech?: Speech;
   /** Human explanation, surfaced on the desk tooltip. */
   note: string;
   /** Where the character should be standing. */
@@ -78,6 +98,44 @@ function peerNameOf(event: EventRow): string | undefined {
   // A message reported upward goes to whoever runs the floor.
   if (record.direction === 'up') return 'manager';
   return undefined;
+}
+
+/** The words of a message, from the payload field the harness writes. */
+function textOf(event: EventRow): string | undefined {
+  const payload = event.payload;
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as Record<string, unknown>;
+  for (const key of ['text', 'summary', 'message', 'subject']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * Which kind of bubble a message gets.
+ *
+ * Explicit wins, and the more specific marker wins over the more general: an
+ * escalation is an escalation, a hand-off is a hand-off, and a message the
+ * harness itself marked informal is chat no matter which way it travelled.
+ * Otherwise `direction` decides — `up` is a report to a manager, `down` is a
+ * directive from one. Failing all of that, a message sent by somebody who is
+ * not working on anything is water-cooler talk, which is the most this system
+ * can honestly claim to know about it.
+ */
+export function speechKindOf(event: EventRow, hasActiveWork: boolean): SpeechKind {
+  const payload = (event.payload ?? null) as Record<string, unknown> | null;
+  const type = event.type;
+  if (type === 'agent.escalated') return 'escalation';
+  if (type === 'agent.delegated') return 'delegation';
+  if (payload) {
+    if (payload.informal === true || payload.kind === 'gossip' || payload.topic === 'gossip') {
+      return 'gossip';
+    }
+    if (payload.direction === 'up') return 'report';
+    if (payload.direction === 'down') return 'directive';
+  }
+  return hasActiveWork ? 'talk' : 'gossip';
 }
 
 /** Recency windows (ms). */
@@ -215,9 +273,18 @@ export function deriveActivity({ agent, task, events, now, arriving }: ActivityI
   );
   if (talk) {
     const peerName = peerNameOf(talk);
+    const text = textOf(talk);
+    const speech: Speech | undefined = text
+      ? {
+          kind: speechKindOf(talk, !!task && ACTIVE_TASK_STATES.includes(task.state)),
+          text,
+          to: peerName,
+        }
+      : undefined;
     return {
       kind: 'talking',
       bubble: '💬',
+      speech,
       note: talk.title,
       where: peerName ? 'peer' : 'desk',
       peerName,

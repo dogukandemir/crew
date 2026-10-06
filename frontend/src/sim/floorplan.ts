@@ -83,6 +83,8 @@ export interface Office {
   deskOf: Record<string, Point>;
   /** Agent id → the room their desk sits in. */
   roomOf: Record<string, string>;
+  /** Agent id → the agent they report to, from the org's own `manager_id`. */
+  managerOf: Record<string, string>;
   agentOf: Record<string, OrgNode>;
   /** Room id → y of the corridor serving its shelf row. */
   corridorY: Record<string, number>;
@@ -171,6 +173,21 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
 
   const agentOf: Record<string, OrgNode> = {};
   for (const a of agents) agentOf[a.id] = a;
+
+  // The command chain, straight from the org tree's own manager_id — this is what
+  // lets a report walk to the reporter's actual manager, and onward to whoever
+  // runs the floor.
+  const managerOf: Record<string, string> = {};
+  for (const a of agents) {
+    const manager = a.manager_id;
+    if (manager && manager !== a.id) managerOf[a.id] = manager;
+  }
+  const top = agents.find((a) => /orchestrator/i.test(a.role ?? ''));
+  if (top) {
+    for (const a of agents) {
+      if (!managerOf[a.id] && a.id !== top.id) managerOf[a.id] = top.id;
+    }
+  }
 
   // The orchestrator runs the floor from its own office; it is the escalation target.
   const orchestrator = agents.find((a) => /orchestrator/i.test(a.role ?? ''));
@@ -349,6 +366,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
       : { x: SPINE_W / 2, y: height - 20 },
     deskOf,
     roomOf,
+    managerOf,
     agentOf,
     corridorY,
     spineX: SPINE_W / 2,

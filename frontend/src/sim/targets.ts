@@ -67,9 +67,18 @@ export function resolvePeer(office: Office, selfId: string, name: string): strin
   const wanted = name.toLowerCase().trim();
   if (!wanted) return undefined;
 
-  if (/^(manager|lead|head|boss|orchestrator|owner)$/.test(wanted)) {
-    return Object.keys(office.agentOf).find((id) => /orchestrator/i.test(office.agentOf[id].role ?? ''));
+  const orchestrator = Object.keys(office.agentOf).find((id) =>
+    /orchestrator/i.test(office.agentOf[id].role ?? ''),
+  );
+
+  // A report goes to the reporter's own manager — the org tree's `manager_id` —
+  // and only falls back to whoever runs the floor. So "reports to my manager"
+  // walks to a real desk, and a manager's own report walks up from there.
+  if (/^(manager|lead|head|boss|supervisor)$/.test(wanted)) {
+    const manager = office.managerOf[selfId];
+    return manager && manager !== selfId ? manager : orchestrator;
   }
+  if (/^(orchestrator|owner|board)$/.test(wanted)) return orchestrator;
 
   const names = Object.keys(office.agentOf);
   for (const id of names) {
@@ -215,7 +224,13 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
         shared.__break = [...(shared.__break ?? []), agentId];
         continue;
       }
-      out[agentId] = { agentId, roomId: home, point: desk, reason: act.note };
+      out[agentId] = {
+        agentId,
+        roomId: home,
+        point: desk,
+        reason: act.note,
+        faceTowards: { x: desk.x, y: desk.y - 30 },
+      };
       continue;
     }
 
@@ -234,7 +249,15 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
       continue;
     }
 
-    out[agentId] = { agentId, roomId: home, point: desk, reason: act?.note ?? 'at their desk' };
+    out[agentId] = {
+      agentId,
+      roomId: home,
+      point: desk,
+      reason: act?.note ?? 'at their desk',
+      // Sitting at your desk means looking at it. Without this the character
+      // keeps whatever way they were last walking and stares at the wall.
+      faceTowards: { x: desk.x, y: desk.y - 30 },
+    };
   }
 
   // Spread agents that share a spot onto a ring around it, turned inward so a

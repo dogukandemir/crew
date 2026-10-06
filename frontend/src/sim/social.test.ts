@@ -106,7 +106,10 @@ describe('asking a colleague in person', () => {
     });
     expect(out.bo.point).toEqual(OFFICE.deskOf.bo);
     expect(out.bo.roomId).toBe('d1');
-    expect(out.bo.faceTowards).toBeUndefined();
+    // Stays put and looks at their own desk — an unresolved name must not put
+    // anyone else on the floor as a recipient.
+    expect(out.bo.faceTowards?.x).toBe(OFFICE.deskOf.bo.x);
+    expect(out.bo.faceTowards?.y).toBeLessThan(OFFICE.deskOf.bo.y);
   });
 
   it('sends an upward report to the orchestrator', () => {
@@ -140,7 +143,9 @@ describe('working together', () => {
         [squadTask(state)],
       );
       expect(out.dev.point, `moved on a ${state} task`).toEqual(OFFICE.deskOf.dev);
-      expect(out.dev.faceTowards).toBeUndefined();
+      // Back at their own desk, they look at their own desk — never at Cleo.
+      expect(out.dev.faceTowards).not.toEqual(OFFICE.deskOf.cleo);
+      expect(out.dev.faceTowards?.x).toBe(OFFICE.deskOf.dev.x);
     }
   });
 

@@ -27,7 +27,7 @@ import {
 import type { FloorPulse } from '../../sim/rooms';
 import type { Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
-import { SPRITE_UNIT, scaleForWidth, spriteCentreOffset } from '../sprites/sprites';
+import { SPRITE_UNIT, scaleForWidth, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import type { ReactNode } from 'react';
@@ -346,16 +346,23 @@ function roomItems(
   }
 
   if (room.kind === 'lab') {
-    // The bench runs along the room with its stools on the open side. The caller's
-    // width becomes a scale read out of the art, so the bench that is drawn is the
-    // bench the room asked for.
+    // Every placement here is derived from a footprint in the manifest, and that is
+    // not tidiness: the room is 2.1 m of usable depth, the fume hood is 1 m and the
+    // bench 0.7 m. At the y they used to have, the hood's own footprint ran 0.67 m
+    // into the bench — which is what a bench disappearing under a tall cabinet is.
+    const hood = spriteFootprint('prop.fumehood');
+    const benchFoot = spriteFootprint('prop.labbench');
+    const hoodD = hood?.b ?? UNITS_PER_METRE;
+    const benchD = benchFoot?.b ?? UNITS_PER_METRE;
+    const hoodY = room.y + 16;
+    // The bench along the room's south edge, as far down as its own depth allows.
+    const benchY = room.y + room.h - ROOM_PAD - benchD - 4;
     const benchW = room.w - 44;
     const benchX = room.x + 22;
-    const benchY = room.y + 64;
     const boardX = room.x + room.w - 46;
     const boardY = room.y + 8;
     at(`${room.id}-board`, boardX, boardY, <Whiteboard key={`${room.id}-board`} x={boardX} y={boardY} w={74} h={38} />);
-    at(`${room.id}-hood`, room.x + 34, room.y + 40, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 34} y={room.y + 40} />);
+    at(`${room.id}-hood`, room.x + 18, hoodY, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 18} y={hoodY} />);
     at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} />);
     at(`${room.id}-bench`, benchX, benchY, <AtlasSprite key={`${room.id}-bench`} name="prop.labbench" x={benchX} y={benchY} scale={scaleForWidth('prop.labbench', benchW)} />);
     // Gear stands ON the bench, which is what the anchor's `z` is for: the worktop's
@@ -363,11 +370,12 @@ function roomItems(
     // hovering at the cupboard doors.
     at(`${room.id}-scope`, room.x + 44, benchY + mh(0.25), <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={room.x + 44} y={benchY + mh(0.25)} z={LAB_BENCH_TOP} />);
     at(`${room.id}-centrifuge`, room.x + benchW - 20, benchY + mh(0.3), <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={room.x + benchW - 20} y={benchY + mh(0.3)} z={LAB_BENCH_TOP} />);
-    // Stools along the bench's open side. A stool is drawn around its own centre, so
-    // the seat comes back by half a stool before the art goes down.
+    // Stools on the bench's OPEN side, which is the room's interior: a stool pushed
+    // back from the bench, not one inside it. A stool is drawn around its own centre,
+    // so the seat comes back by half a stool before the art goes down.
     const stool = spriteCentreOffset('prop.stool');
-    const stoolY = benchY + mh(0.7 + 0.18);
-    for (const dx of [70, 130, 190]) {
+    const stoolY = benchY - mh(0.35);
+    for (const dx of [110, 170, 230]) {
       at(`${room.id}-stool-${dx}`, room.x + dx, stoolY, <AtlasSprite key={`${room.id}-stool-${dx}`} name="prop.stool" x={room.x + dx - stool.x} y={stoolY - stool.y} />);
     }
   }

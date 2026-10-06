@@ -172,6 +172,24 @@ character declares none, because a character's footprint is the point it stands 
   the brightest or darkest thing in their room, and all are now in the middle range
   the rest of the floor lives in.
 
+### S16 · Two props only the sheet could show ✔ fixed
+
+Found by rendering all 28 props at 4× on one card and looking at them. Neither is
+visible in the office at any zoom: among forty sprites, a hood is a hood.
+
+- **The fume hood's sash was a solid cyan block.** The glass was drawn as `sky` — full
+  brightness — over the dark opening, so the hood read as a lit display case. Glass at
+  this size is a dark cool pane with one pale edge.
+- **The turned chair was a shapeless mass.** Its top rail and edge were one pixel
+  each and vanished against the panel, so a chair back read as a grey lump sitting on
+  the floor. Two pixels of rail and a lit left edge give it a silhouette.
+
+Also verified clean on the sheet, so the audit is not a rumour: all three desks,
+both chairs (unturned), the cabinet, both plants, both partitions, both long tables,
+the round table, crates, the vending machine, the water cooler, the coffee machine,
+the foosball table, the whiteboard, the desk lamp, spares, the lab bench, the
+microscope, the stool, the reagent shelf and the centrifuge.
+
 ---
 
 ## Open, not yet fixed

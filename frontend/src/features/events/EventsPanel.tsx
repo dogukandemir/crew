@@ -17,7 +17,7 @@ import { formatClock, formatMicros, formatRelativeTime } from '../../lib/format'
 import { clearSinceSeq, type ConnectionState } from '../../lib/socket';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { selectConnection, useConnection } from '../../stores/connection';
-import { useProjectSocket } from '../../app/SocketProvider';
+import { useProjectSocket } from '../../app/useProjectSocket';
 import { cn } from '../../lib/cn';
 
 const ROW_HEIGHT = 26;
@@ -30,6 +30,7 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
 
   const [query, setQuery] = useState<EventQuery>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // History is backfilled once per project by the socket provider.
 
   const namespaces = useMemo(() => {
     const set = new Set<string>();

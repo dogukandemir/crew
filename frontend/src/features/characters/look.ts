@@ -69,8 +69,10 @@ const SKIN = [
  * identical helmets, which is exactly how the first pass looked.
  */
 const HAIR = [
-  '#151114',
-  '#241a15',
+  // Black is not literally black: a pure-black dome on a round head is a hard
+  // hat whatever the fringe does. Even the darkest head has a lit top.
+  '#2b2128',
+  '#33241c',
   '#3c2718',
   '#5c3c1f',
   '#7d5126',

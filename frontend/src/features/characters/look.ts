@@ -82,7 +82,6 @@ const HAIR = [
   '#a8401f',
   '#6d3320',
   '#8f8f96',
-  '#dcdce2',
   '#4a2f3a',
   '#2f3d4a',
 ] as const;

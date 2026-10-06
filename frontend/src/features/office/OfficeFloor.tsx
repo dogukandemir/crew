@@ -308,10 +308,9 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         const p = project(next.x, next.y);
         const facingAt = !next.moving ? targetsRef.current[id]?.faceTowards : undefined;
         const flip = facingAt ? (facingAt.x >= next.x ? 1 : -1) : next.facing;
-        el.setAttribute(
-          'transform',
-          `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})${flip < 0 ? ' scale(-1 1)' : ''}`,
-        );
+        // Only the position is written here. The figure mirrors itself, so the
+        // name tag and the speech bubble above it stay readable.
+        el.setAttribute('transform', `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
         if (next.moving !== el.classList.contains('is-walking')) {
           el.classList.toggle('is-walking', next.moving);
         }

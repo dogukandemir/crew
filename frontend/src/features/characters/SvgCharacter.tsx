@@ -76,6 +76,7 @@ export function SvgCharacter({ look, activity, atDesk, motion, size = 46, faded 
   );
 
   const body = useRef<SVGGElement>(null);
+  const mirror = useRef<SVGGElement>(null);
   const torso = useRef<SVGGElement>(null);
   const head = useRef<SVGGElement>(null);
   const armL = useRef<SVGGElement>(null);
@@ -110,6 +111,16 @@ export function SvgCharacter({ look, activity, atDesk, motion, size = 46, faded 
 
       const cx = VIEW.w / 2;
       const bob = off.hipY * 100;
+
+      // Facing: mirror the figure about its own centre. Doing it here rather
+      // than on the caller's container keeps the name tag and the speech bubble
+      // the right way round.
+      if (mirror.current) {
+        mirror.current.setAttribute(
+          'transform',
+          `translate(${cx} 0) scale(${mov.facing < 0 ? -1 : 1} 1) translate(${-cx} 0)`,
+        );
+      }
 
       if (body.current) {
         body.current.setAttribute('transform', `translate(0 ${(p.drop + bob).toFixed(2)})`);
@@ -155,21 +166,26 @@ export function SvgCharacter({ look, activity, atDesk, motion, size = 46, faded 
       aria-hidden
     >
 
-      <g transform={`scale(${fig.stature.toFixed(3)}) translate(${(cx * (1 / fig.stature - 1)).toFixed(2)} ${(VIEW.h * (1 / fig.stature - 1) * 0.62).toFixed(2)})`}>
-        <g ref={body}>
-          {/* Legs, behind the torso. */}
-          <Leg side={1} fig={fig} bottom={hue.bottom} skin={hue.skin} shoe={hue.shoes} bare={look.bottom.kind !== 'trousers'} refs={{ root: legL, shin: shinL }} />
-          <Leg side={-1} fig={fig} bottom={hue.bottom} skin={hue.skin} shoe={hue.shoes} bare={look.bottom.kind !== 'trousers'} refs={{ root: legR, shin: shinR }} />
+      {/* The mirror lives here, inside the figure, and NOT on the caller's
+          container: flipping the container also flips anything else in it, so
+          the name tag and the speech bubble came out backwards. */}
+      <g ref={mirror}>
+        <g transform={`scale(${fig.stature.toFixed(3)}) translate(${(cx * (1 / fig.stature - 1)).toFixed(2)} ${(VIEW.h * (1 / fig.stature - 1) * 0.62).toFixed(2)})`}>
+          <g ref={body}>
+            {/* Legs, behind the torso. */}
+            <Leg side={1} fig={fig} bottom={hue.bottom} skin={hue.skin} shoe={hue.shoes} bare={look.bottom.kind !== 'trousers'} refs={{ root: legL, shin: shinL }} />
+            <Leg side={-1} fig={fig} bottom={hue.bottom} skin={hue.skin} shoe={hue.shoes} bare={look.bottom.kind !== 'trousers'} refs={{ root: legR, shin: shinR }} />
 
-          <g ref={torso}>
-            <Torso look={look} fig={fig} top={hue.top} bottom={hue.bottom} badge={hue.badge} skin={hue.skin} />
-          </g>
+            <g ref={torso}>
+              <Torso look={look} fig={fig} top={hue.top} bottom={hue.bottom} badge={hue.badge} skin={hue.skin} />
+            </g>
 
-          <Arm side={1} fig={fig} colour={hue.top} skin={hue.skin} sleeve={look.top.sleeve} refs={{ root: armL, fore: foreL }} />
-          <Arm side={-1} fig={fig} colour={hue.top} skin={hue.skin} sleeve={look.top.sleeve} refs={{ root: armR, fore: foreR }} />
+            <Arm side={1} fig={fig} colour={hue.top} skin={hue.skin} sleeve={look.top.sleeve} refs={{ root: armL, fore: foreL }} />
+            <Arm side={-1} fig={fig} colour={hue.top} skin={hue.skin} sleeve={look.top.sleeve} refs={{ root: armR, fore: foreR }} />
 
-          <g ref={head}>
-            <Head look={look} fig={fig} skin={hue.skin} hair={hue.hair} badge={hue.badge} hivis={hue.hivis} />
+            <g ref={head}>
+              <Head look={look} fig={fig} skin={hue.skin} hair={hue.hair} badge={hue.badge} hivis={hue.hivis} />
+            </g>
           </g>
         </g>
       </g>

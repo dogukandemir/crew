@@ -154,12 +154,18 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
 
     if (act?.where === 'orchestrator') {
       const seat = office.rooms.find((r) => r.kind === 'orchestrator')?.id;
+      const seatPoint = seat ? anchorOf(office, seat) : desk;
       out[agentId] = {
         agentId,
         roomId: seat ?? home,
-        point: seat ? anchorOf(office, seat) : desk,
+        // Stand beside the boss and face them — never on top of them.
+        point: seat ? beside(seatPoint, desk) : desk,
         reason: act.note,
+        faceTowards: seatPoint,
       };
+      // Several people can be waiting on the boss at once. Put them through the
+      // same ring the shared destinations use, or they stand inside each other.
+      if (seat) shared[seat] = [...(shared[seat] ?? []), agentId];
       continue;
     }
 

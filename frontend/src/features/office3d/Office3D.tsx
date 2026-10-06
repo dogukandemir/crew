@@ -527,7 +527,7 @@ export function Office3D({
                 onClick={onUse2D}
                 className="rounded-lg border border-white/10 bg-[#12151c]/85 px-2 py-1 text-xs text-slate-400 backdrop-blur hover:text-slate-200"
               >
-                Lite view
+                2.5D office
               </button>
             )}
           </div>

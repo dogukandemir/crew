@@ -99,6 +99,24 @@ role**, so the org chart does not turn into a set of stereotypes. Only genuinely
 follow the role — a lab coat for QA, hi-vis for facilities, a headset for support, a dress code that
 steps up with seniority, which is what a real company actually looks like.
 
+### One cast, two renderers
+
+The identity above is shared: `features/characters/look.ts` is read by both the
+WebGL office and the 2.5D floor, and the pose table is shared as well, so the
+person at a desk in one view is the person in the other, walking the same way.
+
+The 2.5D floor draws each of them as **SVG** (`features/characters/SvgCharacter.tsx`):
+chibi proportions with a big head and stubby limbs, one soft outline for the whole
+cast, big eyes, a small smile and a blush. Those choices are what make a figure
+likeable at 70 pixels tall. Cuteness is treated as a constraint rather than a hope —
+the head is a tested fraction of the body, variation between people is deliberately
+damped so a floor reads as one cast, and the seated fold is *derived* so the sole
+always lands on the floor line.
+
+This is the default view: it needs no GPU, it is crisp at any zoom, and it is the
+surface that has to sell the product at a glance. The WebGL office is one click
+away.
+
 ## 5. Rendering
 
 three.js via `@react-three/fiber`, with `@react-three/drei` for the orbit camera. Rules that keep a
@@ -159,5 +177,33 @@ zooming in made them swallow the scene.
    `SceneState` over the existing WebSocket. Client changes: one file.
 4. **Multi-tenant** — scope workers by project, send only authorized fields (a viewer should not
    receive another tenant's spend figures), and rate-limit per connection.
-5. **Rich behaviour** — meetings, pairing, day cycle, and the council convening at the table, all
-   driven by real events rather than timers.
+5. **Rich behaviour** — meetings, pairing, day cycle, and the council convening at
+   the table, all driven by real events rather than timers.
+
+## 9. What people do to each other
+
+A floor of individuals working alone is not a company. Three behaviours make the
+organization social, and each one is traceable to something the system actually
+did:
+
+| Behaviour | Grounded in | On the floor |
+|---|---|---|
+| Asking a colleague | the harness's `ask_colleague` tool, recorded as `agent.message` with `{to, text, direction}` | the asker walks across the floor to that person and turns to face them |
+| Pairing | a task assigned to a **squad** (a task has one `assignee_agent_id`, so a squad is how several people genuinely share a job) | juniors gather at the most senior member's desk, and disperse the moment the task ends |
+| Gathering | several people sharing a destination | they spread onto a ring and turn inward, so the review table and the coffee corner read as conversations |
+
+The honesty rule applies here more than anywhere, because social behaviour is
+where a simulation is most tempted to fake it:
+
+- A name the system did not recognise resolves to **nothing**, and the character
+  stays at their desk. Inventing a recipient would put someone on the floor who
+  was never spoken to.
+- Pairing cannot invent collaboration: it requires a live squad task, so it
+  appears with the work and disappears with it.
+- Bubbles carry the real event text or nothing at all. There is no chatter track.
+- Precedence still wins: something wrong (an escalation, a blocked task) outranks
+  a conversation, so an agent on their way to the orchestrator is not shown
+  cheerfully chatting.
+
+`resolvePeer`, `pairAnchor` and the inward-facing rings are pure and tested in
+`src/sim/social.test.ts`.

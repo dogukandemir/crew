@@ -19,6 +19,14 @@ const STORAGE_KEY = 'crew.office.renderer';
 
 type Renderer = '3d' | '2d';
 
+/**
+ * The 2.5D floor is the default: it is the cute, legible view that sells the
+ * product, it draws the same cast as SVG, and it needs no GPU, so it works on
+ * every machine. The WebGL office is one click away for people who want to walk
+ * around the building.
+ */
+const DEFAULT_RENDERER: Renderer = '2d';
+
 /** Probe for a usable WebGL context, and hand it straight back. */
 function webglAvailable(): boolean {
   try {
@@ -47,7 +55,7 @@ export function OfficeTab({ projectId, tabId }: { projectId: string; tabId: stri
   const [renderer, setRenderer] = useState<Renderer | null>(null);
 
   useEffect(() => {
-    const choice = stored() ?? '3d';
+    const choice = stored() ?? DEFAULT_RENDERER;
     setRenderer(choice === '3d' && !webglAvailable() ? '2d' : choice);
   }, []);
 
@@ -68,7 +76,7 @@ export function OfficeTab({ projectId, tabId }: { projectId: string; tabId: stri
     return (
       <>
         <OfficeFloor projectId={projectId} tabId={tabId} />
-        <SwitchHint label="Live 3D office" onClick={() => choose('3d')} />
+        <SwitchHint label="3D office" onClick={() => choose('3d')} />
       </>
     );
   }

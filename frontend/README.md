@@ -45,17 +45,19 @@ approvals. The header carries the connection indicator, a global budget meter an
 
 **Project workspace** — Office, Overview, Org, Tasks, Agents, Brains, Reward, Events, Settings.
 
-- **Office** (the default tab) — the organization as a building, in WebGL. Departments are rooms
-  with partitions and hanging signs; agents are **generated 3D people** — each one built from their
-  agent id (build, skin tone, hair, dress code, accessories) so the same person looks the same
-  every time — sitting at desks between real monitors and chairs, and **walking the corridors
-  between departments** rather than teleporting. Movement is a projection of real state: escalation
-  walks to the orchestrator's office, verification walks to the shared review table, a task owned by
-  another department walks you across the floor to it, a long idle spell wanders to the coffee
-  corner, and a new hire walks in from the entrance. Four camera presets (Isometric / Steep / Plan
-  / Desks), drag to pan, scroll to zoom, right-drag to orbit, click a character for their
-  workstation (live thinking stream, output, scorecard). A **Lite view** toggle switches to the 2D
-  floor plan, which needs no GPU.
+- **Office** (the default tab) — the organization as an office floor, in 2.5D. Departments are
+  rooms; agents are **cute SVG characters** with chibi proportions, each one generated from their
+  agent id (build, skin tone, hair, dress code, accessories) so the same person looks the same every
+  time — and the *same* person the 3D office draws, since both renderers read one identity. They
+  **walk the corridors between departments** rather than teleporting, sit at desks between real
+  monitors and chairs, and work: typing, tool calls, thinking, blocked, celebrating. Movement is a
+  projection of real state — escalation walks to the orchestrator's office, verification walks to the
+  shared review table, a task owned by another department walks you across the floor to it, a long
+  idle spell wanders to the coffee corner, and a new hire walks in from the entrance. They also
+  **work together**: when the harness records `ask_colleague` the asker walks over to that colleague
+  and the two turn to face each other, and when a task is assigned to a squad the juniors gather at
+  the senior's desk until the task ends. Zoom, pan, click a character for their live thinking stream
+  and output. A **3D office** button switches to the WebGL view of the same cast.
 - **Overview** — mission-control cards (tasks done/total, org size, spend vs budget, success
   rate, pending approvals), a live budget-burn chart (recharts) built from real event costs,
   the activity ticker (click a row to jump to that agent/task) and the start-run form

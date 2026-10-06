@@ -138,8 +138,10 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
       />
 
       <p className="text-[11px] text-slate-500">
-        {counts.department > 0 && `Budget at project level: committed spend shown per node. `}
-        Total org spend: {formatMicros(flattenOrg(org.data.root).reduce((s, n) => s + (n.spend_micros ?? 0), 0))}
+        Node cost is the unit's own committed spend; the project total below is the authoritative rollup
+        (summing every node would double-count). Project spend:{' '}
+        {formatMicros(org.data.root.spend_micros ?? org.data.root.cost_micros)} across {counts.department}{' '}
+        departments, {counts.squad} squads and {counts.agent} agents.
       </p>
     </div>
   );

@@ -12,6 +12,8 @@ import { RewardsPanel } from '../rewards/RewardsPanel';
 import { EventsPanel } from '../events/EventsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DrawerHost } from './DrawerHost';
+import { OfficeFloor } from '../office/OfficeFloor';
+import { cn } from '../../lib/cn';
 
 /**
  * One project's workspace (docs/09 §2). Internal tabs live in the tab store so
@@ -57,7 +59,14 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
           ⚑ approvals
         </button>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div
+        ref={scrollRef}
+        className={cn(
+          'min-h-0 flex-1',
+          // The office owns its own canvas and panning; the data panels scroll.
+          tab.internalTab === 'office' ? 'overflow-hidden' : 'overflow-y-auto px-3 py-3',
+        )}
+      >
         <Panel tab={tab} />
       </div>
       <DrawerHost projectId={tab.projectId} tabId={tab.id} />
@@ -67,6 +76,8 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
 
 function Panel({ tab }: { tab: ProjectTab }) {
   switch (tab.internalTab) {
+    case 'office':
+      return <OfficeFloor projectId={tab.projectId} tabId={tab.id} />;
     case 'overview':
       return <Overview projectId={tab.projectId} tabId={tab.id} />;
     case 'org':

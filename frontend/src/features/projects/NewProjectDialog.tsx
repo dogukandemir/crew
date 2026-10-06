@@ -29,7 +29,7 @@ export function NewProjectDialog() {
       }),
     onSuccess: (project) => {
       setName(project.id, project.name);
-      openTab(project.id, 'main', 'overview');
+      openTab(project.id, 'main', 'office');
       setOpen(false);
       setLocalName('');
       setGoal('');

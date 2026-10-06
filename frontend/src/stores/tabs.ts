@@ -11,6 +11,7 @@ import { persist } from 'zustand/middleware';
 import type { EventQuery } from '../api/types';
 
 export const WORKSPACE_TABS = [
+  'office',
   'overview',
   'org',
   'tasks',
@@ -24,6 +25,7 @@ export const WORKSPACE_TABS = [
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
 export const WORKSPACE_TAB_LABEL: Record<WorkspaceTab, string> = {
+  office: 'Office',
   overview: 'Overview',
   org: 'Org',
   tasks: 'Tasks',
@@ -86,7 +88,7 @@ export const useTabs = create<TabsState>()(
       activeTabId: null,
       names: {},
 
-      openTab: (projectId, viewKey = 'main', internalTab = 'overview') => {
+      openTab: (projectId, viewKey = 'main', internalTab = 'office') => {
         const id = tabKey(projectId, viewKey);
         const existing = get().tabs.find((t) => t.id === id);
         if (existing) {

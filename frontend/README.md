@@ -43,8 +43,18 @@ Tab dots show live status and a cost counter; badges count unread events and pen
 approvals. The header carries the connection indicator, a global budget meter and a
 **kill switch** (`POST /api/system/kill`, double-confirm).
 
-**Project workspace** — Overview, Org, Tasks, Agents, Brains, Reward, Events, Settings.
+**Project workspace** — Office, Overview, Org, Tasks, Agents, Brains, Reward, Events, Settings.
 
+- **Office** (the default tab) — an angled aerial view of the organization as a building.
+  Departments are rooms with partition walls and floating signs; agents are emoji characters
+  sitting at desks, and they **walk the corridors between departments** rather than
+  teleporting. Movement is a projection of real state: escalation walks to the orchestrator's
+  office, verification walks to the shared review table, a task owned by another department
+  walks you across the floor to it, a long idle spell wanders to the coffee corner, and a new
+  hire walks in from the entrance. Three camera presets (Isometric / Steep / Plan), zoom
+  30–220% around the cursor, drag to pan, department chips to jump, `F` fit, `Esc` deselect.
+  Clicking a character opens their workstation: live thinking stream, output (task,
+  artifacts, rewards) and scorecard.
 - **Overview** — mission-control cards (tasks done/total, org size, spend vs budget, success
   rate, pending approvals), a live budget-burn chart (recharts) built from real event costs,
   the activity ticker (click a row to jump to that agent/task) and the start-run form
@@ -84,10 +94,22 @@ backend is down it says so rather than showing "nothing to approve".
 src/
   app/         Shell, header, socket provider, query client, hooks
   api/         client.ts (the one typed client) + types.ts (contract types)
-  features/    projects/ overview/ org/ tasks/ agents/ brains/ rewards/ events/ approvals/
+  features/    office/ projects/ overview/ org/ tasks/ agents/ brains/ rewards/ events/ approvals/
   components/  ui/ primitives (button, badge, chip, card, drawer, table, sparkline, …)
   lib/         socket.ts (resume + coalesce + backoff), events.ts (reducer), format.ts
   stores/      zustand slices (tabs, event log, connection, ui)
+```
+
+Inside `features/office/` the simulation is deliberately split from the rendering, and the
+simulation half is pure and unit-tested:
+
+```
+floorplan.ts  org tree  → rooms, desks, doors, corridor network   (+ test)
+paths.ts      rooms     → corridor routes between them            (+ test)
+walkers.ts    a route   → position, facing, "still walking?"      (+ test)
+targets.ts    domain    → where each agent should be standing     (+ test)
+camera.ts     the tilted projection, fit and focus                (+ test)
+OfficeFloor / Room / Sprite / AgentWorkstation  — the React layer
 ```
 
 - **One typed client.** Every request goes through `src/api/client.ts`; RFC 7807 problems

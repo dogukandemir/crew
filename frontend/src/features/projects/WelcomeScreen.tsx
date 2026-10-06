@@ -58,7 +58,7 @@ export function WelcomeScreen() {
                 <button
                   type="button"
                   className="min-w-0 flex-1 text-left"
-                  onClick={() => openTab(p.id, 'main', 'overview')}
+                  onClick={() => openTab(p.id, 'main', 'office')}
                 >
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-slate-100">{p.name}</span>
@@ -71,7 +71,7 @@ export function WelcomeScreen() {
                   {formatMicros(p.spend_micros)}
                   <span className="text-slate-600"> / {formatMicros(p.budget_cap_micros)}</span>
                 </div>
-                <Button size="xs" onClick={() => openTab(p.id, 'main', 'overview')}>
+                <Button size="xs" onClick={() => openTab(p.id, 'main', 'office')}>
                   Open
                 </Button>
               </li>

@@ -10,14 +10,22 @@ import { cn } from '../../lib/cn';
 import { AgentWorkstation } from './AgentWorkstation';
 import { RoomView } from './Room';
 import { Sprite } from './Sprite';
-import { SPINE_W, buildOffice, type Room } from './floorplan';
-import { currentTaskFor, deriveActivity, type Activity } from './activity';
-import { computeTargets } from './targets';
-import { routeBetween } from './paths';
-import { CAMERA_PRESETS, cameraLabel, fitTilted, focusTilted, toScreen, type CameraPreset, type Point } from './camera';
+import { SPINE_W, buildOffice, type Room } from '../../sim/floorplan';
+import { currentTaskFor, deriveActivity, type Activity } from '../../sim/activity';
+import { computeTargets } from '../../sim/targets';
+import { routeBetween } from '../../sim/paths';
+import {
+  CAMERA_PRESETS,
+  cameraLabel,
+  fitTilted,
+  focusTilted,
+  toScreen,
+  type CameraPreset,
+} from './camera';
+import type { Point } from '../../sim/geometry';
 import { panBy, zoomAt, type Transform } from './viewport';
-import { newWalker, setRoute, step, type Walker } from './walkers';
-import './office3d.css';
+import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
+import './office2d.css';
 
 const ARRIVAL_MS = 3200;
 const EVENT_LOOKBACK_MS = 120_000;

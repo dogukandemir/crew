@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EventRow, OrgNode, Task } from '../../api/types';
+import type { EventRow, OrgNode, Task } from '../api/types';
 import { ACTIVITY_ORDER, activityTone, currentTaskFor, deriveActivity } from './activity';
 
 const NOW = Date.UTC(2026, 5, 1, 12, 0, 0);

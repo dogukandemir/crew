@@ -16,7 +16,7 @@ import {
   formatTokens,
 } from '../../lib/format';
 import { avatarFor } from './avatars';
-import { currentTaskFor, type Activity } from './activity';
+import { currentTaskFor, type Activity } from '../../sim/activity';
 
 type StationTab = 'thinking' | 'output' | 'stats';
 

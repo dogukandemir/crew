@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrgNode, Task } from '../../api/types';
+import type { OrgNode, Task } from '../api/types';
 import { buildOffice } from './floorplan';
 import { computeTargets, targetIsInsideRoom } from './targets';
 import type { Activity } from './activity';

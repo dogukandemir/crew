@@ -2,8 +2,8 @@ import type { CSSProperties } from 'react';
 import type { OrgNode } from '../../api/types';
 import { cn } from '../../lib/cn';
 import { deviceFor } from './avatars';
-import type { Activity } from './activity';
-import type { Room } from './floorplan';
+import type { Activity } from '../../sim/activity';
+import type { Room } from '../../sim/floorplan';
 import { formatMicros, formatPercent } from '../../lib/format';
 
 function Desk({

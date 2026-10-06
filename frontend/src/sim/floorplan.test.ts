@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrgNode } from '../../api/types';
+import type { OrgNode } from '../api/types';
 import {
   DESK_H,
   DESK_W,

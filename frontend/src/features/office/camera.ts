@@ -9,6 +9,11 @@
  * pan/zoom maths in viewport.ts keeps working unchanged.
  */
 
+import type { Point } from '../../sim/geometry';
+
+/** Re-exported so the 2D renderer and its tests keep a single Point type. */
+export type { Point };
+
 export const DEFAULT_TILT_X = 54;
 export const DEFAULT_TILT_Z = -26;
 
@@ -28,11 +33,6 @@ export const CAMERA_PRESETS: Record<CameraPreset, CameraPresetInfo> = {
 
 export function cameraLabel(preset: CameraPreset): string {
   return CAMERA_PRESETS[preset].label;
-}
-
-export interface Point {
-  x: number;
-  y: number;
 }
 
 export function deg2rad(deg: number): number {

@@ -9,7 +9,7 @@
  * Precedence is deliberate and documented in ACTIVITY_ORDER: something wrong
  * (blocked, escalated) outranks something active, which outranks something idle.
  */
-import type { EventRow, OrgNode, Task, TaskState } from '../../api/types';
+import type { EventRow, OrgNode, Task, TaskState } from '../api/types';
 
 export type ActivityKind =
   | 'offline'

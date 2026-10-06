@@ -7,8 +7,8 @@
  *
  * Deterministic: the same org tree always produces the same floor.
  */
-import type { OrgNode } from '../../api/types';
-import type { Point } from './camera';
+import type { OrgNode } from '../api/types';
+import type { Point } from './geometry';
 
 export const DESK_W = 104;
 export const DESK_H = 92;

@@ -1,7 +1,7 @@
 import { cn } from '../../lib/cn';
 import type { OrgNode } from '../../api/types';
 import { avatarFor } from './avatars';
-import type { Activity } from './activity';
+import type { Activity } from '../../sim/activity';
 
 /**
  * One character. The outer `.sprite` is positioned in world coordinates by the

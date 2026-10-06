@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrgNode } from '../../api/types';
+import type { OrgNode } from '../api/types';
 import { buildOffice, type Office } from './floorplan';
 import { anchorOf, roomById, routeBetween } from './paths';
 

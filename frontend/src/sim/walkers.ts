@@ -6,7 +6,7 @@
  * behaviour (speed, segment transitions, which way someone is facing, whether
  * they are still moving) is here and tested.
  */
-import type { Point } from './camera';
+import { distance, type Point } from './geometry';
 
 export interface Walker {
   x: number;
@@ -25,10 +25,6 @@ export const WALK_SPEED = 96;
 
 export function newWalker(x: number, y: number): Walker {
   return { x, y, route: [{ x, y }], seg: 0, moving: false, facing: 1 };
-}
-
-function distance(a: Point, b: Point): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 /** Drop consecutive duplicate points so we never divide by zero. */

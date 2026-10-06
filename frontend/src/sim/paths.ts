@@ -9,7 +9,7 @@
  * Straight lines are only used *inside* a room, which is what makes movement
  * read as walking the halls rather than drifting across walls.
  */
-import type { Point } from './camera';
+import type { Point } from './geometry';
 import type { Office, Room } from './floorplan';
 import { simplify } from './walkers';
 

@@ -9,8 +9,8 @@
  * Agents sharing a destination are spread onto a small ring so they stand around
  * the table rather than inside each other.
  */
-import type { Task } from '../../api/types';
-import type { Point } from './camera';
+import type { Task } from '../api/types';
+import type { Point } from './geometry';
 import { DESK_W, type Office } from './floorplan';
 import { anchorOf } from './paths';
 import { currentTaskFor, type Activity } from './activity';

@@ -11,7 +11,7 @@
  */
 import type { Task, TaskState } from '../api/types';
 import type { Point } from './geometry';
-import { DESK_W, type Office } from './floorplan';
+import { DESK_W, breakSeats, type Office } from './floorplan';
 import { anchorOf } from './paths';
 import { currentTaskFor, type Activity } from './activity';
 
@@ -26,6 +26,12 @@ export interface Target {
    * conversation have to face each other, or it reads as two strangers.
    */
   faceTowards?: Point;
+  /**
+   * True when the character is sitting — at their own desk, or on a chair in the
+   * break corner. The renderer only ever seats people at their own workstation:
+   * visiting somebody does not mean taking their chair.
+   */
+  seated?: boolean;
 }
 
 export interface TargetInput {
@@ -236,6 +242,7 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
         point: desk,
         reason: act.note,
         faceTowards: { x: desk.x, y: desk.y - 30 },
+        seated: true,
       };
       continue;
     }
@@ -263,7 +270,55 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
       // Sitting at your desk means looking at it. Without this the character
       // keeps whatever way they were last walking and stares at the wall.
       faceTowards: { x: desk.x, y: desk.y - 30 },
+      seated: true,
     };
+  }
+
+  // The break corner: seat them at the round tables, round-robin over the chairs
+  // in sorted order. Deterministic, collision-free, and two people who land at
+  // one table end up facing each other across it.
+  const breakers = shared.__break;
+  if (breakers && breakers.length > 0) {
+    const seats = breakSeats(office.breakTables);
+    if (seats.length > 0) {
+      const sorted = [...breakers].sort();
+      const byTable: Record<number, string[]> = {};
+      const standing: string[] = [];
+      sorted.forEach((id, i) => {
+        // More people than chairs: the extras stay on their feet by the counter
+        // rather than being stacked on somebody's lap.
+        const seat = seats[i];
+        if (!seat) {
+          standing.push(id);
+          return;
+        }
+        byTable[seat.table] = [...(byTable[seat.table] ?? []), id];
+        out[id] = {
+          ...out[id],
+          roomId: '__break',
+          point: seat.point,
+          faceTowards: seat.faceTowards,
+          seated: true,
+        };
+      });
+      // Sharing a table is a fact the floor can state: say who is sitting
+      // together, and never invent what they said.
+      for (const ids of Object.values(byTable)) {
+        if (ids.length < 2) continue;
+        for (const id of ids) {
+          const others = ids
+            .filter((other) => other !== id)
+            .map((other) => office.agentOf[other]?.name ?? 'someone');
+          out[id].reason = `on a break with ${others.join(' & ')}`;
+        }
+      }
+      // Whoever did not get a chair is still in the corner: let the shared-spot
+      // ring spread them out instead of piling them on one point.
+      if (standing.length > 0) shared.__break = standing;
+      else delete shared.__break;
+    } else {
+      delete shared.__break;
+    }
   }
 
   // Spread agents that share a spot onto a ring around it, turned inward so a

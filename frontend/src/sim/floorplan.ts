@@ -38,6 +38,63 @@ export const ROOM_ACCENTS = [
   '#d97a6c',
 ] as const;
 
+/* ── The break corner's round tables ──────────────────────────────────────────
+   Shared by the simulation (which seats people) and the renderer (which draws a
+   chair under each of them), so the two can never disagree about where a chair
+   is. */
+
+export const BREAK_TABLE_R = 34;
+export const BREAK_TABLE_SEATS = 3;
+/** How far a chair sits from its table's centre. */
+export const BREAK_SEAT_R = 50;
+
+export interface BreakTable {
+  x: number;
+  y: number;
+}
+
+export interface BreakSeat {
+  table: number;
+  index: number;
+  point: Point;
+  /** The table's centre, so two people at one table look at each other. */
+  faceTowards: Point;
+}
+
+/** Every chair in the break corner, table by table. */
+export function breakSeats(tables: BreakTable[]): BreakSeat[] {
+  const out: BreakSeat[] = [];
+  tables.forEach((table, t) => {
+    for (let i = 0; i < BREAK_TABLE_SEATS; i += 1) {
+      const angle = (i / BREAK_TABLE_SEATS) * Math.PI * 2 - Math.PI / 2;
+      out.push({
+        table: t,
+        index: i,
+        point: {
+          x: table.x + Math.cos(angle) * BREAK_SEAT_R,
+          y: table.y + Math.sin(angle) * BREAK_SEAT_R * 0.62,
+        },
+        faceTowards: { x: table.x, y: table.y },
+      });
+    }
+  });
+  return out;
+}
+
+/** Where the tables stand inside the break room. */
+function breakTablePositions(room: Room): BreakTable[] {
+  const cx = room.x + room.w / 2;
+  // Below the coffee bar, in a line, with the chairs still clear of the room's
+  // south wall. Three tables when the room can hold them.
+  const y = room.y + room.h * 0.66;
+  const gap = BREAK_TABLE_R * 2 + 52;
+  return [
+    { x: cx - gap, y },
+    { x: cx, y },
+    { x: cx + gap, y },
+  ];
+}
+
 export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break';
 
 export interface Desk {
@@ -79,6 +136,8 @@ export interface Office {
   reviewTable: Point;
   /** Coffee corner idle agents wander to. */
   breakSpot: Point;
+  /** The break corner's round tables, and the chairs around them. */
+  breakTables: BreakTable[];
   /** Agent id → where their body belongs, in world coordinates. */
   deskOf: Record<string, Point>;
   /** Agent id → the room their desk sits in. */
@@ -195,18 +254,19 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
 
   const rooms: Room[] = [];
 
-  // 1. Break corner — where genuinely idle characters wander.
-  const breakSize = roomSize(1, 1);
+  // 1. Break corner — where genuinely idle characters wander, with room for
+  // round tables and the chairs around them rather than a single coffee point.
+  const breakSize = roomSize(3, 1);
   rooms.push(
     shell({
       id: '__break',
       kind: 'break',
       name: 'Break corner',
-      subtitle: 'coffee',
+      subtitle: 'coffee & talk',
       accent: '#9a8f72',
       w: breakSize.w,
       h: breakSize.h,
-      cols: 1,
+      cols: 3,
       rows: 1,
     }),
   );
@@ -364,6 +424,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     breakSpot: breakRoom
       ? { x: breakRoom.x + breakRoom.w / 2, y: breakRoom.y + breakRoom.h - 24 }
       : { x: SPINE_W / 2, y: height - 20 },
+    breakTables: breakRoom ? breakTablePositions(breakRoom) : [],
     deskOf,
     roomOf,
     managerOf,

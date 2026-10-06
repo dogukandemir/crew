@@ -429,7 +429,13 @@ function Sprite({
       <ellipse className="sprite-shadow" cx={0} cy={0} rx={CHAR_W * 0.34} ry={CHAR_W * 0.17} />
       {selected && <ellipse className="sprite-ring" cx={0} cy={0} rx={CHAR_W * 0.46} ry={CHAR_W * 0.23} />}
 
-      <g className="sprite-body" transform={`translate(${(-CHAR_W / 2).toFixed(2)} ${(-FEET_Y).toFixed(2)})`}>
+      {/* SpriteCharacter draws with the figure's feet on its OWN origin — the anchor
+          is the pixel that touches the floor — so this group must not carry the
+          vector rig's offsets. It carried both, from when the figure was drawn from
+          its top-left corner inside a 24×40 view: half the sprite's width across and
+          FEET_Y up, which left every person walking half a metre above the floor.
+          All that is left is the small sink the old feet had, into the shadow. */}
+      <g className="sprite-body" transform={`translate(0 ${(CHAR_SIZE - FEET_Y).toFixed(2)})`}>
         <SpriteCharacter
           name={agent.id}
           activity={activity.kind}

@@ -29,6 +29,8 @@ disagrees with a doc, the doc and an ADR get updated in the same commit as the c
     WebSocket envelopes (frozen contract for the frontend).
 13. **[12 — Implementation Plan](12-implementation-plan.md)** — milestones M0–M10, exit
     criteria, current status.
+14. **[13 — Backend implementation notes](13-backend-implementation-notes.md)** — the map of what
+    was built, how to run it, the bugs found and fixed, and the deliberate gaps.
 
 ## ADRs
 
@@ -38,8 +40,9 @@ Decisions that were expensive to make and would be expensive to reverse:
 - [0002 — CrewAI as the execution engine, not the orchestrator](adr/0002-crewai-as-execution-engine.md)
 - [0003 — Python/FastAPI backend + event-sourced core](adr/0003-backend-fastapi-event-sourced.md)
 - [0004 — SQLite now, Postgres later](adr/0004-sqlite-now-postgres-later.md)
-- [0005 — CrewAI Flows for org control flow, Crews for swarm work](adr/0005-flows-vs-crews.md)
+- [0005 — CrewAI Flows for org control flow, Crews for swarm work](adr/0005-flows-vs-crews.md) *(Flows half superseded by 0007; Crews half stands)*
 - [0006 — WebSocket event stream as the only live channel](adr/0006-websocket-event-stream.md)
+- [0007 — The run pipeline is our own resumable state machine, not a Flow](adr/0007-run-pipeline-as-own-state-machine.md)
 
 ## Conventions
 

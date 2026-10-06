@@ -30,6 +30,11 @@ users ──< sessions         secrets ──< secret_leases
 updated_at, archived_at, owner_id, budget_cap_micros, spend_micros, currency, tags[]`
 
 ### project_settings (1:1, JSON columns for extensibility)
+
+> **Implementation note (MVP):** the project's settings are stored as a single `settings` JSON
+> column on `projects` rather than a separate table. The column names below are the keys of that
+> document; the 1:1 separate table is deferred until a settings feature needs row-level querying.
+> The UI only ever sends/receives the JSON object, so moving it later is not a contract change.
 `project_id, autonomous_intake(bool), require_goal_confirmation(bool),
 require_human_verification(bool), max_agents(int), max_departments(int),
 max_senior_ratio(float), auto_hire(bool), layoff_idle_days(int),

@@ -6,19 +6,19 @@ means the criteria are demonstrated by tests or by a manual run recorded in the 
 ## Status legend
 ✅ done · 🟡 partial · ⬜ not started
 
-| # | Milestone | Status | Exit criteria |
-|---|-----------|:------:|---------------|
-| M0 | **Foundation** — repo, docs, toolchain, crewai, health endpoint | ✅ | `uv run uvicorn crew.api.main:app` boots, `/api/health` returns version+contract, crewai imports, docs committed |
-| M1 | **Core** — settings, DB + migrations, domain model, event store, bus, repos | 🟡 | create/list projects + agents via REST, every mutation emits an event, seq gapless per project, unit tests green |
-| M2 | **Execution slice** — one real crewai run end-to-end with live events | 🟡 | a task executes through CrewRunner, `agent.*`/`llm.*` events stream over WS, cost recorded, artifact stored, FakeLLM test + one real provider run |
-| M3 | **Org engine** — Orchestrator: intake → plan → hiring → dispatch | 🟡 | goal in → departments/squads/agents created from capability gaps → tasks dispatched; DAG validated |
-| M4 | **Council & decider** — debate, positions, DecisionRecord, override | ⬜ | a high-impact decision produces a Council session with ≥3 positions and a binding decision linked to tasks |
-| M5 | **Rewards** — verification, reward events, EWMA scores, grades | 🟡 | verdict → reward ledger → score → grade transition → model tier & caps change; recompute matches stored scores |
-| M6 | **Observability** — WS filters/resume, metrics rollups, trace view, replay API | 🟡 | UI sees live events for one project; `since_seq` resume works; trace tree assembled from events |
-| M7 | **Security** — auth, vault, policy engine, sandbox, egress, budget guard, audit chain | 🟡 | security test suite (docs/08 §11) passes; budget cap cannot be exceeded; secrets never in events |
-| M8 | **Brains** — 3-level memory, retrieval scoring, promotion, Librarian job | 🟡 | writes scoped correctly, retrieval returns provenance, promotion blocked without rights |
-| M9 | **Frontend** — tabbed control room: overview, org, tasks, agents, rewards, events | 🟡 | multiple projects in tabs, live updates, agent drawer with timeline, approval tray |
-| M10 | **Hardening & packaging** — Postgres/Redis option, docker compose, CI, backups, docs pass | ⬜ | docker compose up runs the stack; CI green (lint, type, unit, security); backup/restore round-trip test |
+| # | Milestone | Status | Evidence / what is left |
+|---|-----------|:------:|-------------------------|
+| M0 | **Foundation** — repo, docs, toolchain, crewai, health endpoint | ✅ | `crew serve` boots (skills seeded=63); `/api/health` → version+contract; crewai 1.15.23 imports; docs + ADRs committed |
+| M1 | **Core** — settings, DB, domain model, event store, bus, repos | ✅ | 30+ tables created, every mutation emits an event, `seq` gapless per project (tested). *Left: Alembic revision generation (dev uses `create_all`)* |
+| M2 | **Execution slice** — crewai run end-to-end with live events | ✅ | `CrewAICrewRunner` + `FakeCrewRunner`; `agent.thought`/`agent.tool.*`/`llm.response` stream over WS with tokens and cost. *Left: one live provider run with real keys (`pytest -m live`)* |
+| M3 | **Org engine** — intake → plan → hiring → dispatch | ✅ | goal → plan (LLM or deterministic) → capability gap → departments/squads/agents hired → task DAG executed in waves; cycle detection tested |
+| M4 | **Council & decider** — debate, positions, DecisionRecord, override | ✅ | convene → panel (hires a critic/decider when the org is too small) → positions → tally/model ruling → decision + dissent preserved; override audited |
+| M5 | **Rewards** — verification, reward events, EWMA scores, grades | ✅ | verdict → reward ledger → score → transition → model tier & spend caps change; `recompute()` matches stored scores |
+| M6 | **Observability** — events, WS filters/resume, traces, metrics, dossier | 🟡 | event API + WS (replay/resume/filters/coalescing) + trace tree + cost rollups + dossier export all tested. *Left: frontend replay scrubber* |
+| M7 | **Security** — auth, vault, policy, sandbox, egress, budget, audit | 🟡 | policy matrix, SSRF/egress, injection corpus, redaction, audit chain, budget cap enforcement all tested. *Left: docker sandbox path untested on this host; `token` auth mode implemented but not integration-tested* |
+| M8 | **Brains** — 3-level memory, retrieval scoring, promotion, Librarian | 🟡 | scoped reads/writes with rights checks, explainable retrieval scores, promotion/supersession, lessons written by the learning stage. *Left: vector embeddings (retrieval is lexical today)* |
+| M9 | **Frontend** — tabbed control room | 🟡 | build in progress (see `frontend/`); contract frozen in docs/11 |
+| M10 | **Hardening & packaging** — Postgres/Redis, docker compose, CI, backups | ⬜ | not started |
 
 ## Build order detail (M1–M3, the critical path)
 

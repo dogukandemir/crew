@@ -190,6 +190,23 @@ the round table, crates, the vending machine, the water cooler, the coffee machi
 the foosball table, the whiteboard, the desk lamp, spares, the lab bench, the
 microscope, the stool, the reagent shelf and the centrifuge.
 
+### S17 · The cast sheet: one real defect, and it is a trap ✔ documented
+
+All twelve facing×pose cells at 6×, plus eight characters side by side. The numbers
+first: every cell is centred to within half a pixel of its own middle (art x 5–18 in a
+24 px cell), every figure's feet are on the last row of the cell or above it in a
+seated pose, and **both walk frames are 37 px tall and end on the same row** — the
+arithmetic behind "no bobbing, no floating", asserted rather than eyeballed.
+
+- **The side view's hair covers two thirds of the face** — it reads as a face with
+  something over it. This is a real defect and it is not visible in the office:
+  `SpriteCharacter` asks for `front` and `back` only, and says why in a comment. The
+  cell stays in the atlas as a trap for the next caller. Recorded here rather than
+  fixed, because fixing the profile rig means redrawing it, and nothing draws it.
+- Everything else on the sheet is clean: no detached limbs, no floating hands, no
+  helmet hair (the fringe still sits above the eye line), and the eight characters are
+  distinguishable at a glance by hair, skin, shirt and glasses.
+
 ---
 
 ## Open, not yet fixed

@@ -119,7 +119,10 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
-      credentials: 'include',
+      // REST auth is `Authorization: Bearer` (docs/11) — sending credentials on
+      // every call would make the browser reject responses from a backend whose
+      // CORS origin is not an exact echo, so we keep the default `same-origin`.
+      credentials: 'same-origin',
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
@@ -156,7 +159,19 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     });
   }
 
-  return parsed as T;
+  const parsed0 = parsed as unknown;
+
+  // Contract drift guard (docs/11 §5: "additive fields are allowed any time",
+  // so the UI must not assume a field is *present* either). A paged endpoint
+  // that omits the envelope tail would otherwise surface as "undefined" in
+  // counters; fill the tail in from what the response actually carries.
+  if (parsed0 && typeof parsed0 === 'object' && Array.isArray((parsed0 as Paged<unknown>).items)) {
+    const page = parsed0 as Paged<unknown>;
+    if (typeof page.total !== 'number') page.total = page.items.length;
+    if (page.next_cursor === undefined) page.next_cursor = null;
+  }
+
+  return parsed0 as T;
 }
 
 /** Assemble the write-op body from docs/11 §1 (command envelope). */

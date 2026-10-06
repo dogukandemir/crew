@@ -45,16 +45,17 @@ approvals. The header carries the connection indicator, a global budget meter an
 
 **Project workspace** — Office, Overview, Org, Tasks, Agents, Brains, Reward, Events, Settings.
 
-- **Office** (the default tab) — an angled aerial view of the organization as a building.
-  Departments are rooms with partition walls and floating signs; agents are emoji characters
-  sitting at desks, and they **walk the corridors between departments** rather than
-  teleporting. Movement is a projection of real state: escalation walks to the orchestrator's
-  office, verification walks to the shared review table, a task owned by another department
-  walks you across the floor to it, a long idle spell wanders to the coffee corner, and a new
-  hire walks in from the entrance. Three camera presets (Isometric / Steep / Plan), zoom
-  30–220% around the cursor, drag to pan, department chips to jump, `F` fit, `Esc` deselect.
-  Clicking a character opens their workstation: live thinking stream, output (task,
-  artifacts, rewards) and scorecard.
+- **Office** (the default tab) — the organization as a building, in WebGL. Departments are rooms
+  with partitions and hanging signs; agents are **generated 3D people** — each one built from their
+  agent id (build, skin tone, hair, dress code, accessories) so the same person looks the same
+  every time — sitting at desks between real monitors and chairs, and **walking the corridors
+  between departments** rather than teleporting. Movement is a projection of real state: escalation
+  walks to the orchestrator's office, verification walks to the shared review table, a task owned by
+  another department walks you across the floor to it, a long idle spell wanders to the coffee
+  corner, and a new hire walks in from the entrance. Four camera presets (Isometric / Steep / Plan
+  / Desks), drag to pan, scroll to zoom, right-drag to orbit, click a character for their
+  workstation (live thinking stream, output, scorecard). A **Lite view** toggle switches to the 2D
+  floor plan, which needs no GPU.
 - **Overview** — mission-control cards (tasks done/total, org size, spend vs budget, success
   rate, pending approvals), a live budget-burn chart (recharts) built from real event costs,
   the activity ticker (click a row to jump to that agent/task) and the start-run form
@@ -92,25 +93,38 @@ backend is down it says so rather than showing "nothing to approve".
 
 ```
 src/
-  app/         Shell, header, socket provider, query client, hooks
+  app/         Shell, header, socket provider, query client, hooks, useSceneFrame
   api/         client.ts (the one typed client) + types.ts (contract types)
-  features/    office/ projects/ overview/ org/ tasks/ agents/ brains/ rewards/ events/ approvals/
+  sim/         the simulation: pure, framework-free, unit-tested (see below)
+  features/    office3d/ office/ projects/ overview/ org/ tasks/ agents/ brains/ rewards/ events/ approvals/
   components/  ui/ primitives (button, badge, chip, card, drawer, table, sparkline, …)
   lib/         socket.ts (resume + coalesce + backoff), events.ts (reducer), format.ts
   stores/      zustand slices (tabs, event log, connection, ui)
 ```
 
-Inside `features/office/` the simulation is deliberately split from the rendering, and the
-simulation half is pure and unit-tested:
+`src/sim/` holds the simulation and imports neither React nor three.js, so the same code can run in
+a browser tab today and in a cloud scene worker later. It is pure and unit-tested:
 
 ```
 floorplan.ts  org tree  → rooms, desks, doors, corridor network   (+ test)
 paths.ts      rooms     → corridor routes between them            (+ test)
 walkers.ts    a route   → position, facing, "still walking?"      (+ test)
 targets.ts    domain    → where each agent should be standing     (+ test)
-camera.ts     the tilted projection, fit and focus                (+ test)
-OfficeFloor / Room / Sprite / AgentWorkstation  — the React layer
+activity.ts   events    → the pose and sentence for each agent    (+ test)
+scene.ts      everything→ one serialisable frame (SceneState)     (+ test)
+geometry.ts   the floor plane helpers
 ```
+
+Two renderers consume that frame, and neither owns simulation state:
+
+- `features/office3d/` — the WebGL office: `characters.ts` (deterministic procedural people),
+  `assets.ts` (shared geometry + a material cache), `poses.ts` (the pose table and the walk cycle,
+  pure and tested), `Character.tsx` (the rig), `scenery.tsx` (procedural textures, rooms, desks),
+  `Office3D.tsx` (camera, lights, HUD) and `OfficeTab.tsx` (WebGL probe + renderer switch).
+- `features/office/` — the 2D floor plan: `camera.ts`, `viewport.ts`, `OfficeFloor.tsx` and friends.
+
+The design, the wire plan for the hosted version and the known limits are in
+[`docs/14-realtime-office-renderer.md`](../docs/14-realtime-office-renderer.md).
 
 - **One typed client.** Every request goes through `src/api/client.ts`; RFC 7807 problems
   become `ApiError` carrying a stable `code` (`budget_exceeded`, `policy_denied`,
@@ -132,3 +146,8 @@ Covers the event reducer (`src/lib/events.test.ts`: dedupe by `seq`, ordering, b
 window + eviction count, gap notices, frame decoding, filtering) and the money/token
 formatters (`src/lib/format.test.ts`: micro-USD ↔ USD, precision rules, `k`/`M`/`B`
 compaction, durations, relative time, budget fraction).
+
+The simulation carries the bulk of it — activities, targets, corridor routing, walkers, the floor
+plan, the scene projection, character generation and the pose table — because that is where the
+interesting behaviour lives and where a bug is invisible until it is on screen. The three.js layer
+is deliberately thin and is verified by driving the real app in a browser.

@@ -12,7 +12,7 @@ import { RewardsPanel } from '../rewards/RewardsPanel';
 import { EventsPanel } from '../events/EventsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DrawerHost } from './DrawerHost';
-import { OfficeTab } from '../office3d/OfficeTab';
+import { OfficeTab } from '../office/OfficeTab';
 import { cn } from '../../lib/cn';
 
 /**

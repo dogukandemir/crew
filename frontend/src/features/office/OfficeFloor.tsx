@@ -18,7 +18,7 @@ import { fitCamera, isoBounds, project, screenOf, type Camera } from './iso';
 import type { Point } from '../../sim/geometry';
 import { panBy, zoomAt } from './viewport';
 import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
-import type { SvgMotionRef } from '../characters/SvgCharacter';
+import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
 import type { Target } from '../../sim/targets';
 import { SPRITE_SCALES, setSpriteScale, useSpriteScale } from '../sprites/viewScale';
 import './office2d.css';

@@ -25,7 +25,7 @@ import {
 } from '../../sim/floorplan';
 import type { FloorPulse } from '../../sim/rooms';
 import type { Target } from '../../sim/targets';
-import type { SvgMotionRef } from '../characters/SvgCharacter';
+import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import { mh, boxFaces, floorRect, polyPoints, project } from './iso';

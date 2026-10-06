@@ -26,6 +26,37 @@ import type { SceneAgent } from '../../sim/scene';
 import { WALK_SPEED, newWalker, setRoute, step, type Walker } from '../../sim/walkers';
 import { AgentWorkstation } from '../office/AgentWorkstation';
 import { CharacterRig, type RigMotion } from './Character';
+import { SPRITE_SCALES, setSpriteScale, useSpriteScale } from '../sprites/viewScale';
+
+/**
+ * The sprite size selector, beside the other view controls.
+ *
+ * Every option is the same geometry at a different size — one factor, applied to
+ * both axes — so this chooses scale, never shape. Self-contained so it can sit in
+ * either renderer's overlay without threading state through it.
+ */
+function SpriteScaleChips() {
+  const current = useSpriteScale();
+  return (
+    <span className="flex items-center gap-1">
+      {SPRITE_SCALES.map((s) => (
+        <button
+          key={s.name}
+          type="button"
+          onClick={() => setSpriteScale(s.name)}
+          title={s.hint}
+          className={`rounded-lg border px-2 py-1 text-xs backdrop-blur ${
+            current === s.name
+              ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+              : 'border-white/10 bg-[#12151c]/85 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {s.label}
+        </button>
+      ))}
+    </span>
+  );
+}
 import { UNIT, OFFICE as P, matte } from './assets';
 import { lookFor } from '../characters/look';
 import { Room3D, RoomDesks, corridorTexture, makeToWorld, nameTagTexture } from './scenery';
@@ -530,6 +561,7 @@ export function Office3D({
                 2.5D office
               </button>
             )}
+            <SpriteScaleChips />
           </div>
         </div>
 

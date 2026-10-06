@@ -20,6 +20,7 @@ import { panBy, zoomAt } from './viewport';
 import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
 import type { SvgMotionRef } from '../characters/SvgCharacter';
 import type { Target } from '../../sim/targets';
+import { SPRITE_SCALES, setSpriteScale, useSpriteScale } from '../sprites/viewScale';
 import './office2d.css';
 
 const ARRIVAL_MS = 3200;
@@ -58,6 +59,9 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const [showArchived, setShowArchived] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [follow, setFollow] = useState(false);
+  // Which of the offered sprite sizes is in force. Presentation only: the office
+  // is the same office at every size, and the shape never changes.
+  const spriteScale = useSpriteScale();
   const [selected, setSelected] = useState<string | null>(null);
   const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
@@ -555,6 +559,23 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         <Button size="xs" variant="secondary" onClick={fit} title="Fit the floor (F)">
           ⤢ Fit
         </Button>
+
+        <span className="office-sep" />
+
+        {/* How big the sprites are drawn. Every option is the same geometry at a
+            different size — one factor on both axes — so this is a choice about
+            scale, never about shape. */}
+        {SPRITE_SCALES.map((s) => (
+          <Chip
+            key={s.name}
+            tone={spriteScale === s.name ? 'success' : 'neutral'}
+            selected={spriteScale === s.name}
+            onClick={() => setSpriteScale(s.name)}
+            title={s.hint}
+          >
+            {s.label}
+          </Chip>
+        ))}
 
         <span className="office-sep" />
 

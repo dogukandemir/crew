@@ -19,7 +19,8 @@ import { useEffect, useId, useRef } from 'react';
 import type { ActivityKind } from '../../sim/activity';
 import atlasUrl from '../sprites/atlas.png';
 import { ATLAS, type AtlasEntry } from '../sprites/atlas.gen';
-import { SPRITE_UNIT_X, SPRITE_UNIT_Y, lookIndex } from '../sprites/sprites';
+import { SPRITE_UNIT, lookIndex } from '../sprites/sprites';
+import { spriteScaleFactor } from '../sprites/viewScale';
 
 export interface SpriteMotion {
   facing: 1 | -1;
@@ -86,22 +87,21 @@ export function SpriteCharacter({
       const e = cell(facing, pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
-        // origin. `height` is how tall the figure should be there; the horizontal
-        // axis is a different world scale, so it takes the ratio of the two.
-        const ky = height / 40;
-        const kx = ky * (SPRITE_UNIT_X / SPRITE_UNIT_Y);
-        const x0 = -e.ax * kx;
-        const y0 = -e.ay * ky;
+        // origin. `height` is how tall the figure should be there, and the same
+        // factor scales across: two would shear the sprite. See Sprite.tsx.
+        const k = (height / 40) * spriteScaleFactor();
+        const x0 = -e.ax * k;
+        const y0 = -e.ay * k;
         // The sheet slides under a window the size of the cell: an <image> has no
-        // idea what a cell is. See Sprite.tsx.
+        // idea what a cell is.
         clipRect.current.setAttribute('x', x0.toFixed(2));
         clipRect.current.setAttribute('y', y0.toFixed(2));
-        clipRect.current.setAttribute('width', (e.w * kx).toFixed(2));
-        clipRect.current.setAttribute('height', (e.h * ky).toFixed(2));
-        img.current.setAttribute('x', (x0 - e.x * kx).toFixed(2));
-        img.current.setAttribute('y', (y0 - e.y * ky).toFixed(2));
-        img.current.setAttribute('width', (ATLAS.width * kx).toFixed(2));
-        img.current.setAttribute('height', (ATLAS.height * ky).toFixed(2));
+        clipRect.current.setAttribute('width', (e.w * k).toFixed(2));
+        clipRect.current.setAttribute('height', (e.h * k).toFixed(2));
+        img.current.setAttribute('x', (x0 - e.x * k).toFixed(2));
+        img.current.setAttribute('y', (y0 - e.y * k).toFixed(2));
+        img.current.setAttribute('width', (ATLAS.width * k).toFixed(2));
+        img.current.setAttribute('height', (ATLAS.height * k).toFixed(2));
       }
 
       if (mirror.current) {

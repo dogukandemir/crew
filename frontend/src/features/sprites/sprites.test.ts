@@ -7,7 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ATLAS } from './atlas.gen';
-import { SPRITE_UNIT_X, SPRITE_UNIT_Y, characterSprite, entry, hasSprite, lookIndex } from './sprites';
+import { SPRITE_UNIT, characterSprite, entry, hasSprite, lookIndex } from './sprites';
+import { SPRITE_SCALES } from './viewScale';
 import { UNITS_PER_METRE } from '../office/iso';
 
 /** Every prop the floor renderer draws, as it names them. */
@@ -71,15 +72,24 @@ describe('the sprite atlas', () => {
     expect(used.size).toBeGreaterThan(20);
   });
 
-  it('derives the world scale from the atlas, not from a guess', () => {
-    // A 2×1 sprite is 48 pixels wide and 2 metres of floor, so a sprite pixel is
-    // this many world units ACCROSS. Down is a different scale, and using one
-    // number for both is what made the first cut of this office 1.5× too tall.
-    expect(SPRITE_UNIT_X).toBeCloseTo(UNITS_PER_METRE / (ATLAS.world.tilePixels / 2), 6);
-    expect(SPRITE_UNIT_Y).toBeCloseTo(UNITS_PER_METRE / ATLAS.world.heightPixelsPerMetre, 6);
-    expect(SPRITE_UNIT_X).toBeGreaterThan(0);
-    expect(SPRITE_UNIT_Y).toBeGreaterThan(0);
-    // The floor is 2:1, so a metre up has to be drawn taller than a metre across.
-    expect(SPRITE_UNIT_X).toBeGreaterThan(SPRITE_UNIT_Y);
+  it('draws a sprite with ONE factor, so its own floor stays 2:1', () => {
+    // Two factors — one per axis — is the bug that made every desk look sheared:
+    // each axis matched this world's metres, and the sprite's own 2:1 floor did not.
+    expect(SPRITE_UNIT).toBeCloseTo(UNITS_PER_METRE / (ATLAS.world.tilePixels / 2), 6);
+    expect(SPRITE_UNIT).toBeGreaterThan(0);
+    // The manifest still declares the height contract; it is what the scale CHOICE
+    // in viewScale.ts is for, not what the mapping is for.
+    expect(ATLAS.world.heightPixelsPerMetre).toBeGreaterThan(0);
+  });
+
+  it('offers the sizes it claims to', () => {
+    const names = SPRITE_SCALES.map((s) => s.name);
+    expect(names).toEqual(['tiled', 'true', 'big']);
+    for (const s of SPRITE_SCALES) {
+      expect(s.factor).toBeGreaterThan(0);
+      // Nothing offered may shear: one factor per option, applied to both axes.
+      expect(Number.isFinite(s.factor)).toBe(true);
+    }
+    expect(SPRITE_SCALES.find((s) => s.name === 'tiled')?.factor).toBe(1);
   });
 });

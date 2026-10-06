@@ -12,8 +12,9 @@
 import { useId } from 'react';
 import atlasUrl from './atlas.png';
 import { project } from '../office/iso';
-import { SPRITE_UNIT_X, SPRITE_UNIT_Y, entry } from './sprites';
 import { ATLAS } from './atlas.gen';
+import { SPRITE_UNIT, entry } from './sprites';
+import { spriteScaleFactor } from './viewScale';
 
 export function Sprite({
   name,
@@ -41,12 +42,13 @@ export function Sprite({
   if (!e) return null;
 
   const p = project(x, y, z);
-  // Two scales on purpose: a sprite's horizontal axis is floor (2:1, 16 px per
-  // metre) and its vertical axis is height (24 px per metre). See SPRITE_UNIT_Y.
-  const left = p.x - e.ax * SPRITE_UNIT_X;
-  const top = p.y - e.ay * SPRITE_UNIT_Y;
-  const w = e.w * SPRITE_UNIT_X;
-  const h = e.h * SPRITE_UNIT_Y;
+  // One factor for both axes: a sprite's floor is 2:1 and scaling x and y by
+  // different amounts shears it. The size is the user's choice, not a calculation.
+  const u = SPRITE_UNIT * spriteScaleFactor();
+  const left = p.x - e.ax * u;
+  const top = p.y - e.ay * u;
+  const w = e.w * u;
+  const h = e.h * u;
 
   // The SHEET, not the cell. An SVG <image> draws the whole file it is pointed at,
   // so a cell is selected by scaling the sheet up to the atlas's own pixel size and
@@ -61,10 +63,10 @@ export function Sprite({
       </clipPath>
       <image
         href={atlasUrl}
-        x={left - e.x * SPRITE_UNIT_X}
-        y={top - e.y * SPRITE_UNIT_Y}
-        width={ATLAS.width * SPRITE_UNIT_X}
-        height={ATLAS.height * SPRITE_UNIT_Y}
+        x={left - e.x * u}
+        y={top - e.y * u}
+        width={ATLAS.width * u}
+        height={ATLAS.height * u}
         opacity={opacity}
         preserveAspectRatio="none"
         clipPath={`url(#${clipId})`}

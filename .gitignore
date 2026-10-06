@@ -1,0 +1,48 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+.eslintcache
+
+# --- Secrets / local state ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!docs/**/*.key.md
+secrets/
+
+# --- Runtime data (workspaces, sqlite db, artifacts) ---
+data/
+!frontend/src/data/
+workspaces/
+artifacts/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+logs/
+*.log
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

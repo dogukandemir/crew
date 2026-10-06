@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRow, Task } from '../../api/types';
 import { useOrg, useTasks } from '../../app/hooks';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
@@ -8,22 +8,15 @@ import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { cn } from '../../lib/cn';
 import { AgentWorkstation } from './AgentWorkstation';
-import { RoomView } from './Room';
-import { Sprite } from './Sprite';
-import { SPINE_W, buildOffice, type Room } from '../../sim/floorplan';
+import { OfficeScene } from './OfficeScene';
+import { buildOffice, type Room } from '../../sim/floorplan';
 import { currentTaskFor, deriveActivity, type Activity } from '../../sim/activity';
+import { floorPulse } from '../../sim/rooms';
 import { computeTargets } from '../../sim/targets';
 import { routeBetween } from '../../sim/paths';
-import {
-  CAMERA_PRESETS,
-  cameraLabel,
-  fitTilted,
-  focusTilted,
-  toScreen,
-  type CameraPreset,
-} from './camera';
-import { distance, type Point } from '../../sim/geometry';
-import { panBy, zoomAt, type Transform } from './viewport';
+import { fitCamera, isoBounds, project, screenOf, type Camera } from './iso';
+import type { Point } from '../../sim/geometry';
+import { panBy, zoomAt } from './viewport';
 import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
 import type { SvgMotionRef } from '../characters/SvgCharacter';
 import type { Target } from '../../sim/targets';
@@ -32,7 +25,10 @@ import './office2d.css';
 const ARRIVAL_MS = 3200;
 const EVENT_LOOKBACK_MS = 120_000;
 const PANEL_W = 380;
-const WALK_LANE = 78;
+/** How long a department that just appeared is flagged as new. */
+const NEW_ROOM_MS = 25_000;
+/** Room to leave above the floor for signage and speech bubbles when fitting. */
+const HEADROOM = 140;
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -57,8 +53,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const log = useEventLog(selectEventLog(projectId));
   const now = useNow(1000);
 
-  const [preset, setPreset] = useState<CameraPreset>('iso');
-  const [cam, setCam] = useState<Transform>({ x: 0, y: 0, scale: 1 });
+  const [cam, setCam] = useState<Camera>({ x: 0, y: 0, scale: 1 });
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [showArchived, setShowArchived] = useState(false);
   const [attentionOnly, setAttentionOnly] = useState(false);
@@ -66,6 +61,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const [selected, setSelected] = useState<string | null>(null);
   const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
+  const [newRoomIds, setNewRoomIds] = useState<Set<string>>(new Set());
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -74,7 +70,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const lastFollow = useRef(0);
 
   const walkers = useRef<Map<string, Walker>>(new Map());
-  const spriteEls = useRef<Map<string, HTMLDivElement>>(new Map());
+  const spriteEls = useRef<Map<string, SVGGElement>>(new Map());
   /** Per-character frame data the SVG rig reads; never React state. */
   const motions = useRef<Map<string, SvgMotionRef>>(new Map());
   /** Latest targets, for the walk loop to read who is facing whom. */
@@ -88,13 +84,12 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     motions.current.set(id, box);
     return box;
   }, []);
+
   const lastTargetKey = useRef<Map<string, string>>(new Map());
   const lastRoom = useRef<Map<string, string>>(new Map());
   const idleSince = useRef<Map<string, number>>(new Map());
   const arrivals = useRef<Map<string, number>>(new Map());
   const rosterReady = useRef(false);
-
-  const { rotX, rotZ } = CAMERA_PRESETS[preset];
 
   const office = useMemo(
     () => buildOffice(org.data?.root, { showArchived }),
@@ -102,7 +97,20 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   );
   const visibleIds = useMemo(() => Object.keys(office.deskOf).sort(), [office]);
   const rosterKey = visibleIds.join(',');
+  const seenRooms = useRef<Set<string>>(new Set());
   const tasks = tasksQuery.data?.items;
+
+  /** The screen box the whole building occupies, signage included. */
+  const bounds = useMemo(
+    () => isoBounds(office.width, office.height, HEADROOM, 46),
+    [office.width, office.height],
+  );
+
+  // The scene reads its per-character animation state from this map, so every
+  // seated agent needs a box before the first paint; the walk loop fills them in.
+  useEffect(() => {
+    for (const id of visibleIds) motionFor(id);
+  }, [visibleIds, motionFor]);
 
   // ── Canvas size ────────────────────────────────────────────────────────────
   const attachCanvas = useCallback((el: HTMLDivElement | null) => {
@@ -119,16 +127,38 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const fit = useCallback(() => {
-    setCam(fitTilted(office.width, office.height, size.w, size.h, rotX, rotZ, 36, 1.7));
-  }, [office.width, office.height, size.w, size.h, rotX, rotZ]);
+    setCam(fitCamera(bounds, size));
+  }, [bounds, size]);
 
   useEffect(() => {
     if (size.w === 0 || office.width === 0) return;
-    const key = `${projectId}:${preset}:${size.w}x${size.h}`;
+    const key = `${projectId}:${size.w}x${size.h}`;
     if (fittedFor.current === key) return;
     fittedFor.current = key;
-    setCam(fitTilted(office.width, office.height, size.w, size.h, rotX, rotZ, 36, 1.7));
-  }, [projectId, preset, size, office.width, office.height, rotX, rotZ]);
+    setCam(fitCamera(bounds, size));
+  }, [projectId, size, office.width, bounds]);
+
+  // A department the org just opened: say so on the floor for a while.
+  useEffect(() => {
+    const ids = office.rooms.map((r) => r.id);
+    const known = seenRooms.current;
+    if (known.size === 0) {
+      ids.forEach((id) => known.add(id));
+      return;
+    }
+    const fresh = ids.filter((id) => !known.has(id));
+    if (fresh.length === 0) return;
+    ids.forEach((id) => known.add(id));
+    setNewRoomIds((prev) => new Set([...prev, ...fresh]));
+    const timer = window.setTimeout(() => {
+      setNewRoomIds((prev) => {
+        const next = new Set(prev);
+        fresh.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, NEW_ROOM_MS);
+    return () => window.clearTimeout(timer);
+  }, [office.rooms]);
 
   useEffect(() => {
     setSelected(null);
@@ -166,6 +196,12 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     }
     return out;
   }, [visibleIds, office, tasks, recentByAgent, now]);
+
+  // A department's pulse: who is producing, what it has shipped, is it new.
+  const pulse = useMemo(
+    () => floorPulse({ office, activities, events: log.items, now, showArchived }),
+    [office, activities, log.items, now, showArchived],
+  );
 
   // ── Roster bookkeeping ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -267,13 +303,18 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         if (next !== w) walkers.current.set(id, next);
         const el = spriteEls.current.get(id);
         if (!el) continue;
-        el.style.transform = `translate3d(${next.x.toFixed(2)}px, ${next.y.toFixed(2)}px, 0)`;
+        // World position → screen position → the SVG transform. Nothing is
+        // rotated: a character is drawn upright wherever the floor puts them.
+        const p = project(next.x, next.y);
+        const facingAt = !next.moving ? targetsRef.current[id]?.faceTowards : undefined;
+        const flip = facingAt ? (facingAt.x >= next.x ? 1 : -1) : next.facing;
+        el.setAttribute(
+          'transform',
+          `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})${flip < 0 ? ' scale(-1 1)' : ''}`,
+        );
         if (next.moving !== el.classList.contains('is-walking')) {
           el.classList.toggle('is-walking', next.moving);
         }
-        const facingAt = !next.moving ? targetsRef.current[id]?.faceTowards : undefined;
-        const flip = String(facingAt ? (facingAt.x >= next.x ? 1 : -1) : next.facing);
-        if (el.style.getPropertyValue('--flip') !== flip) el.style.setProperty('--flip', flip);
 
         // Hand the same movement to the character rig, so the walk cycle is
         // driven by ground actually covered rather than by a timer.
@@ -281,7 +322,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         const travelled = Math.hypot(next.x - w.x, next.y - w.y);
         m.current.moving = next.moving;
         m.current.speed = dt > 0 ? travelled / dt : 0;
-        m.current.facing = next.facing < 0 ? -1 : 1;
+        m.current.facing = flip < 0 ? -1 : 1;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -290,14 +331,17 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   }, []);
 
   const registerSprite = useCallback(
-    (id: string) => (el: HTMLDivElement | null) => {
+    (id: string) => (el: SVGGElement | null) => {
       if (!el) {
         spriteEls.current.delete(id);
         return;
       }
       spriteEls.current.set(id, el);
       const w = walkers.current.get(id);
-      if (w) el.style.transform = `translate3d(${w.x.toFixed(2)}px, ${w.y.toFixed(2)}px, 0)`;
+      if (w) {
+        const p = project(w.x, w.y);
+        el.setAttribute('transform', `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
+      }
     },
     [],
   );
@@ -316,8 +360,13 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     if (Date.now() - lastFollow.current < 3000) return;
     const seat = office.deskOf[best.id];
     lastFollow.current = Date.now();
-    setCam(focusTilted({ x: seat.x - 300, y: seat.y - 190, w: 600, h: 380 }, size.w, size.h, rotX, rotZ, 1.05));
-  }, [follow, log.items, office, size.w, size.h, rotX, rotZ]);
+    setCam(
+      fitCamera(isoBounds(360, 360, HEADROOM, 40), size, { zoom: 1.35 }),
+    );
+    // Centre on the seat itself rather than on the world origin.
+    const corner = project(Math.max(0, seat.x - 180), Math.max(0, seat.y - 180));
+    setCam((c) => ({ ...c, x: c.x - corner.x * c.scale, y: c.y - corner.y * c.scale }));
+  }, [follow, log.items, office, size]);
 
   // ── Camera interaction ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -336,18 +385,13 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const focusRoom = useCallback(
     (room: Room) => {
       setFocusRoomId(room.id);
-      setCam(
-        focusTilted(
-          { x: room.x, y: room.y, w: room.w, h: room.h },
-          size.w,
-          size.h,
-          rotX,
-          rotZ,
-          1.15,
-        ),
-      );
+      const box = isoBounds(room.w, room.h, HEADROOM, 40);
+      const base = fitCamera(box, size, { zoom: 1.1 });
+      // The box is measured from the world origin, so shift it onto the room.
+      const corner = project(room.x, room.y);
+      setCam({ ...base, x: base.x - corner.x * base.scale, y: base.y - corner.y * base.scale });
     },
-    [size.w, size.h, rotX, rotZ],
+    [size],
   );
 
   const selectAgent = useCallback(
@@ -358,7 +402,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       const walker = walkers.current.get(id);
       const pos = walker ? { x: walker.x, y: walker.y } : at;
       if (!pos || size.w === 0) return;
-      const screen = toScreen(pos.x, pos.y, cam, rotX, rotZ);
+      const screen = screenOf(pos.x, pos.y, cam);
       const visibleW = Math.max(160, size.w - PANEL_W);
       const margin = 120;
       let dx = 0;
@@ -369,7 +413,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       else if (screen.y < margin) dy = margin - screen.y;
       if (dx !== 0 || dy !== 0) setCam((c) => panBy(c, dx, dy));
     },
-    [office, size.w, size.h, cam, rotX, rotZ],
+    [office, size.w, size.h, cam],
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -437,11 +481,6 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     e.preventDefault();
   };
 
-  const corridorBands = useMemo(
-    () => Array.from(new Set(Object.values(office.corridorY))).sort((a, b) => a - b),
-    [office.corridorY],
-  );
-
   const counts = useMemo(() => {
     const all = Object.values(activities);
     return {
@@ -458,16 +497,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   }
 
   const empty = visibleIds.length === 0;
-  const far = cam.scale < 0.42;
-  const mid = cam.scale < 0.62;
-  const camStyle: CSSProperties = {
-    transform: `translate3d(${cam.x}px, ${cam.y}px, 0) scale(${cam.scale})`,
-  };
-  const worldStyle: CSSProperties = {
-    width: office.width,
-    height: office.height,
-    transform: `rotateX(${rotX}deg) rotateZ(${rotZ}deg)`,
-  };
+  const shipped = Object.values(pulse.rooms).reduce((sum, room) => sum + room.shipped, 0);
 
   return (
     <div className="office">
@@ -495,14 +525,6 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
         <span className="office-sep" />
 
-        {(Object.keys(CAMERA_PRESETS) as CameraPreset[]).map((p) => (
-          <Chip key={p} selected={preset === p} onClick={() => setPreset(p)} tone={preset === p ? 'success' : 'neutral'}>
-            {cameraLabel(p)}
-          </Chip>
-        ))}
-
-        <span className="office-sep" />
-
         {office.rooms
           .filter((r) => r.kind === 'department' || r.kind === 'orchestrator')
           .map((r) => (
@@ -518,6 +540,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
                 style={{ background: r.accent }}
               />
               {r.name}
+              {(pulse.rooms[r.id]?.producing ?? 0) > 0 && (
+                <span className="ml-1 text-emerald-300" title="producing now">
+                  ●
+                </span>
+              )}
             </Chip>
           ))}
 
@@ -539,6 +566,12 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
         <span className="office-stat">
           <b>{counts.agents}</b> seats · <b>{counts.working}</b> working · <b>{counts.thinking}</b> thinking
+          {shipped > 0 && (
+            <>
+              {' · '}
+              <b className="text-emerald-300">{shipped}</b> shipped
+            </>
+          )}
           {counts.attention > 0 && (
             <>
               {' · '}
@@ -573,63 +606,23 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           onPointerCancel={onPointerUp}
           onKeyDown={onKeyDown}
         >
-          <div className="office-camera" style={camStyle}>
-            <div className={cn('office-world', mid && 'is-mid', far && 'is-far')} style={worldStyle}>
-              <div className="office-floor" />
-              <div
-                className="corridor is-vertical"
-                style={{ left: 0, top: 0, width: SPINE_W, height: office.height }}
-              />
-              {corridorBands.map((y) => (
-                <div
-                  key={y}
-                  className="corridor"
-                  style={{ left: 0, top: y - WALK_LANE / 2, width: office.width, height: WALK_LANE }}
-                />
-              ))}
-
-              {office.rooms.map((room) => (
-                <RoomView
-                  key={room.id}
-                  room={room}
-                  rotX={rotX}
-                  rotZ={rotZ}
-                  activities={activities}
-                  selectedId={selected}
-                  focused={focusRoomId === room.id}
-                  onFocusRoom={focusRoom}
-                  onSelectAgent={selectAgent}
-                />
-              ))}
-
-              {visibleIds.map((id) => {
-                const act = activities[id];
-                if (!act) return null;
-                const target = targets[id];
-                const desk = office.deskOf[id];
-                const atDesk =
-                  !!target && target.roomId === office.roomOf[id] && distance(target.point, desk) < 1.5;
-                return (
-                  <Sprite
-                    key={id}
-                    agent={office.agentOf[id]}
-                    activity={act}
-                    motion={motionFor(id)}
-                    atDesk={atDesk}
-                    selected={selected === id}
-                    dimmed={attentionOnly && act.kind !== 'blocked' && act.kind !== 'waiting'}
-                    walkingTo={
-                      target && target.roomId !== office.roomOf[id]
-                        ? office.rooms.find((r) => r.id === target.roomId)?.name
-                        : undefined
-                    }
-                    onSelect={() => selectAgent(id)}
-                    register={registerSprite(id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          {size.w > 0 && (
+            <OfficeScene
+              office={office}
+              activities={activities}
+              targets={targets}
+              pulse={pulse}
+              selected={selected}
+              attentionOnly={attentionOnly}
+              focusRoomId={focusRoomId}
+              newRoomIds={newRoomIds}
+              motions={motions.current}
+              registerSprite={registerSprite}
+              onSelectAgent={selectAgent}
+              viewport={size}
+              camera={cam}
+            />
+          )}
 
           <div className="office-hint">
             drag to pan · scroll to zoom · click a character for thinking &amp; output · <kbd>F</kbd> fit ·{' '}

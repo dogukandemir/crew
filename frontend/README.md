@@ -45,19 +45,32 @@ approvals. The header carries the connection indicator, a global budget meter an
 
 **Project workspace** — Office, Overview, Org, Tasks, Agents, Brains, Reward, Events, Settings.
 
-- **Office** (the default tab) — the organization as an office floor, in 2.5D. Departments are
-  rooms; agents are **cute SVG characters** with chibi proportions, each one generated from their
-  agent id (build, skin tone, hair, dress code, accessories) so the same person looks the same every
-  time — and the *same* person the 3D office draws, since both renderers read one identity. They
-  **walk the corridors between departments** rather than teleporting, sit at desks between real
-  monitors and chairs, and work: typing, tool calls, thinking, blocked, celebrating. Movement is a
-  projection of real state — escalation walks to the orchestrator's office, verification walks to the
-  shared review table, a task owned by another department walks you across the floor to it, a long
-  idle spell wanders to the coffee corner, and a new hire walks in from the entrance. They also
-  **work together**: when the harness records `ask_colleague` the asker walks over to that colleague
-  and the two turn to face each other, and when a task is assigned to a squad the juniors gather at
-  the senior's desk until the task ends. Zoom, pan, click a character for their live thinking stream
-  and output. A **3D office** button switches to the WebGL view of the same cast.
+- **Office** (the default tab) — the organization as an office building seen isometrically. Departments
+  are real rooms with partition walls, hanging signs and a floor in their own accent colour; agents are
+  **cute SVG characters** with chibi proportions, generated from their agent id (build, skin tone, hair,
+  dress code, accessories) so the same person always looks the same — and the *same* person the 3D
+  office draws, since both renderers read one identity and one pose table. Verticals stay vertical, so
+  people **stand up** and the furniture has real height: desks, monitors, chairs, plants, a coffee bar,
+  lamps and whiteboards are all drawn as volumes with a lit top face and shaded sides. They **walk the
+  corridors between departments** rather than teleporting, and work: typing, tool calls, thinking,
+  blocked, celebrating. Movement is a projection of real state — escalation walks to the orchestrator,
+  verification walks to the shared review table, a task owned by another department walks you across the
+  floor to it, a long idle spell wanders to the coffee corner, and a new hire walks in from the entrance.
+- **Talking is visible.** A character with something to say shows a **speech bubble carrying the real
+  words from the event**, and its colour says what kind of exchange it is: work conversation is white,
+  **water-cooler gossip is amber** (a message between colleagues who are not working on anything), a
+  report to a manager is green with an `↑`, a directive coming down is violet with a `↓`, a hand-off is
+  blue with a `→`, and an escalation is red. The walk goes with it: report to your manager and you
+  actually walk to their desk, ask a colleague and you walk over and turn to face them, and when a task
+  is assigned to a squad the juniors gather at the senior's desk until it ends. A dashed route appears on
+  the floor while somebody is working in another department.
+- **Each department reports what it is doing.** Its board carries the department name and mission, a
+  pulsing **producing** marker when someone in it is mid-output, a **shipped** count with the newest
+  deliverable by name (`✓ 2 shipped · Market scan`), seat/working/stuck counts, and a **new** flag when
+  the org has just opened that department. The toolbar totals the floor: seats, working, thinking,
+  shipped, and who needs you.
+- Zoom, pan, click a character for their live thinking stream, output and scorecard. A **3D office**
+  button switches to the WebGL view of the same cast.
 - **Overview** — mission-control cards (tasks done/total, org size, spend vs budget, success
   rate, pending approvals), a live budget-burn chart (recharts) built from real event costs,
   the activity ticker (click a row to jump to that agent/task) and the start-run form

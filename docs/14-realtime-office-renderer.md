@@ -30,8 +30,9 @@ org tree ──┘   (pose + note)      (where + why)       (one frame)        (
 | Activity | `sim/activity.ts` | agent, its task, its recent events | `Activity` — a pose kind, a bubble, a human sentence, and *where they should be* | ✅ |
 | Target | `sim/targets.ts` | activities + tasks + floor plan | `Target` — a concrete point plus the reason | ✅ |
 | Frame | `sim/scene.ts` | floor plan + activities + targets + tasks | `SceneState` — one serialisable frame | ✅ |
-| Characters | `office3d/characters.ts`, `sim`-free | agent id + role + grade | a stable appearance | ✅ |
-| Rig + render | `office3d/*` | `SceneState` | pixels | ⬜ deliberately thin |
+| Characters | `features/characters/look.ts`, `sim`-free | agent id + role + grade | a stable appearance | ✅ |
+| Department pulse | `sim/rooms.ts` | floor plan + activities + events | production, shipments and newness per room | ✅ |
+| Rig + render | `office3d/*`, `office/*` | the frame above | pixels | ⬜ deliberately thin |
 
 Precedence is explicit and documented in `ACTIVITY_ORDER`: something wrong (`blocked`, `waiting`)
 outranks something active (`typing`, `tool`, `talking`, `walking`), which outranks idle. Movement
@@ -50,7 +51,8 @@ version push a floor plan once and then stream small per-tick frames.
 src/sim/            pure, framework-free, deterministic          ← portable as-is
 src/app/useSceneFrame.ts   the one seam: domain → scene frame    ← becomes a subscription
 src/features/office3d/     three.js renderer                     ← unchanged
-src/features/office/       2D fallback renderer                  ← unchanged
+src/features/office/       the 2.5D floor: projection, props, bubbles ← unchanged
+src/features/characters/   the cast that both renderers draw        ← unchanged
 ```
 
 `useSceneFrame` composes the pure stages in the browser today. In the cloud it is replaced by a
@@ -205,5 +207,54 @@ where a simulation is most tempted to fake it:
   a conversation, so an agent on their way to the orchestrator is not shown
   cheerfully chatting.
 
-`resolvePeer`, `pairAnchor` and the inward-facing rings are pure and tested in
-`src/sim/social.test.ts`.
+`resolvePeer`, `pairAnchor` and the inward-facing rings are pure and tested in `src/sim/social.test.ts`.
+
+## 10. Why the floor is drawn isometrically
+
+The first 2.5D attempt tilted a CSS 3D plane and counter-rotated each character to stand up in it.
+It looked wrong, and the reason is worth writing down: **a tilted plane forecloses the vertical
+axis.** Everything drawn in it is foreshortened, so a standing figure reads as lying down and desks
+read as floor tiles. No amount of fiddling with the counter-rotation fixes that, because the problem
+is the projection, not the sprite.
+
+`features/office/iso.ts` replaces it with a dimetric projection calculated in code:
+
+```
+screen.x = (worldX − worldY) · 1
+screen.y = (worldX + worldY) · 0.5 − height
+```
+
+Verticals stay vertical. A character is drawn upright because there is nothing to rotate, and a
+height is a real screen height. That single property is what makes the scene read as a place.
+
+**Everything solid is a volume.** `boxFaces()` returns three polygons for any box on the floor — a lit
+top face and two shaded sides — and every prop in `office/props.tsx` is built from that. The contrast
+between the faces is what makes a monitor read as a monitor. Sizes come from metres: `mh(0.74)` is
+desk height, `mh(1.5)` is a person, and the character's on-screen size is derived from the same
+scale, so people are correctly bigger than the furniture.
+
+The camera is a plain translate + scale. There is one projection, so there are no camera presets any
+more; `fitCamera()` frames the whole building, signage included, and the department chips zoom to a
+room. Painting order is far-to-near by `x + y`, which is the depth order this projection implies.
+
+## 11. What the floor says about the organization
+
+Three things are drawn on top of the simulation, and each one is a fact from the log:
+
+| Marker | Grounded in | Where it appears |
+|---|---|---|
+| Bubble colour | the event's own type and payload (`direction`, `informal`) | above the speaker's head |
+| "producing" | at least one agent in the room is typing or running a tool | pulsing pill on the department board |
+| "✓ n shipped · <title>" | `task.completed` events for that room's agents, inside a 20-minute window | under the department name |
+| "new" | an `org.department.created` event, or a room that the session has not seen before | on the department board |
+| Walk to the boss | the org tree's own `manager_id` — a real command chain, not a guess | a character walking to a real desk |
+
+Speech bubbles are the clearest example of the honesty rule. The colour and the badge come from what
+the message *is*: an escalation is red with a `!`, a report upward is green with a `↑`, a directive
+coming down is violet with a `↓`, a hand-off is blue with a `→`, work talk is white, and chat between
+colleagues who are not working on anything is amber with a `☕`. The words are always the event's own
+text — `textOf()` reads `payload.text` and nothing else, and when there is no text there is no bubble
+rather than a plausible-looking one.
+
+What a "squad" is, and why pairing needs one, is in §9. What this system cannot honestly claim is also
+in §9: it never invents a recipient, never invents collaboration, and never invents conversation.

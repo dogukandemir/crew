@@ -9,7 +9,7 @@ import { PanelError } from '../../components/PanelError';
 import { cn } from '../../lib/cn';
 import { AgentWorkstation } from './AgentWorkstation';
 import { OfficeScene } from './OfficeScene';
-import { buildOffice, type Room } from '../../sim/floorplan';
+import { buildOffice, placementOf, type Placement, type Room } from '../../sim/floorplan';
 import { currentTaskFor, deriveActivity, type Activity } from '../../sim/activity';
 import { floorPulse } from '../../sim/rooms';
 import { computeTargets } from '../../sim/targets';
@@ -127,11 +127,22 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const idleSince = useRef<Map<string, number>>(new Map());
   const arrivals = useRef<Map<string, number>>(new Map());
   const rosterReady = useRef(false);
+  /** The slots the last build produced, fed back into the next one. */
+  const placement = useRef<Placement['slots']>({});
 
-  const office = useMemo(
-    () => buildOffice(org.data?.root, { showArchived }),
-    [org.data, showArchived],
-  );
+  const office = useMemo(() => {
+    // The floor is EXTENDED, never re-packed: the slots from the last build go back in,
+    // so a room that already exists keeps its place and only new rooms are allocated.
+    // That is what makes a hire a local event — the department it joins re-grids its
+    // own desks and nobody else in the building moves.
+    //
+    // The ref is written inside the memo on purpose: it is the memo's own output that
+    // the next build needs. StrictMode calling this twice is harmless — the second call
+    // restores the slots the first one just produced, which is the same placement.
+    const built = buildOffice(org.data?.root, { showArchived, prev: placement.current });
+    placement.current = placementOf(built);
+    return built;
+  }, [org.data, showArchived]);
   const visibleIds = useMemo(() => Object.keys(office.deskOf).sort(), [office]);
   const rosterKey = visibleIds.join(',');
   const seenRooms = useRef<Set<string>>(new Set());

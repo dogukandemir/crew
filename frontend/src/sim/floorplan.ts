@@ -60,13 +60,34 @@ export interface RoomSlot {
   /** The width and height the slot was allocated for, so growth can be detected. */
   w: number;
   h: number;
+  /**
+   * The slot's BAY: what it was given, with one desk of slack in each direction. The
+   * drawn room may grow inside its bay without the shelf — or anything below it —
+   * moving. This is the field that makes "a hire is a local event" true rather than
+   * hopeful, and it is why bays have to be carried between builds.
+   */
+  bayW: number;
+  bayH: number;
 }
+
+/**
+ * The slack a fresh bay gets: one more desk, each way.
+ *
+ * A bay that fits its first roster exactly is the bug this whole placement exists to
+ * fix. The first hire into a department then grows that room past its allocation, the
+ * shelf gets taller, and every shelf below slides down — one new agent in one
+ * department, and a different department on the far side of the floor moves.
+ */
+const BAY_SLACK = { w: DESK_W + DESK_GAP_X, h: DESK_H + DESK_GAP_Y };
 
 export interface Placement {
   slots: Record<string, RoomSlot>;
   rows: number;
   width: number;
   height: number;
+  /** y of each shelf, and the height of the tallest room on it — its corridor follows. */
+  rowTops: number[];
+  rowHeights: number[];
 }
 
 /**
@@ -98,17 +119,25 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
   for (const room of sizes) {
     const was = prev[room.id];
     if (!was) continue;
-    slots[room.id] = { ...was, x: was.x - SPINE_W, w: room.w, h: room.h };
-    rowCursor[was.row] = Math.max(rowCursor[was.row] ?? 0, was.x - SPINE_W + room.w + ROOM_COL_GAP);
-    rowTallest[was.row] = Math.max(rowTallest[was.row] ?? 0, room.h);
+    // The bay is carried, not recomputed: `max(stored, actual)` means the FIRST hire
+    // fits inside the slack and moves nothing, while a second hire into the same room
+    // does grow the bay — which is honest, because the room genuinely got bigger.
+    const bayW = Math.max(was.bayW ?? room.w + BAY_SLACK.w, room.w);
+    const bayH = Math.max(was.bayH ?? room.h + BAY_SLACK.h, room.h);
+    slots[room.id] = { ...was, x: was.x - SPINE_W, w: room.w, h: room.h, bayW, bayH };
+    rowCursor[was.row] = Math.max(rowCursor[was.row] ?? 0, was.x - SPINE_W + bayW + ROOM_COL_GAP);
+    rowTallest[was.row] = Math.max(rowTallest[was.row] ?? 0, bayH);
   }
 
   // 2. New rooms go into the first shelf that can still hold them, else a new shelf.
   for (const room of sizes) {
     if (slots[room.id]) continue;
     let row = -1;
+    const bayW = room.w + BAY_SLACK.w;
     for (let r = 0; r < rowCursor.length; r += 1) {
-      if ((rowCursor[r] ?? 0) + room.w <= MAX_ROW_WIDTH) {
+      // An empty shelf always accepts, so a room wider than MAX_ROW_WIDTH takes the
+      // row it is on rather than leaving an empty one behind it.
+      if ((rowCursor[r] ?? 0) === 0 || (rowCursor[r] ?? 0) + bayW <= MAX_ROW_WIDTH) {
         row = r;
         break;
       }
@@ -118,9 +147,10 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
       rowCursor[row] = 0;
       rowTallest[row] = 0;
     }
-    slots[room.id] = { row, x: rowCursor[row] ?? 0, y: 0, w: room.w, h: room.h };
-    rowCursor[row] = (rowCursor[row] ?? 0) + room.w + ROOM_COL_GAP;
-    rowTallest[row] = Math.max(rowTallest[row] ?? 0, room.h);
+    const bayH = room.h + BAY_SLACK.h;
+    slots[room.id] = { row, x: rowCursor[row] ?? 0, y: 0, w: room.w, h: room.h, bayW, bayH };
+    rowCursor[row] = (rowCursor[row] ?? 0) + bayW + ROOM_COL_GAP;
+    rowTallest[row] = Math.max(rowTallest[row] ?? 0, bayH);
   }
 
   // 3. The shelves stack: each shelf's y follows the tallest room above it. A slot's y
@@ -145,7 +175,19 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
     rows: rowTallest.length,
     width: SPINE_W + contentWidth + 40,
     height: contentHeight + ROW_GAP * 0.55,
+    rowTops: rowY,
+    rowHeights: rowTallest,
   };
+}
+
+/**
+ * The placement a built office came out with, to hand back as `prev` next time.
+ *
+ * Read out of the office rather than kept beside it, so the two cannot drift: if the
+ * office says a room is at (x, y), that is the slot the next build will restore.
+ */
+export function placementOf(office: Office): Placement['slots'] {
+  return office.placement;
 }
 
 /** Department accents: muted, distinguishable on a dark floor, no neon. */
@@ -330,10 +372,22 @@ export interface Office {
   corridorY: Record<string, number>;
   /** x of the vertical spine. */
   spineX: number;
+  /**
+   * Every room's slot, bays included. Hand this back as `BuildOptions.prev` and the
+   * floor is extended instead of re-packed — which is the only way a room keeps its
+   * place while the organization changes around it.
+   */
+  placement: Placement['slots'];
 }
 
 export interface BuildOptions {
   showArchived?: boolean;
+  /**
+   * The previous placement, so a room that already exists keeps the slot it was given
+   * instead of being packed again. Omitting it is a fresh floor — correct for the first
+   * build, and for a test that wants the packing itself.
+   */
+  prev?: Placement['slots'];
 }
 
 function isArchived(a: OrgNode): boolean {
@@ -559,37 +613,25 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     );
   }
 
-  // ── Shelf packing, leaving a corridor band between rows ────────────────────
-  const rowCorridors: number[] = [];
-  let row = 0;
-  let cursorX = 0;
-  let rowY = 0;
-  let rowH = 0;
-
+  // ── Shelf packing: once per room, and then never again ─────────────────────
+  // `placeRooms` and not a fresh pack on every update. A room that already exists keeps
+  // the slot it was given, so hiring into engineering re-grids engineering's own desks
+  // and moves nobody else — and a room stays where the reader last saw it.
+  const placement = placeRooms(rooms, opts.prev ?? {});
   for (const room of rooms) {
-    if (cursorX > 0 && cursorX + room.w > MAX_ROW_WIDTH) {
-      rowCorridors[row] = rowY + rowH + ROW_GAP / 2;
-      row += 1;
-      rowY += rowH + ROW_GAP;
-      cursorX = 0;
-      rowH = 0;
-    }
-    room.row = row;
-    room.x = cursorX;
-    room.y = rowY;
-    cursorX += room.w + ROOM_COL_GAP;
-    rowH = Math.max(rowH, room.h);
+    const slot = placement.slots[room.id];
+    room.row = slot.row;
+    room.x = slot.x;
+    room.y = slot.y;
   }
-  rowCorridors[row] = rowY + rowH + ROW_GAP / 2;
 
-  const contentWidth = Math.max(...rooms.map((r) => r.x + r.w));
-  const contentHeight = rowY + rowH;
-
-  // Shift everything right to clear the vertical spine.
-  for (const room of rooms) room.x += SPINE_W;
-
-  const width = SPINE_W + contentWidth + 40;
-  const height = contentHeight + ROW_GAP * 0.55;
+  // The corridor band for a shelf, from that shelf's own tallest room.
+  const rowCorridors: number[] = placement.rowTops.map(
+    (top, r) => top + (placement.rowHeights[r] ?? 0) + ROW_GAP / 2,
+  );
+  const { width, height } = placement;
+  const contentWidth = width - SPINE_W - 40;
+  const contentHeight = height - ROW_GAP * 0.55;
 
   // ── Doors and corridors ───────────────────────────────────────────────────
   const corridorY: Record<string, number> = {};
@@ -633,6 +675,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     roomOf,
     managerOf,
     agentOf,
+    placement: placement.slots,
     corridorY,
     spineX: SPINE_W / 2,
   };

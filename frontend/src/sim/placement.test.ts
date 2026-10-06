@@ -34,9 +34,16 @@ describe('placeRooms', () => {
     const b = next.slots.b;
     const overlaps = b.x < a.x + a.w && a.x < b.x + b.w && b.y < a.y + a.h && a.y < b.y + b.h;
     expect(overlaps).toBe(false);
-    // Placed to the right of what is already there, at the shelf's own y.
-    expect(b.x).toBeGreaterThanOrEqual(a.x + a.w);
-    expect(b.y).toBe(a.y);
+    // Either beside `a` on the same shelf, clear of `a`'s whole bay, or on a shelf of
+    // its own below. A bay is a desk wider than the room it holds, so two rooms that
+    // look like they fit can genuinely not — which is the placement working.
+    if (b.row === a.row) {
+      expect(b.x).toBeGreaterThanOrEqual(a.x + a.bayW);
+      expect(b.y).toBe(a.y);
+    } else {
+      expect(b.row).toBeGreaterThan(a.row);
+      expect(b.y).toBeGreaterThan(a.y);
+    }
   });
 
   it('opens a shelf instead of sliding the last room along', () => {

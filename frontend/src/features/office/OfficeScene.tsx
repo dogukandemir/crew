@@ -643,7 +643,7 @@ export function OfficeScene({
                 from={{ x: room.door.x, y: from }}
                 to={{ x: room.door.x, y: lane + 4 }}
                 half={13}
-                tie={24}
+                tie={72}
               />
             </g>
           );

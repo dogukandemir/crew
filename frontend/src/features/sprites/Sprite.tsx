@@ -23,6 +23,7 @@ export function Sprite({
   z = 0,
   flip = false,
   opacity = 1,
+  scale = 1,
   className,
 }: {
   /** Atlas key. An unknown key draws nothing, on purpose. */
@@ -34,6 +35,8 @@ export function Sprite({
   z?: number;
   flip?: boolean;
   opacity?: number;
+  /** How big this one thing is, on top of the view's sprite scale. Both axes. */
+  scale?: number;
   className?: string;
 }) {
   // Hooks first: an early return after a hook would change the hook order.
@@ -44,7 +47,7 @@ export function Sprite({
   const p = project(x, y, z);
   // One factor for both axes: a sprite's floor is 2:1 and scaling x and y by
   // different amounts shears it. The size is the user's choice, not a calculation.
-  const u = SPRITE_UNIT * spriteScaleFactor();
+  const u = SPRITE_UNIT * spriteScaleFactor() * scale;
   const left = p.x - e.ax * u;
   const top = p.y - e.ay * u;
   const w = e.w * u;

@@ -41,8 +41,16 @@ export const SPRITE_SCALES: { name: SpriteScaleName; factor: number; label: stri
   { name: 'big', factor: 1.45, label: 'Sprite · large', hint: 'Same geometry, bigger, for reading the art.' },
 ];
 
-const KEY = 'crew.spriteScale';
-const FALLBACK: SpriteScaleName = 'tiled';
+const KEY = 'crew.spriteScale.v2';
+/**
+ * To scale by default.
+ *
+ * The atlas desk is drawn two metres across and the simulation's desk is 1.45, so
+ * at 1:1 the furniture reads bigger than the rooms it stands in — which is what
+ * "still crowded" was. The storage key carries a version because a stored choice
+ * must not be silently overridden; a new key is a new question, asked once.
+ */
+const FALLBACK: SpriteScaleName = 'true';
 
 const read = (): SpriteScaleName => {
   try {

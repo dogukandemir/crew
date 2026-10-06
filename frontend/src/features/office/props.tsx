@@ -151,14 +151,13 @@ export const SEAT_Z = mh(0.5);
  * sitting in mid-air next to their own chair.
  */
 export function Chair({ at, color: _color = '#1c1f26' }: { at: { x: number; y: number }; color?: string }) {
-  // One sprite, anchored where the sitter is. The chair used to be built from the
-  // pose table's hip height so it could never disagree with a seated body; the
-  // sprite carries that relationship in its own pixels, which is the same
-  // guarantee with less to keep in sync.
+  // One sprite, anchored where the sitter is, at 0.68: the atlas chair fills its
+  // metre, and a metre of chair next to a 1.45 m desk is a chair the size of the
+  // desk. The old drawn chair was 0.44 m across, and that is what fits.
   return (
     <g>
-      <GroundShadow cx={at.x} cy={at.y} r={22} opacity={0.28} />
-      <Sprite name="prop.chair" x={at.x} y={at.y} />
+      <GroundShadow cx={at.x} cy={at.y} r={14} opacity={0.28} />
+      <Sprite name="prop.chair" x={at.x} y={at.y} scale={0.68} />
     </g>
   );
 }

@@ -51,6 +51,7 @@ import {
 } from './props';
 import { Partition, UNITS_PER_METRE } from './props';
 import { Sprite as AtlasSprite } from '../sprites/Sprite';
+import { spriteScaleFactor } from '../sprites/viewScale';
 import { routeBetween } from '../../sim/paths';
 import { cn } from '../../lib/cn';
 
@@ -337,12 +338,14 @@ function LabFurniture({ room }: { room: Room }) {
       <AtlasSprite name="prop.fumehood" x={room.x + 34} y={room.y + 40} scale={1.1} />
       <AtlasSprite name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} scale={1.1} />
       <AtlasSprite name="prop.labbench" x={benchX(benchW, benchS)} y={benchA + 14} scale={benchS} />
-      <AtlasSprite name="prop.labbench" x={benchX(benchW, benchS)} y={benchB + 14} scale={benchS} />
+      {/* One bench, not two. Two facing benches in a room this size read as an
+          island with a channel through it — the stools sit along the one bench's
+          open side instead. */}
       {/* Gear that stands on the benches rather than in them. */}
       <AtlasSprite name="prop.microscope" x={room.x + 44} y={benchA + 20} />
       <AtlasSprite name="prop.centrifuge" x={room.x + benchW - 20} y={benchA + 24} />
       {[70, 130, 190].map((dx) => (
-        <AtlasSprite key={`stool-${dx}`} name="prop.stool" x={room.x + dx} y={room.y + 76} scale={0.5} />
+        <AtlasSprite key={`stool-${dx}`} name="prop.stool" x={room.x + dx} y={benchA + 14 + UNITS_PER_METRE + 4} scale={0.5} />
       ))}
     </g>
   );
@@ -463,12 +466,12 @@ function Sprite({
       {/* A hit area, so clicking anywhere on the figure works. */}
       <rect x={-CHAR_W / 2} y={-FEET_Y} width={CHAR_W} height={FEET_Y} fill="transparent" />
 
-      <text className="sprite-tag" x={0} y={-FEET_Y - 7} textAnchor="middle">
+      <text className="sprite-tag" x={0} y={-FEET_Y * spriteScaleFactor() - 7} textAnchor="middle">
         {agent.name}
       </text>
 
       {speech ? (
-        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y - 34).toFixed(0)})`}>
+        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - 32).toFixed(0)})`}>
           <Bubble kind={speech.kind} text={speech.text} />
           {speech.to && (
             <text y={4} fontSize={8.5} textAnchor="middle" fill="#93a1b8">
@@ -477,7 +480,7 @@ function Sprite({
           )}
         </g>
       ) : activity.bubble ? (
-        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y - 30).toFixed(0)})`}>
+        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - 28).toFixed(0)})`}>
           <Bubble kind={emojiKind(activity)} text={activity.bubble} maxWidth={60} />
         </g>
       ) : null}
@@ -693,8 +696,12 @@ export function OfficeScene({
             office,
             homeId,
             target.roomId,
-            { x: home.x + home.w / 2, y: home.y + home.h / 2 },
-            { x: away.x + away.w / 2, y: away.y + away.h / 2 },
+            // DOORS, not centres. A room's centre is where its desks are, so a
+            // route drawn to it ran up onto the furniture. A route is door to door
+            // along the corridors, which is also the only part of it anybody walks
+            // twice.
+            { x: home.door.x, y: home.door.y },
+            { x: away.door.x, y: away.door.y },
           );
           if (route.length < 2) return null;
           const d = route

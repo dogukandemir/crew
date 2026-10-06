@@ -137,8 +137,14 @@ export function Panel({
 const DESK_SLAB_D = 58;
 export const DESK_H_M = 0.74;
 export const DESK_Z = mh(DESK_H_M);
-/** How far south of the desk cell its occupant sits. */
-export const SIT_BACK = 30;
+/** How far south of the desk cell its occupant sits.
+ *
+ * Derived, not chosen: the desk sprite is anchored at its far corner and is one
+ * metre deep, so its near edge is `DESK_SLAB_D/2 + UNITS_PER_METRE/2` south of the
+ * cell's top. A chair tucks UNDER that edge, a few units in, and the sitter's seat,
+ * the chair's seat and the desk edge are then one piece of geometry that cannot
+ * drift. It was 30 — half a metre of empty floor with a chair pushed out into it. */
+export const SIT_BACK = DESK_H - (DESK_SLAB_D / 2 + UNITS_PER_METRE / 2 - 6);
 /** The seated hip height from the pose table — a chair has to meet it exactly. */
 export const SEAT_Z = mh(0.5);
 

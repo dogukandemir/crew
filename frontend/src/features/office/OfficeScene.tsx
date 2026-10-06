@@ -20,12 +20,14 @@ import {
   ROOM_HEADER,
   SPINE_W,
   breakSeats,
+  deskSeat,
   type Office,
   type Room,
 } from '../../sim/floorplan';
 import type { FloorPulse } from '../../sim/rooms';
 import type { Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
+import { SPRITE_UNIT, scaleForWidth, spriteCentreOffset } from '../sprites/sprites';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import type { ReactNode } from 'react';
@@ -66,10 +68,29 @@ const SLAB = 34;
 /** Air around the building, so the slab reads as a thing sitting in space. */
 const PAD = 46;
 
-/** How tall a person is on screen: 1.5 m in world units, as the SVG's box. */
-export const CHAR_SIZE = (mh(1.5) * 100) / 92;
-const CHAR_W = CHAR_SIZE * 0.64;
-const FEET_Y = CHAR_SIZE * 0.92;
+/**
+ * The lab bench's worktop height, in world units.
+ *
+ * Stated here as well as in spriteforge — `props/lab.ts` draws the worktop at 0.92 m
+ * — because a thing standing ON the bench needs it, and the atlas does not carry a
+ * height per entry. It is in the audit's open list: the honest fix is a `height`
+ * field in the manifest, so the two cannot drift.
+ */
+const LAB_BENCH_TOP = mh(0.92);
+
+/**
+ * How tall a person is, in world units, at the atlas's own scale.
+ *
+ * Derived the way every sprite is: 40 px of figure at `SPRITE_UNIT` — 1.67 m. It
+ * used to be `mh(1.5) × 100 / 92`, a number inherited from the hand-drawn vector
+ * rig the atlas replaced, which the character sprite then divided by 40 and
+ * multiplied by a view factor, drawing people 0.56 m tall beside full-size desks.
+ */
+export const FIGURE_H = 40 * SPRITE_UNIT;
+const CHAR_W = FIGURE_H * 0.64;
+const FEET_Y = FIGURE_H;
+/** How far the feet sink into their own contact shadow. */
+const FEET_SINK = 2;
 
 /** The emoji bubble's skin, so a blocked character does not look chatty. */
 function emojiKind(activity: Activity): 'talk' | 'report' | 'escalation' {
@@ -305,38 +326,56 @@ function roomItems(
               what makes one place end and the next begin. Two per desk read as a
               room full of panels — bays are a run, not a cage. */}
           <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
-          <Workstation x={deskX} y={deskY} busy={busy} glow={mix('#7cc4ff', room.accent, 0.5)} />
+          <Workstation
+            x={deskX}
+            y={deskY}
+            seat={deskSeat(room, desk)}
+            busy={busy}
+            glow={mix('#7cc4ff', room.accent, 0.5)}
+          />
         </g>,
       );
     }
-    // Corner dressing: every real office has a sad plant.
-    const px = room.x + room.w - ROOM_PAD - 14;
-    const py = room.y + room.h - 26;
+    // Dressing, in the room's header strip — the band `roomSize()` reserves above
+    // the first row of desks for exactly this. In the room's corner it stood inside
+    // the desk grid: a plant drawn through the workstation of whoever had the last
+    // bay, which is what a green mass on top of a desk is.
+    const px = room.x + 16;
+    const py = room.y + WALL_T + 14;
     at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
   }
 
   if (room.kind === 'lab') {
+    // The bench runs along the room with its stools on the open side. The caller's
+    // width becomes a scale read out of the art, so the bench that is drawn is the
+    // bench the room asked for.
     const benchW = room.w - 44;
-    const benchA = room.y + 50;
-    const benchS = benchW / (2 * UNITS_PER_METRE);
     const benchX = room.x + 22;
-    const bx = room.x + room.w - 46;
-    const by = room.y + 8;
-    at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={74} h={38} />);
-    at(`${room.id}-hood`, room.x + 34, room.y + 40, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 34} y={room.y + 40} scale={1.1} />);
-    at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} scale={1.1} />);
-    at(`${room.id}-bench`, benchX, benchA + 14, <AtlasSprite key={`${room.id}-bench`} name="prop.labbench" x={benchX} y={benchA + 14} scale={benchS} />);
-    at(`${room.id}-scope`, room.x + 44, benchA + 20, <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={room.x + 44} y={benchA + 20} />);
-    at(`${room.id}-centrifuge`, room.x + benchW - 20, benchA + 24, <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={room.x + benchW - 20} y={benchA + 24} />);
-    {[70, 130, 190].forEach((dx) =>
-      at(`${room.id}-stool-${dx}`, room.x + dx, benchA + 14 + UNITS_PER_METRE + 4, <AtlasSprite key={`${room.id}-stool-${dx}`} name="prop.stool" x={room.x + dx} y={benchA + 14 + UNITS_PER_METRE + 4} scale={0.5} />),
-    )}
+    const benchY = room.y + 64;
+    const boardX = room.x + room.w - 46;
+    const boardY = room.y + 8;
+    at(`${room.id}-board`, boardX, boardY, <Whiteboard key={`${room.id}-board`} x={boardX} y={boardY} w={74} h={38} />);
+    at(`${room.id}-hood`, room.x + 34, room.y + 40, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 34} y={room.y + 40} />);
+    at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} />);
+    at(`${room.id}-bench`, benchX, benchY, <AtlasSprite key={`${room.id}-bench`} name="prop.labbench" x={benchX} y={benchY} scale={scaleForWidth('prop.labbench', benchW)} />);
+    // Gear stands ON the bench, which is what the anchor's `z` is for: the worktop's
+    // height, at a point on the worktop. Drawn on the floor it was a microscope
+    // hovering at the cupboard doors.
+    at(`${room.id}-scope`, room.x + 44, benchY + mh(0.25), <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={room.x + 44} y={benchY + mh(0.25)} z={LAB_BENCH_TOP} />);
+    at(`${room.id}-centrifuge`, room.x + benchW - 20, benchY + mh(0.3), <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={room.x + benchW - 20} y={benchY + mh(0.3)} z={LAB_BENCH_TOP} />);
+    // Stools along the bench's open side. A stool is drawn around its own centre, so
+    // the seat comes back by half a stool before the art goes down.
+    const stool = spriteCentreOffset('prop.stool');
+    const stoolY = benchY + mh(0.7 + 0.18);
+    for (const dx of [70, 130, 190]) {
+      at(`${room.id}-stool-${dx}`, room.x + dx, stoolY, <AtlasSprite key={`${room.id}-stool-${dx}`} name="prop.stool" x={room.x + dx - stool.x} y={stoolY - stool.y} />);
+    }
   }
 
   if (room.kind === 'commons') {
     const bx = room.x + room.w / 2;
-    const by = room.y + WALL_T + 8;
-    at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={168} h={58} />);
+    const by = room.y + WALL_T + 4;
+    at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={140} h={58} />);
     const tx = room.x + 24;
     const ty = room.y + room.h - 124;
     at(`${room.id}-table`, tx, ty, <MeetingTable key={`${room.id}-table`} x={tx} y={ty} w={room.w - 48} d={92} seats={3} />);
@@ -445,19 +484,18 @@ function Sprite({
           its top-left corner inside a 24×40 view: half the sprite's width across and
           FEET_Y up, which left every person walking half a metre above the floor.
           All that is left is the small sink the old feet had, into the shadow. */}
-      <g className="sprite-body" transform={`translate(0 ${(CHAR_SIZE - FEET_Y).toFixed(2)})`}>
+      <g className="sprite-body" transform={`translate(0 ${FEET_SINK})`}>
         <SpriteCharacter
           name={agent.id}
           activity={activity.kind}
           atDesk={atDesk}
           motion={motion}
-          height={FEET_Y}
           faded={activity.kind === 'offline'}
         />
       </g>
 
       {/* A hit area, so clicking anywhere on the figure works. */}
-      <rect x={-CHAR_W / 2} y={-FEET_Y} width={CHAR_W} height={FEET_Y} fill="transparent" />
+      <rect x={-CHAR_W / 2} y={-FEET_Y * spriteScaleFactor()} width={CHAR_W} height={FEET_Y * spriteScaleFactor()} fill="transparent" />
 
       <text className="sprite-tag" x={0} y={-FEET_Y * spriteScaleFactor() - 7} textAnchor="middle">
         {agent.name}

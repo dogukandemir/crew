@@ -7,13 +7,27 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ATLAS } from './atlas.gen';
-import { SPRITE_UNIT, categoryCensus, categoryOf, characterSprite, entry, hasSprite, lookIndex } from './sprites';
+import {
+  SPRITE_UNIT,
+  categoryCensus,
+  categoryOf,
+  characterSprite,
+  entry,
+  hasSprite,
+  lookIndex,
+  scaleForWidth,
+  spriteCentreOffset,
+  spriteFootprint,
+  spriteWidth,
+} from './sprites';
 import { SPRITE_SCALES } from './viewScale';
 import { UNITS_PER_METRE } from '../office/iso';
+import { DESK_TOP_D_M, DESK_TOP_W_M } from '../../sim/floorplan';
 
 /** Every prop the floor renderer draws, as it names them. */
 const USED = [
   'prop.chair',
+  'prop.chair.turned',
   'prop.plant',
   'prop.whiteboard',
   'prop.coffee',
@@ -23,6 +37,14 @@ const USED = [
   'prop.desk.busy',
   'prop.cabinet',
   'prop.roundtable',
+  'prop.table.3',
+  'prop.partition.1',
+  'prop.labbench',
+  'prop.fumehood',
+  'prop.microscope',
+  'prop.centrifuge',
+  'prop.stool',
+  'prop.bottleshelf',
 ];
 
 describe('the sprite atlas', () => {
@@ -72,25 +94,40 @@ describe('the sprite atlas', () => {
     expect(used.size).toBeGreaterThan(20);
   });
 
+  it('measures a metre the same way up as across', () => {
+    // THE number this whole layer rests on. A 1 m tile is `tilePixels` px wide and a
+    // 1 m height is `heightPixelsPerMetre` px tall; for one uniform pixels→units
+    // factor to place floor and height alike, the tile must be exactly twice the
+    // height-metre — a tile costs two world metres of screen width, a height-metre
+    // costs one.
+    //
+    // These disagreed (32 against 24) for as long as the atlas existed. The renderer
+    // worked around it with a hand-chosen view factor, which is how every prop ended
+    // up two thirds the size of the bay it stood in.
+    expect(ATLAS.world.tilePixels / 2).toBe(ATLAS.world.heightPixelsPerMetre);
+    expect(ATLAS.world.pixelsPerMetre).toBe(ATLAS.world.heightPixelsPerMetre);
+    expect(SPRITE_UNIT).toBeCloseTo(UNITS_PER_METRE / ATLAS.world.pixelsPerMetre, 9);
+  });
+
   it('draws a sprite with ONE factor, so its own floor stays 2:1', () => {
     // Two factors — one per axis — is the bug that made every desk look sheared:
     // each axis matched this world's metres, and the sprite's own 2:1 floor did not.
-    expect(SPRITE_UNIT).toBeCloseTo(UNITS_PER_METRE / (ATLAS.world.tilePixels / 2), 6);
     expect(SPRITE_UNIT).toBeGreaterThan(0);
-    // The manifest still declares the height contract; it is what the scale CHOICE
-    // in viewScale.ts is for, not what the mapping is for.
-    expect(ATLAS.world.heightPixelsPerMetre).toBeGreaterThan(0);
+    const e = entry('prop.desk')!;
+    expect(spriteWidth('prop.desk')).toBeCloseTo(e.w * SPRITE_UNIT, 9);
   });
 
   it('offers the sizes it claims to', () => {
     const names = SPRITE_SCALES.map((s) => s.name);
-    expect(names).toEqual(['tiled', 'true', 'big']);
+    expect(names).toEqual(['compact', 'scale', 'large']);
     for (const s of SPRITE_SCALES) {
       expect(s.factor).toBeGreaterThan(0);
       // Nothing offered may shear: one factor per option, applied to both axes.
       expect(Number.isFinite(s.factor)).toBe(true);
     }
-    expect(SPRITE_SCALES.find((s) => s.name === 'tiled')?.factor).toBe(1);
+    // "To scale" is the atlas's own metre, and the default: the only option at which
+    // a person is the height the art says they are.
+    expect(SPRITE_SCALES.find((s) => s.name === 'scale')?.factor).toBe(1);
   });
 
   it('has a sprite family for every category the floor is built from', () => {
@@ -116,5 +153,69 @@ describe('the sprite atlas', () => {
     expect(categoryOf('prop.table.3')).toBe('surface');
     expect(categoryOf('prop.vending')).toBe('prop');
     expect(categoryOf('nonsense')).toBe('prop');
+  });
+
+  it('reports a caller a width to divide by, and a centre to step back from', () => {
+    // Scaling a thing by its own width: the caller asks for 100 units and gets them.
+    const s = scaleForWidth('prop.whiteboard', 100);
+    expect((spriteWidth('prop.whiteboard') ?? 0) * s).toBeCloseTo(100, 6);
+    // A caller who knows where the MIDDLE of something is must step back by half a
+    // footprint; for a 0.6 m chair that is 0.3 m along each axis. Derived from the
+    // cell, whose footprint diamond is rounded to whole pixels, so this is within a
+    // few centimetres rather than exact — which is the point: derived, not typed.
+    const c = spriteCentreOffset('prop.chair');
+    const halfChair = UNITS_PER_METRE * 0.3;
+    expect(Math.abs(c.x - halfChair) / halfChair).toBeLessThan(0.05);
+    expect(c.y).toBeCloseTo(c.x, 9);
+    // An unknown name is not a crash and not a substitution.
+    expect(scaleForWidth('prop.nonexistent', 100)).toBe(1);
+    expect(spriteCentreOffset('prop.nonexistent')).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('the art against the floor plan', () => {
+  const ppm = ATLAS.world.pixelsPerMetre;
+  /** A sprite cell's width is its footprint's diamond: `(a + b)` tiles, in px. */
+  const footprintMetres = (name: string): number => {
+    const e = entry(name);
+    expect(e, name).toBeDefined();
+    return e!.w / ppm;
+  };
+
+  it('declares the footprint of its furniture, and the desk fits its bay', () => {
+    // The footprint is the art's own claim about itself, and it is what lets the
+    // renderer put a chair against the desk's near edge. Read here, it is also the
+    // place where the art and the floor plan are held to each other: a desk drawn
+    // 2 × 1 in a 1.45 m bay overhangs its neighbours however the plan is tuned.
+    const desk = entry('prop.desk')!;
+    expect(desk.a).toBeCloseTo(DESK_TOP_W_M, 6);
+    expect(desk.b).toBeCloseTo(DESK_TOP_D_M, 6);
+    expect(spriteFootprint('prop.desk')).toEqual({
+      a: DESK_TOP_W_M * UNITS_PER_METRE,
+      b: DESK_TOP_D_M * UNITS_PER_METRE,
+    });
+    // And it fits: the desk's depth plus its legroom is inside the bay's own depth.
+    expect(DESK_TOP_D_M).toBeLessThan(92 / (104 / 1.45));
+
+    const chair = entry('prop.chair')!;
+    expect(chair.a).toBeCloseTo(0.6, 6);
+    expect(chair.b).toBeCloseTo(0.6, 6);
+
+    // A desk's centre is half its footprint from its anchor — exactly, not nearly.
+    expect(spriteCentreOffset('prop.desk').x).toBeCloseTo((DESK_TOP_W_M * UNITS_PER_METRE) / 2, 9);
+    expect(spriteCentreOffset('prop.desk').y).toBeCloseTo((DESK_TOP_D_M * UNITS_PER_METRE) / 2, 9);
+  });
+
+  it('draws a chair a chair could sit on, and a person taller than it', () => {
+    expect(footprintMetres('prop.chair')).toBeCloseTo(1.2, 1);
+    const figure = entry('char.0.front.stand')!;
+    const metres = figure.h / ppm;
+    expect(metres).toBeGreaterThan(1.5);
+    expect(metres).toBeLessThan(1.9);
+  });
+
+  it('draws the lab bench and the long table at the sizes the rooms ask for', () => {
+    expect(footprintMetres('prop.labbench')).toBeCloseTo(2 + 0.7, 1);
+    expect(footprintMetres('prop.table.3')).toBeCloseTo(3 + 1, 1);
   });
 });

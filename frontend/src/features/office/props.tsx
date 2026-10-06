@@ -11,9 +11,10 @@
  * nothing is rotated, and verticals stay vertical.
  */
 import type { ReactNode } from 'react';
-import { DESK_H, DESK_W } from '../../sim/floorplan';
+import { DESK_TOP_D, DESK_W } from '../../sim/floorplan';
 import { UNITS_PER_METRE, boxFaces, floorRect, mh, polyPoints, project } from './iso';
 import { Sprite } from '../sprites/Sprite';
+import { scaleForWidth, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
 
 /** Scale a hex colour's brightness. */
 export function shade(hex: string, factor: number): string {
@@ -134,40 +135,33 @@ export function Panel({
   );
 }
 
-const DESK_SLAB_D = 58;
+/** The desk's top surface: 0.74 m, which is a desk. */
 export const DESK_H_M = 0.74;
 export const DESK_Z = mh(DESK_H_M);
-/** How far south of the desk cell its occupant sits.
- *
- * Derived, not chosen: the desk sprite is anchored at its far corner and is one
- * metre deep, so its near edge is `DESK_SLAB_D/2 + UNITS_PER_METRE/2` south of the
- * cell's top. A chair tucks UNDER that edge, a few units in, and the sitter's seat,
- * the chair's seat and the desk edge are then one piece of geometry that cannot
- * drift. It was 30 — half a metre of empty floor with a chair pushed out into it. */
-export const SIT_BACK = DESK_H - (DESK_SLAB_D / 2 + UNITS_PER_METRE / 2 - 6);
-/** The seated hip height from the pose table — a chair has to meet it exactly. */
+/** The seated hip height — a chair's seat has to meet it exactly. */
 export const SEAT_Z = mh(0.5);
 
 /**
  * An office chair, placed where its occupant actually is.
  *
- * The pose table puts a seated body's hips at `HIP_SIT` (0.5 m) off the floor, so
- * the seat's top face is set to exactly that height and the chair is centred on
- * the sitter. Getting either wrong is what makes a character look like they are
- * sitting in mid-air next to their own chair.
+ * The pose table puts a seated body's hips at 0.5 m off the floor, so the seat's top
+ * face is set to exactly that height and the chair is centred on the sitter. Getting
+ * either wrong is what makes a character look like they are sitting in mid-air next
+ * to their own chair.
  */
 export function Chair({ at, color: _color = '#1c1f26', turned = false }: { at: { x: number; y: number }; color?: string; turned?: boolean }) {
-  // One sprite, anchored where the sitter is, at 0.68: the atlas chair fills its
-  // metre, and a metre of chair next to a 1.45 m desk is a chair the size of the
-  // desk. The old drawn chair was 0.44 m across, and that is what fits.
+  // `at` is the seat itself: the point the simulation uses. The art is placed by its
+  // anchor, so it comes back by half its own footprint — read out of the atlas, since
+  // a hand-typed half-metre is how the chair ended up 30 cm from its sitter.
   //
   // `turned` is the chair facing the table rather than the viewer. A chair at a
   // desk faces the desk, so what the room shows is its back; a chair on the near
   // side of a meeting table faces away too, and one on the far side faces us.
+  const c = spriteCentreOffset(turned ? 'prop.chair.turned' : 'prop.chair');
   return (
     <g>
       <GroundShadow cx={at.x} cy={at.y} r={14} opacity={0.28} />
-      <Sprite name={turned ? 'prop.chair.turned' : 'prop.chair'} x={at.x} y={at.y} scale={0.68} />
+      <Sprite name={turned ? 'prop.chair.turned' : 'prop.chair'} x={at.x - c.x} y={at.y - c.y} />
     </g>
   );
 }
@@ -182,6 +176,7 @@ export function Chair({ at, color: _color = '#1c1f26', turned = false }: { at: {
 export function Workstation({
   x,
   y,
+  seat,
   color: _color = '#2b3242',
   busy = false,
   glow: _glow = '#7cc4ff',
@@ -189,6 +184,8 @@ export function Workstation({
 }: {
   x: number;
   y: number;
+  /** Where the person who works here sits — `deskSeat()` in the floor plan. */
+  seat: { x: number; y: number };
   color?: string;
   busy?: boolean;
   glow?: string;
@@ -196,36 +193,33 @@ export function Workstation({
 }) {
   // The desk, its monitor, the lit screen and the keyboard are one sprite, in two
   // states — and `busy` is exactly the distinction the atlas carries a second cell
-  // for. The old drawing built that out of a panel, four rectangles and a standby
-  // dot, and had to keep them all agreeing.
-  const mid = x + DESK_W / 2;
-  const sitY = y + DESK_H - SIT_BACK;
+  // for.
+  //
+  // It is placed at the bay's own origin, because that is where the sprite's anchor
+  // is: a sprite is anchored at its footprint's far corner (see Sprite.tsx), and so
+  // is a bay. This used to offset the art by a metre and a half a metre, computed
+  // from the art's DECLARED half-footprint while the art was drawn at two thirds of
+  // it — so every desk sat 30 cm up and to the left of the bay it belonged to, and
+  // the chair, which came from the bay, was no longer under it.
   return (
     <g>
-      <GroundShadow cx={mid} cy={y + DESK_SLAB_D / 2} r={DESK_W * 0.42} />
-      {/* The chair is its own sprite: the sim seats a body on it, so it has to be
+      <GroundShadow cx={x + DESK_W / 2} cy={y + DESK_TOP_D} r={DESK_W * 0.42} />
+      {/* The chair's own sprite: the sim seats a body on it, so it has to be
           placeable on its own. It faces the desk, like every chair at a desk. */}
-      <Chair at={{ x: mid, y: sitY }} turned />
-      {/* The atlas desk is drawn at its own size — 2 m across, in its own
-          proportions — so it is centred on the desk the simulation actually
-          assigned rather than aligned to its corner. The offset is the sprite's own
-          half-footprint: one metre along x, half a metre along y. The chair and the
-          sitter still come from DESK_W, which is what the sim moves around. */}
-      <Sprite
-        name={screen && busy ? 'prop.desk.busy' : 'prop.desk'}
-        x={x + DESK_W / 2 - UNITS_PER_METRE}
-        y={y + DESK_SLAB_D / 2 - UNITS_PER_METRE / 2}
-      />
+      <Chair at={seat} turned />
+      <Sprite name={screen && busy ? 'prop.desk.busy' : 'prop.desk'} x={x} y={y} />
     </g>
   );
 }
 
 /** A potted plant — the cheapest way to make an office look alive. */
 export function Plant({ x, y, scale: _scale = 1 }: { x: number; y: number; scale?: number }) {
+  // `x, y` is the middle of the plant; the art is anchored at a corner.
+  const c = spriteCentreOffset('prop.plant');
   return (
     <g>
       <GroundShadow cx={x} cy={y} r={17} />
-      <Sprite name="prop.plant" x={x} y={y} />
+      <Sprite name="prop.plant" x={x - c.x} y={y - c.y} />
     </g>
   );
 }
@@ -245,12 +239,17 @@ export function Partition({ at, tiles = 1 }: { at: { x: number; y: number }; til
 
 /** A whiteboard / glass board on a wall, with scribbles. */
 export function Whiteboard({ x, y, w = 120, h: _h = 56 }: { x: number; y: number; w?: number; h?: number }) {
-  // The atlas has ONE board, two metres across, so the width a caller asks for
-  // becomes a scale. Without this the lab's 74-unit board was drawn at two metres
-  // and read as a wall of its own — the board stopping respecting its caller is
-  // what "why did the lab change" was. The height is the atlas's: a board of a
-  // different SHAPE belongs in the atlas, not in a stretched sprite.
-  return <Sprite name="prop.whiteboard" x={x} y={y} scale={w / (2 * UNITS_PER_METRE)} />;
+  // The atlas has ONE board, and `scaleForWidth` reads its actual width out of the
+  // entry: the caller's width becomes a scale. Without this the lab's 74-unit board
+  // was drawn at its art's two metres and read as a wall of its own — the board
+  // stopping respecting its caller is what "why did the lab change" was. The height
+  // is the atlas's: a board of a different SHAPE belongs in the atlas, not in a
+  // stretched sprite.
+  //
+  // The width used to be divided by a hand-typed `2 × UNITS_PER_METRE` — a number
+  // that was supposed to be the art's width, was wrong by 17%, and would have been
+  // wrong again the moment the art changed.
+  return <Sprite name="prop.whiteboard" x={x} y={y} scale={scaleForWidth('prop.whiteboard', w)} />;
 }
 
 /** The coffee counter idle characters gather at. */
@@ -279,23 +278,25 @@ export function CoffeeBar({ x, y, w = 150 }: { x: number; y: number; w?: number 
  * use. The caller's width becomes a scale: the atlas has one table, three metres
  * across, and a room that asks for two gets two.
  */
-export function MeetingTable({ x, y, w = 210, d = 96, seats = 4 }: { x: number; y: number; w?: number; d?: number; seats?: number }) {
+export function MeetingTable({ x, y, w = 210, d: _d = 96, seats = 4 }: { x: number; y: number; w?: number; d?: number; seats?: number }) {
   const step = w / (seats + 1);
-  const s = w / (3 * UNITS_PER_METRE);
+  const s = scaleForWidth('prop.table.3', w);
+  // The chairs stand against the ART's own near and far edges, not against the bay
+  // the caller described. The table is 3 × 1 m of art scaled to `w`, so its depth is
+  // `b × s`; a chair sits half a chair outside that. Hand-placed offsets are what put
+  // a row of chairs 20 cm clear of their own table the moment the table moved.
+  const fp = spriteFootprint('prop.table.3');
+  const depth = (fp?.b ?? 100) * s;
+  const clear = spriteCentreOffset('prop.chair.turned').y * 1.2;
   return (
     <g>
-      <GroundShadow cx={x + w / 2} cy={y + d / 2} r={Math.max(w, d) * 0.5} />
-      <Sprite
-        name="prop.table.3"
-        x={x + w / 2 - 1.5 * UNITS_PER_METRE * s}
-        y={y + d / 2 - 0.5 * UNITS_PER_METRE * s}
-        scale={s}
-      />
+      <GroundShadow cx={x + w / 2} cy={y + depth / 2} r={Math.max(w, depth) * 0.5} />
+      <Sprite name="prop.table.3" x={x} y={y} scale={s} />
       {Array.from({ length: seats }, (_, i) => (
-        <Chair key={`s${i}`} at={{ x: x + step * (i + 1), y: y + d + 26 }} color="#22262f" turned />
+        <Chair key={`s${i}`} at={{ x: x + step * (i + 1), y: y + depth + clear }} color="#22262f" turned />
       ))}
-      <Chair at={{ x: x + step, y: y - 26 }} />
-      <Chair at={{ x: x + w - step, y: y - 26 }} />
+      <Chair at={{ x: x + step, y: y - clear }} />
+      <Chair at={{ x: x + w - step, y: y - clear }} />
     </g>
   );
 }
@@ -311,11 +312,14 @@ export function RoundTable({ at, r = 34, color: _color = '#4a3f2e' }: { at: { x:
   // A surface like the rest: round in plan is what the atlas draws, and the radius
   // the floor plan hands out (the same one the simulation seats people around)
   // becomes the scale.
-  const s = (2 * r) / (1.4 * UNITS_PER_METRE);
+  const s = scaleForWidth('prop.roundtable', 2 * r);
+  // `at` is the table's centre; the art is anchored at its footprint's far corner,
+  // so it comes back by half the footprint, scaled with it.
+  const c = spriteCentreOffset('prop.roundtable');
   return (
     <g>
       <GroundShadow cx={at.x} cy={at.y} r={r * 1.1} />
-      <Sprite name="prop.roundtable" x={at.x - (1.4 * UNITS_PER_METRE * s) / 2} y={at.y - (1.4 * UNITS_PER_METRE * s) / 2} scale={s} />
+      <Sprite name="prop.roundtable" x={at.x - c.x * s} y={at.y - c.y * s} scale={s} />
     </g>
   );
 }
@@ -414,4 +418,4 @@ export function FoosballTable({ x, y, w: _w = 176, d: _d = 104 }: { x: number; y
   );
 }
 
-export { DESK_H, DESK_W, UNITS_PER_METRE };
+export { DESK_W, UNITS_PER_METRE };

@@ -48,15 +48,12 @@ export function SpriteCharacter({
   activity,
   atDesk,
   motion,
-  /** Drawn height in local pixels — the figure's feet land on the local origin. */
-  height,
   faded,
 }: {
   name: string;
   activity: ActivityKind;
   atDesk: boolean;
   motion: SpriteMotionRef;
-  height: number;
   faded?: boolean;
 }) {
   const img = useRef<SVGImageElement>(null);
@@ -99,9 +96,12 @@ export function SpriteCharacter({
       const e = cell(atDesk ? 'back' : 'front', pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
-        // origin. `height` is how tall the figure should be there, and the same
-        // factor scales across: two would shear the sprite. See Sprite.tsx.
-        const k = (height / 40) * spriteScaleFactor();
+        // origin, at EXACTLY the sprite factor every prop uses. There is no second
+        // rule for people: this used to take a `height` from its caller and divide
+        // it by 40, so a figure was drawn 40 units tall — 0.56 m — while the desk
+        // beside it was drawn from the other factor entirely. One rule, one atlas,
+        // one metre. See Sprite.tsx.
+        const k = SPRITE_UNIT * spriteScaleFactor();
         const x0 = -e.ax * k;
         const y0 = -e.ay * k;
         // The sheet slides under a window the size of the cell: an <image> has no
@@ -127,7 +127,7 @@ export function SpriteCharacter({
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [name, activity, atDesk, motion, height]);
+  }, [name, activity, atDesk, motion]);
 
   return (
     <g ref={mirror} opacity={faded ? 0.55 : 1}>

@@ -12,6 +12,24 @@ import type { Point } from './geometry';
 
 export const DESK_W = 104;
 export const DESK_H = 92;
+
+/**
+ * The desk itself — the top, not the bay it sits in — in metres.
+ *
+ * The bay is 1.45 m wide by definition (`DESK_W` below), and the desk that stands in
+ * it is 1.4 × 0.7: a desk, with the rest of the bay left as legroom and chair space.
+ * These are the numbers the atlas art has to match, and `sprites.test.ts` checks
+ * that it does — the art is the one thing here that can silently disagree.
+ */
+export const DESK_TOP_W_M = 1.4;
+export const DESK_TOP_D_M = 0.7;
+/** This world's metre, as the plan counts it. */
+const M_UNIT = DESK_W / 1.45;
+export const DESK_TOP_W = DESK_TOP_W_M * M_UNIT;
+export const DESK_TOP_D = DESK_TOP_D_M * M_UNIT;
+/** Six centimetres of clearance so a sitter's legs are under the desk, not against it. */
+export const DESK_LEGROOM = 0.06 * M_UNIT;
+
 /**
  * The whole plan is generated from these numbers.
  *
@@ -491,10 +509,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   const roomOf: Record<string, string> = {};
   for (const room of rooms) {
     for (const desk of room.desks) {
-      deskOf[desk.agentId] = {
-        x: room.x + desk.x + DESK_W / 2,
-        y: room.y + desk.y + DESK_H - 30,
-      };
+      deskOf[desk.agentId] = deskSeat(room, desk);
       roomOf[desk.agentId] = room.id;
     }
   }
@@ -530,10 +545,27 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   };
 }
 
+/**
+ * Where the person at a desk sits.
+ *
+ * ONE function, because two things need it: the simulation walks a body to this
+ * point, and the renderer draws the chair under it. They used to be two formulas —
+ * `DESK_H - 30` in the plan and a constant assembled from a slab depth that existed
+ * nowhere else — which agreed to within three units purely by luck, and would have
+ * drifted apart on the next edit to either. The seat is the desk's own near edge
+ * plus the legroom, and both callers ask this.
+ */
+export function deskSeat(room: { x: number; y: number }, desk: { x: number; y: number }): Point {
+  return {
+    x: room.x + desk.x + DESK_W / 2,
+    y: room.y + desk.y + DESK_TOP_D + DESK_LEGROOM,
+  };
+}
+
 /** World position of the orchestrator's desk, if there is an orchestrator. */
 export function orchestratorSeat(office: Office): Point | null {
   const room = office.rooms.find((r) => r.kind === 'orchestrator');
   const desk = room?.desks[0];
   if (!room || !desk) return null;
-  return { x: room.x + desk.x + DESK_W / 2, y: room.y + desk.y + DESK_H - 30 };
+  return deskSeat(room, desk);
 }

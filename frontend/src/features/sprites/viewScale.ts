@@ -1,56 +1,46 @@
 /**
- * How big the sprites are drawn, and which of the offered looks is in force.
+ * How big the sprites are drawn.
  *
- * The first cut mapped a sprite's two axes with two different factors, to make its
- * footprint and its height each match this world's metres. It was arithmetically
- * defensible and visually wrong: a sprite's own floor is 2:1, and scaling x and y
- * by different amounts breaks that, so every desk came out sheared. A sprite has to
- * be drawn with ONE factor — its geometry is not negotiable — and the only real
- * choice is how big that factor is.
+ * `SPRITE_UNIT` already puts a sprite at the size the world says it is — the atlas
+ * measures a metre with one number for floor and height alike, so a desk is 1.4 m
+ * against a 1.45 m bay without anybody adjusting anything. This is therefore not a
+ * correction; it is a preference, and it says so:
  *
- * So this is a choice, not a calculation, and it is the user's to make:
+ *   compact ×0.75  For a wide floor on a small screen: the layout stays legible
+ *                  when everything is small.
+ *   to scale ×1.00 The atlas's own metre, and the default. A 1.7 m person is
+ *                  1.7 m next to the desk, the chair and the door.
+ *   large  ×1.5    For looking at the art.
  *
- *   tiled  ×1.00  Every prop covers exactly the tile the simulation gave it. People
- *                 stand on their own desks' tiles. Chunky, because spriteforge's
- *                 metre of height is a metre and a half of this world's.
- *   true   ×0.68  Shrunk until a 1.7 m person is 1.7 m in this world's units, so
- *                 the office reads to scale against its rooms. The props no longer
- *                 fill their tiles.
- *   big    ×1.45  For looking at the art: the same geometry, larger.
- *
- * Kept in a module-level value with a listener set rather than a store: two
- * components read it, nothing else needs to know, and it survives a reload.
+ * The earlier version's default was 0.68, which was not a preference at all: it
+ * was the factor that made the figures stop towering over their own desks, and it
+ * paid for that by shrinking every prop to two thirds of the bay the simulation
+ * had given it. With the atlas measuring itself in one metre, 1.00 is the honest
+ * one, and it is the default.
  */
 import { useEffect, useState } from 'react';
 
-export type SpriteScaleName = 'tiled' | 'true' | 'big';
+export type SpriteScaleName = 'compact' | 'scale' | 'large';
 
 export const SPRITE_SCALES: { name: SpriteScaleName; factor: number; label: string; hint: string }[] = [
   {
-    name: 'tiled',
-    factor: 1,
-    label: 'Sprite · tiled',
-    hint: 'Every sprite covers the tile the simulation gave it. The chunky one.',
+    name: 'compact',
+    factor: 0.75,
+    label: 'Sprite · compact',
+    hint: 'Everything smaller, for a wide floor on a small screen.',
   },
   {
-    name: 'true',
-    factor: 0.68,
+    name: 'scale',
+    factor: 1,
     label: 'Sprite · to scale',
-    hint: 'Shrunk until a person is 1.7 m against the rooms. Props no longer fill their tiles.',
+    hint: 'The atlas’s own metre: a 1.7 m person is 1.7 m against the furniture.',
   },
-  { name: 'big', factor: 1.45, label: 'Sprite · large', hint: 'Same geometry, bigger, for reading the art.' },
+  { name: 'large', factor: 1.5, label: 'Sprite · large', hint: 'Same geometry, bigger, for reading the art.' },
 ];
 
-const KEY = 'crew.spriteScale.v2';
-/**
- * To scale by default.
- *
- * The atlas desk is drawn two metres across and the simulation's desk is 1.45, so
- * at 1:1 the furniture reads bigger than the rooms it stands in — which is what
- * "still crowded" was. The storage key carries a version because a stored choice
- * must not be silently overridden; a new key is a new question, asked once.
- */
-const FALLBACK: SpriteScaleName = 'true';
+/** A new key, because the old one stored a factor that meant something else. */
+const KEY = 'crew.spriteScale.v3';
+const FALLBACK: SpriteScaleName = 'scale';
 
 const read = (): SpriteScaleName => {
   try {

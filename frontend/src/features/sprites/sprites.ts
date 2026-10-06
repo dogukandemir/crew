@@ -25,21 +25,76 @@ import { ATLAS, type AtlasEntry } from './atlas.gen';
 import { UNITS_PER_METRE } from '../office/iso';
 
 /**
- * World units per sprite pixel. ONE number for both axes, and it has to stay that
- * way: spriteforge draws a metre of floor as 16 px across (the 2:1 tile) and a
- * metre of height as 24 px up, so a sprite's two axes are different world scales.
- * Mapping them with two different factors makes each of them match this world's
- * metres and shears every sprite's own 2:1 floor — which is what "the desks look
- * crooked" was. A sprite's geometry is not negotiable; only its size is, and that
- * is the user's choice in `viewScale.ts`.
+ * World units per sprite pixel. ONE number for both axes, and it is the atlas's
+ * own metre — not a number this file works out for itself.
+ *
+ * The manifest says how many pixels a metre costs (`pixelsPerMetre`), for floor
+ * and for height alike, so converting a sprite pixel into this world's units is
+ * that same metre read through `UNITS_PER_METRE`. Nothing else is needed, and
+ * nothing else may be used: mapping the two axes with two different factors is
+ * what sheared every desk, and deriving the factor from the tile size — which is
+ * what this did — silently re-introduces the very mismatch the atlas is built to
+ * avoid, because a tile is only a metre if the art says it is.
  */
-export const SPRITE_UNIT = UNITS_PER_METRE / (ATLAS.world.tilePixels / 2);
+export const SPRITE_UNIT = UNITS_PER_METRE / ATLAS.world.pixelsPerMetre;
 
 const BY_NAME = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
 
 /** The atlas cell for a name, or undefined — never a silent substitute. */
 export function entry(name: string): AtlasEntry | undefined {
   return BY_NAME.get(name);
+}
+
+/**
+ * How wide a sprite is on screen at scale 1, in world units.
+ *
+ * A caller that asks for "a board two metres wide" needs the art's own width to
+ * divide by. Stating that width by hand — as a 2 in a formula — is how the lab's
+ * board ended up a whole wall: the number was the art's, and it was wrong.
+ */
+export function spriteWidth(name: string): number | undefined {
+  const e = entry(name);
+  return e ? e.w * SPRITE_UNIT : undefined;
+}
+
+/** The scale that makes a sprite exactly `units` wide on screen. */
+export function scaleForWidth(name: string, units: number): number {
+  const w = spriteWidth(name);
+  return w && w > 0 ? units / w : 1;
+}
+
+/**
+ * A sprite's footprint, in world units, when its art declares one.
+ *
+ * This is what makes furniture arithmetic possible: the desk is 1.4 × 0.7 m and says
+ * so, so a chair can stand against its near edge and a bench-top can hold a
+ * microscope. Without it a renderer has only a bounding box, and every placement
+ * becomes a hand-tuned offset that drifts the moment the art changes — which is how a
+ * row of chairs ended up 20 cm clear of its own table.
+ */
+export function spriteFootprint(name: string): { a: number; b: number } | undefined {
+  const e = entry(name);
+  if (!e || e.a === undefined || e.b === undefined) return undefined;
+  return { a: e.a * UNITS_PER_METRE, b: e.b * UNITS_PER_METRE };
+}
+
+/**
+ * The world offset from a sprite's anchor to the centre of its own footprint.
+ *
+ * A sprite is anchored at the far corner of its footprint, so a caller that knows
+ * where the MIDDLE of something is — a seat, a table's centre, a stool — has to step
+ * back by half the footprint before it can place the art: exactly half `a` along x
+ * and half `b` along y. For art that declares no footprint (a character, whose
+ * footprint is the point it stands on) this falls back to the cell's own diamond,
+ * which is `(cell height − 1 − anchor y)` px and ends at the near corner.
+ */
+export function spriteCentreOffset(name: string): { x: number; y: number } {
+  const f = spriteFootprint(name);
+  if (f) return { x: f.a / 2, y: f.b / 2 };
+  const e = entry(name);
+  if (!e) return { x: 0, y: 0 };
+  const half = ((e.h - 1 - e.ay) / 2) * SPRITE_UNIT;
+  return { x: half, y: half };
 }
 
 export function hasSprite(name: string): boolean {

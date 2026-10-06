@@ -27,7 +27,7 @@ import { WALK_SPEED, newWalker, setRoute, step, type Walker } from '../../sim/wa
 import { AgentWorkstation } from '../office/AgentWorkstation';
 import { CharacterRig, type RigMotion } from './Character';
 import { UNIT, OFFICE as P, matte } from './assets';
-import { lookFor } from './characters';
+import { lookFor } from '../characters/look';
 import { Room3D, RoomDesks, corridorTexture, makeToWorld, nameTagTexture } from './scenery';
 
 /** Activity → colour. Same language as the 2D floor and the status dots. */

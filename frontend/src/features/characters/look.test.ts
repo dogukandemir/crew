@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameScale, lookFor } from './characters';
+import { frameScale, lookFor } from './look';
 
 /** A spread of ids that look like real agent ids. */
 const IDS = Array.from({ length: 240 }, (_, i) => `01J${i.toString(36).padStart(4, '0')}-agent`);

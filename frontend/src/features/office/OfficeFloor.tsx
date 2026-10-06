@@ -22,9 +22,10 @@ import {
   toScreen,
   type CameraPreset,
 } from './camera';
-import type { Point } from '../../sim/geometry';
+import { distance, type Point } from '../../sim/geometry';
 import { panBy, zoomAt, type Transform } from './viewport';
 import { newWalker, setRoute, step, type Walker } from '../../sim/walkers';
+import type { SvgMotionRef } from '../characters/SvgCharacter';
 import './office2d.css';
 
 const ARRIVAL_MS = 3200;
@@ -73,6 +74,17 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
   const walkers = useRef<Map<string, Walker>>(new Map());
   const spriteEls = useRef<Map<string, HTMLDivElement>>(new Map());
+  /** Per-character frame data the SVG rig reads; never React state. */
+  const motions = useRef<Map<string, SvgMotionRef>>(new Map());
+
+  /** One stable motion box per agent, created on first use. */
+  const motionFor = useCallback((id: string): SvgMotionRef => {
+    const existing = motions.current.get(id);
+    if (existing) return existing;
+    const box: SvgMotionRef = { current: { facing: 1, moving: false, speed: 0 } };
+    motions.current.set(id, box);
+    return box;
+  }, []);
   const lastTargetKey = useRef<Map<string, string>>(new Map());
   const lastRoom = useRef<Map<string, string>>(new Map());
   const idleSince = useRef<Map<string, number>>(new Map());
@@ -256,6 +268,14 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         }
         const flip = String(next.facing);
         if (el.style.getPropertyValue('--flip') !== flip) el.style.setProperty('--flip', flip);
+
+        // Hand the same movement to the character rig, so the walk cycle is
+        // driven by ground actually covered rather than by a timer.
+        const m = motionFor(id);
+        const travelled = Math.hypot(next.x - w.x, next.y - w.y);
+        m.current.moving = next.moving;
+        m.current.speed = dt > 0 ? travelled / dt : 0;
+        m.current.facing = next.facing < 0 ? -1 : 1;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -580,11 +600,16 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
                 const act = activities[id];
                 if (!act) return null;
                 const target = targets[id];
+                const desk = office.deskOf[id];
+                const atDesk =
+                  !!target && target.roomId === office.roomOf[id] && distance(target.point, desk) < 1.5;
                 return (
                   <Sprite
                     key={id}
                     agent={office.agentOf[id]}
                     activity={act}
+                    motion={motionFor(id)}
+                    atDesk={atDesk}
                     selected={selected === id}
                     dimmed={attentionOnly && act.kind !== 'blocked' && act.kind !== 'waiting'}
                     walkingTo={

@@ -18,8 +18,8 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ActivityKind } from '../../sim/activity';
 import { BODY, GEOM, JOINT, matte } from './assets';
-import { frameScale, type CharacterLook } from './characters';
-import { blendPose, motionOffset, poseForContext, type Pose } from './poses';
+import { frameScale, type CharacterLook } from '../characters/look';
+import { blendPose, motionOffset, poseForContext, type Pose } from '../characters/poses';
 
 /** What the rig needs to know about movement. The parent mutates this in place. */
 export interface RigMotion {

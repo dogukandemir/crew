@@ -50,6 +50,37 @@ export type SpriteFacing = (typeof ATLAS.facings)[number];
 export type SpritePose = (typeof ATLAS.poses)[number];
 
 /**
+ * What a sprite is, in the taxonomy the floor is built from.
+ *
+ * StarNet's build tools name the parts of a station — select, room, hallway,
+ * SURFACE, prop, belt — and the moment that taxonomy arrived here it answered a
+ * question nothing else could: which category is missing? The lab benches, the
+ * review table and the round tables were all `surface`, and all of them were still
+ * boxes; that is not a coincidence you can see by reading the renderer, but it is
+ * one you can see in a census.
+ *
+ * Derived from the name rather than stored, because the name is already the
+ * contract every caller uses.
+ */
+export type SpriteCategory = 'character' | 'shell' | 'surface' | 'prop' | 'belt';
+
+export function categoryOf(name: string): SpriteCategory {
+  if (name.startsWith('char.')) return 'character';
+  // Rooms and the walls between them: what a station is divided BY.
+  if (/^prop\.(wall|partition)/.test(name)) return 'shell';
+  // Where work happens: everything you sit or stand at.
+  if (/^prop\.(desk|chair|table|roundtable|labbench|cabinet|stool|foosball)/.test(name)) return 'surface';
+  return 'prop';
+}
+
+/** How many sprites of each kind the atlas carries. */
+export function categoryCensus(): Record<SpriteCategory, number> {
+  const out: Record<SpriteCategory, number> = { character: 0, shell: 0, surface: 0, prop: 0, belt: 0 };
+  for (const e of ATLAS.entries) out[categoryOf(e.name)] += 1;
+  return out;
+}
+
+/**
  * A stable look index for an agent, 0..looks-1.
  *
  * FNV-1a over the name: deterministic, spreads well over short strings, and needs

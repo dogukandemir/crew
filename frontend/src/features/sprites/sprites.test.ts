@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ATLAS } from './atlas.gen';
-import { SPRITE_UNIT, characterSprite, entry, hasSprite, lookIndex } from './sprites';
+import { SPRITE_UNIT, categoryCensus, categoryOf, characterSprite, entry, hasSprite, lookIndex } from './sprites';
 import { SPRITE_SCALES } from './viewScale';
 import { UNITS_PER_METRE } from '../office/iso';
 
@@ -91,5 +91,30 @@ describe('the sprite atlas', () => {
       expect(Number.isFinite(s.factor)).toBe(true);
     }
     expect(SPRITE_SCALES.find((s) => s.name === 'tiled')?.factor).toBe(1);
+  });
+
+  it('has a sprite family for every category the floor is built from', () => {
+    // StarNet's build tools name the parts of a station: room, hallway, surface,
+    // prop, belt. This is the census that says which of them the atlas can draw —
+    // the question that found the lab benches still being boxes.
+    const census = categoryCensus();
+    expect(census.character).toBeGreaterThan(0);
+    expect(census.shell).toBeGreaterThan(0);
+    expect(census.surface).toBeGreaterThan(0);
+    expect(census.prop).toBeGreaterThan(0);
+    // Belt is the documented gap: the conveyor is drawn as rails and ties in the
+    // scene, not as a sprite. If that changes, this is where it gets recorded.
+    expect(census.belt).toBe(0);
+    expect(Object.values(census).reduce((a, b) => a + b, 0)).toBe(ATLAS.entries.length);
+  });
+
+  it('classifies the things the renderer actually uses', () => {
+    expect(categoryOf('char.3.front.walkA')).toBe('character');
+    expect(categoryOf('prop.partition.1')).toBe('shell');
+    expect(categoryOf('prop.desk.busy')).toBe('surface');
+    expect(categoryOf('prop.labbench')).toBe('surface');
+    expect(categoryOf('prop.table.3')).toBe('surface');
+    expect(categoryOf('prop.vending')).toBe('prop');
+    expect(categoryOf('nonsense')).toBe('prop');
   });
 });

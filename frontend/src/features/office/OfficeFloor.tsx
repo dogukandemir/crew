@@ -82,11 +82,42 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   /** Latest targets, for the walk loop to read who is facing whom. */
   const targetsRef = useRef<Record<string, Target>>({});
 
+  /** The group every drawable lives in: what the walk loop keeps in depth order. */
+  const depthLayer = useRef<SVGGElement | null>(null);
+
+  const registerDepthLayer = useCallback((el: SVGGElement | null) => {
+    depthLayer.current = el;
+  }, []);
+
+  /**
+   * Keep the floor in position order.
+   *
+   * SVG has no z-index: element order IS paint order. Every prop and every person in
+   * a room is a child of the depth layer carrying `data-depth` — the world x + y of
+   * its base, which the projection turns into height on screen, larger being nearer
+   * — so this walks that list once a frame and re-appends it only when something has
+   * actually crossed something else. A person walking behind a desk is behind it,
+   * and in front of it on the way back, without anybody deciding so.
+   */
+  const sortDepthLayer = useCallback(() => {
+    const layer = depthLayer.current;
+    if (!layer) return;
+    const kids = Array.from(layer.children) as SVGGElement[];
+    const depthOf = (el: SVGGElement) => Number(el.getAttribute('data-depth') ?? 0);
+    for (let i = 1; i < kids.length; i += 1) {
+      if (depthOf(kids[i]) < depthOf(kids[i - 1])) {
+        kids.sort((a, b) => depthOf(a) - depthOf(b));
+        for (const el of kids) layer.appendChild(el);
+        return;
+      }
+    }
+  }, []);
+
   /** One stable motion box per agent, created on first use. */
   const motionFor = useCallback((id: string): SvgMotionRef => {
     const existing = motions.current.get(id);
     if (existing) return existing;
-    const box: SvgMotionRef = { current: { facing: 1, moving: false, speed: 0 } };
+    const box: SvgMotionRef = { current: { facing: 1, moving: false, speed: 0, x: 0, y: 0 } };
     motions.current.set(id, box);
     return box;
   }, []);
@@ -349,7 +380,13 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         m.current.moving = next.moving;
         m.current.speed = dt > 0 ? travelled / dt : 0;
         m.current.facing = flip < 0 ? -1 : 1;
+        // The floor's order is a property of where things stand, so it is written
+        // where positions are written — here, and not in React.
+        m.current.x = next.x;
+        m.current.y = next.y;
+        el.setAttribute('data-depth', String(next.x + next.y));
       }
+      sortDepthLayer();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -672,6 +709,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
               newRoomIds={newRoomIds}
               motions={motions.current}
               registerSprite={registerSprite}
+              registerDepthLayer={registerDepthLayer}
               registerTrail={registerTrail}
               onSelectAgent={selectAgent}
               viewport={size}

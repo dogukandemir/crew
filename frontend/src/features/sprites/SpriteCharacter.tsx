@@ -27,6 +27,13 @@ export interface SpriteMotion {
   moving: boolean;
   /** Simulation units per second. */
   speed: number;
+  /**
+   * Where the walker is, in floor units. Written by the walk loop, read by the
+   * scene to order things by position — the one thing about a person that React
+   * never sees, because moving is written straight to the elements.
+   */
+  x: number;
+  y: number;
 }
 
 export interface SpriteMotionRef {

@@ -28,6 +28,7 @@ import type { Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
+import type { ReactNode } from 'react';
 import { mh, boxFaces, floorRect, polyPoints, project } from './iso';
 import {
   Box,
@@ -155,23 +156,8 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
 
 /* ── One room ─────────────────────────────────────────────────────────────── */
 
-function RoomShell({
-  room,
-  office,
-  pulse,
-  activities,
-  focused,
-  newRoom,
-  stagger,
-}: {
-  room: Room;
-  office: Office;
-  pulse?: FloorPulse['rooms'][string];
-  activities: Record<string, Activity>;
-  focused: boolean;
-  newRoom: boolean;
-  stagger: number;
-}) {
+/** The shell: floor and walls. Always behind everything a room contains. */
+function RoomShell({ room, focused, newRoom }: { room: Room; focused: boolean; newRoom: boolean }) {
   const wall = mix('#2a3346', room.accent, 0.3);
   const accentSoft = mix('#12161f', room.accent, 0.45);
   const inner = mix('#1e2634', room.accent, 0.16);
@@ -213,65 +199,6 @@ function RoomShell({
         strokeWidth={1.5}
       />
 
-      {room.kind === 'department' || room.kind === 'orchestrator' ? (
-        <RoomDesks room={room} activities={activities} accent={room.accent} />
-      ) : null}
-
-      <RoomFurniture room={room} office={office} />
-      <Sign room={room} pulse={pulse} stagger={stagger} />
-    </g>
-  );
-}
-
-/** A department's workstations, with the corner dressing that makes it a place. */
-function RoomDesks({
-  room,
-  activities,
-  accent,
-}: {
-  room: Room;
-  activities: Record<string, Activity>;
-  accent: string;
-}) {
-  return (
-    <g>
-      {/* Back to front. The board lives on the room's far wall, so it is painted
-          before the desks that stand in front of it — in SVG the paint order is the
-          element order, and a sprite added after another is simply on top of it. */}
-      {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
-      {/* ORDER IS POSITION, not the order things were written in.
-          In SVG the element order is the paint order, so a room is drawn back to
-          front: the board on the far wall, then the desks sorted by their own y so
-          a desk nearer the viewer paints after one behind it, then whatever stands
-          nearest. The room as a whole is one unit of that order and the floor plan
-          is what makes that safe — rooms never overlap, so two of them can never
-          need to interleave.
-          The honest limit: a person is drawn in the cast layer after every room, so
-          somebody standing behind a desk paints over it. Fixing that needs every
-          prop and every person in one list keyed by depth — a real change to how
-          this scene is built, not a line to move. */}
-      {[...room.desks]
-        .sort((a, b) => a.y - b.y)
-        .map((desk) => {
-        const act = activities[desk.agentId];
-        const busy = act?.kind === 'typing' || act?.kind === 'tool';
-        const deskX = room.x + desk.x;
-        const deskY = room.y + desk.y;
-        return (
-          <g key={desk.agentId}>
-            {/* The bay this desk sits in: ONE partition, at the desk's left, which
-                is what makes one place end and the next begin. Two per desk read as
-                a room full of panels — bays are a run, not a cage. */}
-            <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
-            <Workstation x={deskX} y={deskY} busy={busy} glow={mix('#7cc4ff', accent, 0.5)} />
-          </g>
-        );
-      })}
-      {/* Corner dressing: every real office has a sad plant and a cabinet. One of
-          each per room — the floor lamps that used to sit in every corner were
-          decoration with no job, and a floor of identical lamps is what made the
-          place feel crowded. */}
-      <Plant x={room.x + room.w - ROOM_PAD - 14} y={room.y + room.h - 26} />
     </g>
   );
 }
@@ -317,91 +244,149 @@ function Conveyor({ from, to, half = 11, tie = 96 }: { from: { x: number; y: num
   );
 }
 
-/**
- * The lab: two benches facing each other, a fume hood, glassware, stools.
- *
- * Surfaces and props, both from the atlas — the benches were the last thing on the
- * floor still drawn out of boxes, which is what made the lab look like a different
- * game from the rooms beside it. The placement maths is the same as ever: a caller's
- * width becomes a scale, because the atlas has one bench and one hood.
- */
-function LabFurniture({ room }: { room: Room }) {
-  const benchW = room.w - 44;
-  const benchA = room.y + 50;
-  const benchB = room.y + 96;
-  const benchS = benchW / (2 * UNITS_PER_METRE);
-  const benchX = (w: number, s: number) => room.x + 22 + (w - 2 * UNITS_PER_METRE * s) / 2;
-  return (
-    <g>
-      {/* Back to front: far wall first. */}
-      <Whiteboard x={room.x + room.w - 46} y={room.y + 8} w={74} h={38} />
-      <AtlasSprite name="prop.fumehood" x={room.x + 34} y={room.y + 40} scale={1.1} />
-      <AtlasSprite name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} scale={1.1} />
-      <AtlasSprite name="prop.labbench" x={benchX(benchW, benchS)} y={benchA + 14} scale={benchS} />
-      {/* One bench, not two. Two facing benches in a room this size read as an
-          island with a channel through it — the stools sit along the one bench's
-          open side instead. */}
-      {/* Gear that stands on the benches rather than in them. */}
-      <AtlasSprite name="prop.microscope" x={room.x + 44} y={benchA + 20} />
-      <AtlasSprite name="prop.centrifuge" x={room.x + benchW - 20} y={benchA + 24} />
-      {[70, 130, 190].map((dx) => (
-        <AtlasSprite key={`stool-${dx}`} name="prop.stool" x={room.x + dx} y={benchA + 14 + UNITS_PER_METRE + 4} scale={0.5} />
-      ))}
-    </g>
-  );
+/* ── The shared rooms: the review table, the coffee corner, the bench ─────── */
+
+/* ── One thing on the floor ───────────────────────────────────────────────── */
+
+/** One thing standing on the floor, and how far into the screen it stands. */
+interface Drawable {
+  key: string;
+  /**
+   * World x + y of the thing's base.
+   *
+   * The projection is linear in both, so this orders things exactly as the screen
+   * does — larger is nearer — which means a prop and a person can be compared
+   * without either of them knowing the other exists.
+   */
+  depth: number;
+  node: ReactNode;
 }
 
-/** The shared rooms: the review table, the coffee corner, the bench. */
-function RoomFurniture({ room, office }: { room: Room; office: Office }) {
-  if (room.kind === 'lab') return <LabFurniture room={room} />;
-  if (room.kind === 'commons') {
-    return (
-      <g>
-        {/* Back to front, again: the board on the far wall first. */}
-        <Whiteboard x={room.x + room.w / 2} y={room.y + WALL_T + 8} w={168} h={58} />
-        <MeetingTable x={room.x + 24} y={room.y + room.h - 124} w={room.w - 48} d={92} seats={3} />
-        <Plant x={room.x + room.w - 26} y={room.y + 30} />
-      </g>
-    );
+/**
+ * Everything that stands in a room, as one drawable per thing.
+ *
+ * Returning a LIST rather than nesting JSX is the whole point: these are drawn in
+ * one order together with the people, sorted by position. A room used to be a group
+ * — everything inside it painted as a unit — and that is what made somebody walking
+ * behind a department paint over its furniture. At group granularity there is no
+ * answer to "is this person in front of that desk or behind it"; per thing there is.
+ */
+function roomItems(
+  room: Room,
+  office: Office,
+  activities: Record<string, Activity>,
+  pulse: FloorPulse['rooms'][string] | undefined,
+  stagger: number,
+): Drawable[] {
+  const out: Drawable[] = [];
+  const at = (key: string, x: number, y: number, node: ReactNode) => out.push({ key, depth: x + y, node });
+
+  if (room.kind === 'department' || room.kind === 'orchestrator') {
+    if (room.seats > 5) {
+      const bx = room.x + room.w - 90;
+      const by = room.y + WALL_T + 6;
+      at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={110} h={50} />);
+    }
+    for (const desk of room.desks) {
+      const deskX = room.x + desk.x;
+      const deskY = room.y + desk.y;
+      const act = activities[desk.agentId];
+      const busy = act?.kind === 'typing' || act?.kind === 'tool';
+      at(
+        `desk-${desk.agentId}`,
+        deskX,
+        deskY,
+        <g key={`desk-${desk.agentId}`}>
+          {/* The bay this desk sits in: ONE partition, at the desk's left, which is
+              what makes one place end and the next begin. Two per desk read as a
+              room full of panels — bays are a run, not a cage. */}
+          <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
+          <Workstation x={deskX} y={deskY} busy={busy} glow={mix('#7cc4ff', room.accent, 0.5)} />
+        </g>,
+      );
+    }
+    // Corner dressing: every real office has a sad plant.
+    const px = room.x + room.w - ROOM_PAD - 14;
+    const py = room.y + room.h - 26;
+    at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
   }
+
+  if (room.kind === 'lab') {
+    const benchW = room.w - 44;
+    const benchA = room.y + 50;
+    const benchS = benchW / (2 * UNITS_PER_METRE);
+    const benchX = room.x + 22;
+    const bx = room.x + room.w - 46;
+    const by = room.y + 8;
+    at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={74} h={38} />);
+    at(`${room.id}-hood`, room.x + 34, room.y + 40, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 34} y={room.y + 40} scale={1.1} />);
+    at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} scale={1.1} />);
+    at(`${room.id}-bench`, benchX, benchA + 14, <AtlasSprite key={`${room.id}-bench`} name="prop.labbench" x={benchX} y={benchA + 14} scale={benchS} />);
+    at(`${room.id}-scope`, room.x + 44, benchA + 20, <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={room.x + 44} y={benchA + 20} />);
+    at(`${room.id}-centrifuge`, room.x + benchW - 20, benchA + 24, <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={room.x + benchW - 20} y={benchA + 24} />);
+    {[70, 130, 190].forEach((dx) =>
+      at(`${room.id}-stool-${dx}`, room.x + dx, benchA + 14 + UNITS_PER_METRE + 4, <AtlasSprite key={`${room.id}-stool-${dx}`} name="prop.stool" x={room.x + dx} y={benchA + 14 + UNITS_PER_METRE + 4} scale={0.5} />),
+    )}
+  }
+
+  if (room.kind === 'commons') {
+    const bx = room.x + room.w / 2;
+    const by = room.y + WALL_T + 8;
+    at(`${room.id}-board`, bx, by, <Whiteboard key={`${room.id}-board`} x={bx} y={by} w={168} h={58} />);
+    const tx = room.x + 24;
+    const ty = room.y + room.h - 124;
+    at(`${room.id}-table`, tx, ty, <MeetingTable key={`${room.id}-table`} x={tx} y={ty} w={room.w - 48} d={92} seats={3} />);
+    const px = room.x + room.w - 26;
+    const py = room.y + 30;
+    at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
+  }
+
   if (room.kind === 'break') {
     const layout = office.breakLayout;
-    return (
-      <g>
-        <CoffeeBar x={room.x + room.w - 124} y={room.y + 14} w={112} />
-        <VendingMachine x={layout.vending.x} y={layout.vending.y} accent="#5b8def" />
-        <FoosballTable
-          x={layout.foosball.x}
-          y={layout.foosball.y}
-          w={layout.foosball.w}
-          d={layout.foosball.d}
-        />
-        {layout.tables.map((table, i) => (
-          <g key={`t${i}`}>
-            <RoundTable at={table} r={BREAK_TABLE_R} />
-            {/* The chairs come from the same list the simulation seats people
-                on, so a chair is never empty while somebody sits beside it. */}
-            {breakSeats([table]).map((seat) => (
-              <Chair key={`${i}-${seat.index}`} at={seat.point} color="#2a2f3a" />
-            ))}
-          </g>
-        ))}
-        <Plant x={room.x + 16} y={room.y + room.h - 26} />
-        <Crate x={room.x + room.w - 58} y={room.y + room.h - 52} w={32} h={mh(0.4)} />
-      </g>
+    const cx = room.x + room.w - 124;
+    const cy = room.y + 14;
+    at(`${room.id}-coffee`, cx, cy, <CoffeeBar key={`${room.id}-coffee`} x={cx} y={cy} w={112} />);
+    at(`${room.id}-vending`, layout.vending.x, layout.vending.y, <VendingMachine key={`${room.id}-vending`} x={layout.vending.x} y={layout.vending.y} accent="#5b8def" />);
+    at(
+      `${room.id}-foosball`,
+      layout.foosball.x,
+      layout.foosball.y,
+      <FoosballTable key={`${room.id}-foosball`} x={layout.foosball.x} y={layout.foosball.y} w={layout.foosball.w} d={layout.foosball.d} />,
     );
+    layout.tables.forEach((table, i) => {
+      at(
+        `${room.id}-table-${i}`,
+        table.x,
+        table.y,
+        <g key={`${room.id}-table-${i}`}>
+          <RoundTable at={table} r={BREAK_TABLE_R} />
+          {/* The chairs come from the same list the simulation seats people on, so
+              a chair is never empty while somebody sits beside it. */}
+          {breakSeats([table]).map((seat) => (
+            <Chair key={`${i}-${seat.index}`} at={seat.point} color="#2a2f3a" />
+          ))}
+        </g>,
+      );
+    });
+    const px = room.x + 16;
+    const py = room.y + room.h - 26;
+    at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
+    const kx = room.x + room.w - 58;
+    const ky = room.y + room.h - 52;
+    at(`${room.id}-crate`, kx, ky, <Crate key={`${room.id}-crate`} x={kx} y={ky} w={32} h={mh(0.4)} />);
   }
+
   if (room.kind === 'bench') {
-    return (
-      <g>
-        <Crate x={room.x + 22} y={room.y + 24} w={46} h={mh(0.5)} />
-        <Crate x={room.x + 76} y={room.y + 30} w={36} h={mh(0.36)} />
-        <Printer x={room.x + room.w - 76} y={room.y + 24} />
-        <Plant x={room.x + 24} y={room.y + room.h - 28} />
-      </g>
-    );
+    at(`${room.id}-crate-a`, room.x + 22, room.y + 24, <Crate key={`${room.id}-crate-a`} x={room.x + 22} y={room.y + 24} w={46} h={mh(0.5)} />);
+    at(`${room.id}-crate-b`, room.x + 76, room.y + 30, <Crate key={`${room.id}-crate-b`} x={room.x + 76} y={room.y + 30} w={36} h={mh(0.36)} />);
+    at(`${room.id}-printer`, room.x + room.w - 76, room.y + 24, <Printer key={`${room.id}-printer`} x={room.x + room.w - 76} y={room.y + 24} />);
+    at(`${room.id}-plant`, room.x + 24, room.y + room.h - 28, <Plant key={`${room.id}-plant`} x={room.x + 24} y={room.y + room.h - 28} />);
   }
-  return null;
+
+  // The nameplate is the room's own label: it sits over the room's furniture but
+  // under anybody standing in front of it.
+  at(`${room.id}-sign`, room.x, room.y + room.h + 1, <Sign key={`${room.id}-sign`} room={room} pulse={pulse} stagger={stagger} />);
+  return out;
 }
 
 /* ── One character ────────────────────────────────────────────────────────── */
@@ -416,6 +401,8 @@ function Sprite({
   dimmed,
   onSelect,
   register,
+  /** World x + y of their feet: what orders them against the furniture. */
+  depth,
 }: {
   agent: OrgNode;
   activity: Activity;
@@ -426,12 +413,14 @@ function Sprite({
   dimmed: boolean;
   onSelect: () => void;
   register: (el: SVGGElement | null) => void;
+  depth: number;
 }) {
   const speech = activity.speech;
 
   return (
     <g
       ref={register}
+      data-depth={depth}
       className={cn('sprite', `act-${activity.kind}`, dimmed && 'is-dim', selected && 'is-selected')}
       data-sprite={agent.id}
       onClick={onSelect}
@@ -502,6 +491,8 @@ export interface OfficeSceneProps {
   newRoomIds: Set<string>;
   motions: Map<string, SvgMotionRef>;
   registerSprite: (id: string) => (el: SVGGElement | null) => void;
+  /** The group every drawable lives in, so the walk loop can keep it in depth order. */
+  registerDepthLayer: (el: SVGGElement | null) => void;
   /** The striped route each walker is currently taking, written by the rAF loop. */
   registerTrail: (id: string) => (el: SVGPathElement | null) => void;
   onSelectAgent: (id: string) => void;
@@ -520,6 +511,7 @@ export function OfficeScene({
   newRoomIds,
   motions,
   registerSprite,
+  registerDepthLayer,
   registerTrail,
   onSelectAgent,
   viewport,
@@ -529,25 +521,6 @@ export function OfficeScene({
     () => [...office.rooms].sort((a, b) => a.x + a.y - (b.x + b.y)),
     [office.rooms],
   );
-
-  // People are drawn after the furniture, ordered by where they are headed, so
-  // the floor reads front-to-back without re-sorting every animation frame.
-  const people = useMemo(() => {
-    const ids = Object.keys(office.deskOf);
-    return ids.sort((a, b) => {
-      const pa = targets[a]?.point ?? office.deskOf[a];
-      const pb = targets[b]?.point ?? office.deskOf[b];
-      return pa.x + pa.y - (pb.x + pb.y);
-    });
-  }, [office, targets]);
-
-  const aisle = 78;
-  const corridors = useMemo(
-    () => Array.from(new Set(Object.values(office.corridorY))).sort((a, b) => a - b),
-    [office.corridorY],
-  );
-
-  const far = camera.scale < 0.4;
 
   /** Boards on one shelf row are lifted alternately so they cannot overlap. */
   const staggers = useMemo(() => {
@@ -565,6 +538,69 @@ export function OfficeScene({
     }
     return out;
   }, [office.rooms]);
+
+  // People used to be sorted here, and drawn after every room. That is the ordering
+  // a group can give you; it cannot answer "in front of this desk, or behind it".
+  // They are entries in `drawables` now, compared with the furniture by position.
+  const people = useMemo(() => {
+    const ids = Object.keys(office.deskOf);
+    return ids;
+  }, [office]);
+
+  /**
+   * Everything that stands on the floor, in one list, ordered by how near it is.
+   *
+   * Room furniture and people together: a desk and the person walking behind it have
+   * to be compared with each other, and the only thing that can compare them is a
+   * list that contains both. The people's depths come from the last walk-loop frame,
+   * and the loop keeps the DOM in order between renders — React never sees a walker
+   * move, because positions are written straight to the elements.
+   */
+  const drawables = useMemo(() => {
+    const out: Drawable[] = [];
+    for (const room of rooms) {
+      out.push(...roomItems(room, office, activities, pulse.rooms[room.id], staggers[room.id] ?? 0));
+    }
+    for (const id of people) {
+      const agent = office.agentOf[id];
+      const activity = activities[id];
+      const motion = motions.get(id);
+      if (!agent || !activity || !motion) continue;
+      const target = targets[id];
+      const m = motion.current;
+      out.push({
+        key: id,
+        depth: m.x + m.y,
+        node: (
+          <Sprite
+            key={id}
+            agent={agent}
+            activity={activity}
+            reason={target?.reason}
+            motion={motion}
+            atDesk={!!target?.seated}
+            selected={selected === id}
+            dimmed={attentionOnly && activity.kind !== 'blocked' && activity.kind !== 'waiting'}
+            onSelect={() => onSelectAgent(id)}
+            register={registerSprite(id)}
+            depth={m.x + m.y}
+          />
+        ),
+      });
+    }
+    // Ties broken by key so the order is stable between renders: two things at the
+    // same depth must not swap places every time React re-renders.
+    out.sort((a, b) => a.depth - b.depth || (a.key < b.key ? -1 : 1));
+    return out;
+  }, [rooms, office, activities, pulse, staggers, people, motions, targets, selected, attentionOnly, onSelectAgent, registerSprite]);
+
+  const aisle = 78;
+  const corridors = useMemo(
+    () => Array.from(new Set(Object.values(office.corridorY))).sort((a, b) => a - b),
+    [office.corridorY],
+  );
+
+  const far = camera.scale < 0.4;
 
   return (
     <svg
@@ -671,12 +707,8 @@ export function OfficeScene({
           <RoomShell
             key={room.id}
             room={room}
-            office={office}
-            pulse={pulse.rooms[room.id]}
-            activities={activities}
             focused={focusRoomId === room.id}
             newRoom={newRoomIds.has(room.id)}
-            stagger={staggers[room.id] ?? 0}
           />
         ))}
 
@@ -732,27 +764,14 @@ export function OfficeScene({
           <path key={`trail-${id}`} className="sprite-trail" ref={registerTrail(id)} fill="none" />
         ))}
 
-        {people.map((id) => {
-          const agent = office.agentOf[id];
-          const activity = activities[id];
-          const motion = motions.get(id);
-          if (!agent || !activity || !motion) return null;
-          const target = targets[id];
-          return (
-            <Sprite
-              key={id}
-              agent={agent}
-              activity={activity}
-              reason={target?.reason}
-              motion={motion}
-              atDesk={!!target?.seated}
-              selected={selected === id}
-              dimmed={attentionOnly && activity.kind !== 'blocked' && activity.kind !== 'waiting'}
-              onSelect={() => onSelectAgent(id)}
-              register={registerSprite(id)}
-            />
-          );
-        })}
+        {/* ONE list, ordered by position. Props and people together, because the
+            only way a person can be behind a desk is if the desk and the person are
+            compared, and the only way to compare them is to draw them from the same
+            list. The walk loop keeps this in order between renders, since positions
+            are written straight to the DOM and React never sees a walker move. */}
+        <g ref={registerDepthLayer}>
+          {drawables.map((d) => d.node)}
+        </g>
       </g>
 
       <rect x={0} y={0} width={viewport.w} height={viewport.h} fill="url(#office-vignette)" pointerEvents="none" />

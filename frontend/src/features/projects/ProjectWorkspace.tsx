@@ -12,7 +12,7 @@ import { RewardsPanel } from '../rewards/RewardsPanel';
 import { EventsPanel } from '../events/EventsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DrawerHost } from './DrawerHost';
-import { OfficeFloor } from '../office/OfficeFloor';
+import { OfficeTab } from '../office3d/OfficeTab';
 import { cn } from '../../lib/cn';
 
 /**
@@ -77,7 +77,7 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
 function Panel({ tab }: { tab: ProjectTab }) {
   switch (tab.internalTab) {
     case 'office':
-      return <OfficeFloor projectId={tab.projectId} tabId={tab.id} />;
+      return <OfficeTab projectId={tab.projectId} tabId={tab.id} />;
     case 'overview':
       return <Overview projectId={tab.projectId} tabId={tab.id} />;
     case 'org':

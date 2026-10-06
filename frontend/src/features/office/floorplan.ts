@@ -1,0 +1,364 @@
+/**
+ * Floor plan (pure).
+ *
+ * The floor is a real 3D plane: departments are rooms, agents get desks, and a
+ * corridor network (a vertical spine plus one corridor per shelf row) connects
+ * every room — so characters walk *between* departments instead of teleporting.
+ *
+ * Deterministic: the same org tree always produces the same floor.
+ */
+import type { OrgNode } from '../../api/types';
+import type { Point } from './camera';
+
+export const DESK_W = 104;
+export const DESK_H = 92;
+export const DESK_GAP_X = 16;
+export const DESK_GAP_Y = 14;
+export const ROOM_PAD = 14;
+export const ROOM_HEADER = 30;
+/** Wall gap between neighbouring rooms on the same shelf row. */
+export const ROOM_COL_GAP = 34;
+/** Corridor band between two shelf rows. */
+export const ROW_GAP = 108;
+/** Vertical corridor running down the left-hand side of the floor. */
+export const SPINE_W = 96;
+export const MAX_ROW_WIDTH = 720;
+export const ENTRANCE_MARGIN = 44;
+/** Visual height of walls / desks in the 3D scene, in px. */
+export const WALL_H = 30;
+export const DESK_TOP_Z = 17;
+
+/** Department accents: muted, distinguishable on a dark floor, no neon. */
+export const ROOM_ACCENTS = [
+  '#5b8def',
+  '#e0a458',
+  '#5fbf8f',
+  '#c97bb6',
+  '#6fc3d0',
+  '#d97a6c',
+] as const;
+
+export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break';
+
+export interface Desk {
+  agentId: string;
+  agent: OrgNode;
+  /** Top-left, relative to the room's content origin. */
+  x: number;
+  y: number;
+}
+
+export interface Room {
+  id: string;
+  kind: RoomKind;
+  name: string;
+  subtitle?: string;
+  accent: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  desks: Desk[];
+  dept?: OrgNode;
+  seats: number;
+  rows: number;
+  cols: number;
+  /** Shelf row this room was packed into — decides which corridor serves it. */
+  row: number;
+  /** Waypoint just outside the room's bottom edge, where its corridor spur starts. */
+  door: Point;
+}
+
+export interface Office {
+  rooms: Room[];
+  width: number;
+  height: number;
+  /** Where new hires walk in from (bottom of the spine). */
+  entrance: Point;
+  /** The shared review table agents walk to while verifying. */
+  reviewTable: Point;
+  /** Coffee corner idle agents wander to. */
+  breakSpot: Point;
+  /** Agent id → where their body belongs, in world coordinates. */
+  deskOf: Record<string, Point>;
+  /** Agent id → the room their desk sits in. */
+  roomOf: Record<string, string>;
+  agentOf: Record<string, OrgNode>;
+  /** Room id → y of the corridor serving its shelf row. */
+  corridorY: Record<string, number>;
+  /** x of the vertical spine. */
+  spineX: number;
+}
+
+export interface BuildOptions {
+  showArchived?: boolean;
+}
+
+function isArchived(a: OrgNode): boolean {
+  return a.state === 'archived';
+}
+
+/** Every unit under `node`, depth-first. */
+export function flattenOrg(node: OrgNode | null | undefined): OrgNode[] {
+  if (!node) return [];
+  const out: OrgNode[] = [];
+  const walk = (n: OrgNode) => {
+    out.push(n);
+    for (const c of n.children ?? []) walk(c);
+  };
+  walk(node);
+  return out;
+}
+
+function gridFor(n: number): { cols: number; rows: number } {
+  const cols = Math.max(1, Math.min(4, Math.ceil(Math.sqrt(n))));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  return { cols, rows };
+}
+
+function roomSize(cols: number, rows: number): { w: number; h: number } {
+  return {
+    w: ROOM_PAD * 2 + cols * DESK_W + (cols - 1) * DESK_GAP_X,
+    h: ROOM_PAD * 2 + ROOM_HEADER + rows * DESK_H + (rows - 1) * DESK_GAP_Y,
+  };
+}
+
+function accentFor(index: number): string {
+  return ROOM_ACCENTS[index % ROOM_ACCENTS.length];
+}
+
+function makeDesks(roster: OrgNode[], cols: number): Desk[] {
+  return roster.map((a, idx) => ({
+    agentId: a.id,
+    agent: a,
+    x: ROOM_PAD + (idx % cols) * (DESK_W + DESK_GAP_X),
+    y: ROOM_PAD + ROOM_HEADER + Math.floor(idx / cols) * (DESK_H + DESK_GAP_Y),
+  }));
+}
+
+type RoomInit = Pick<Room, 'id' | 'kind' | 'name' | 'accent' | 'w' | 'h' | 'cols' | 'rows'> &
+  Partial<Room>;
+
+function shell(init: RoomInit): Room {
+  return {
+    subtitle: undefined,
+    x: 0,
+    y: 0,
+    desks: [],
+    seats: 0,
+    row: 0,
+    door: { x: 0, y: 0 },
+    ...init,
+  };
+}
+
+/**
+ * Build the floor plan.
+ *
+ * Rooms are packed shelf-style (left to right, wrapping at MAX_ROW_WIDTH). Rows
+ * are separated by a corridor band, and the whole floor is shifted right to
+ * leave room for the vertical spine — that pair of corridors is what makes
+ * cross-row (cross-department) walking possible.
+ */
+export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions = {}): Office {
+  const showArchived = opts.showArchived ?? false;
+
+  const all = flattenOrg(root);
+  const agents = all.filter((n) => n.kind === 'agent' && (showArchived || !isArchived(n)));
+  const departments = all.filter(
+    (n) => n.kind === 'department' && (showArchived || !isArchived(n)),
+  );
+
+  const agentOf: Record<string, OrgNode> = {};
+  for (const a of agents) agentOf[a.id] = a;
+
+  // The orchestrator runs the floor from its own office; it is the escalation target.
+  const orchestrator = agents.find((a) => /orchestrator/i.test(a.role ?? ''));
+  const others = agents.filter((a) => a.id !== orchestrator?.id);
+
+  const rooms: Room[] = [];
+
+  // 1. Break corner — where genuinely idle characters wander.
+  const breakSize = roomSize(1, 1);
+  rooms.push(
+    shell({
+      id: '__break',
+      kind: 'break',
+      name: 'Break corner',
+      subtitle: 'coffee',
+      accent: '#9a8f72',
+      w: breakSize.w,
+      h: breakSize.h,
+      cols: 1,
+      rows: 1,
+    }),
+  );
+
+  // 2. Commons — the shared review table (walk target while verifying).
+  const commonsSize = roomSize(2, 1);
+  rooms.push(
+    shell({
+      id: '__commons',
+      kind: 'commons',
+      name: 'Review table',
+      subtitle: 'stand-up & review',
+      accent: '#8b93a7',
+      w: commonsSize.w,
+      h: commonsSize.h,
+      cols: 2,
+      rows: 1,
+    }),
+  );
+
+  // 3. Orchestrator office.
+  if (orchestrator) {
+    const size = roomSize(1, 1);
+    rooms.push(
+      shell({
+        id: '__orchestrator',
+        kind: 'orchestrator',
+        name: orchestrator.name,
+        subtitle: 'Orchestrator',
+        accent: '#e0a458',
+        w: size.w,
+        h: size.h,
+        cols: 1,
+        rows: 1,
+        seats: 1,
+        desks: makeDesks([orchestrator], 1),
+      }),
+    );
+  }
+
+  // 4. One room per department.
+  departments.forEach((dept, i) => {
+    const roster = others
+      .filter((a) => a.department_id === dept.id)
+      .sort(
+        (a, b) =>
+          (a.squad_id ?? '').localeCompare(b.squad_id ?? '') || a.name.localeCompare(b.name),
+      );
+    const { cols, rows } = gridFor(Math.max(roster.length, 1));
+    const size = roomSize(cols, rows);
+    rooms.push(
+      shell({
+        id: dept.id,
+        kind: 'department',
+        name: dept.name,
+        subtitle: dept.mission,
+        accent: accentFor(i),
+        w: size.w,
+        h: size.h,
+        cols,
+        rows,
+        dept,
+        seats: roster.length,
+        desks: makeDesks(roster, cols),
+      }),
+    );
+  });
+
+  // 5. Anyone the org has not seated yet (hire in flight, or no department).
+  const seated = new Set(rooms.flatMap((r) => r.desks.map((d) => d.agentId)));
+  const bench = others.filter((a) => !seated.has(a.id));
+  if (bench.length > 0) {
+    const { cols, rows } = gridFor(bench.length);
+    const size = roomSize(cols, rows);
+    rooms.push(
+      shell({
+        id: '__bench',
+        kind: 'bench',
+        name: 'Bench',
+        subtitle: 'not yet assigned',
+        accent: '#6b7280',
+        w: size.w,
+        h: size.h,
+        cols,
+        rows,
+        seats: bench.length,
+        desks: makeDesks(bench, cols),
+      }),
+    );
+  }
+
+  // ── Shelf packing, leaving a corridor band between rows ────────────────────
+  const rowCorridors: number[] = [];
+  let row = 0;
+  let cursorX = 0;
+  let rowY = 0;
+  let rowH = 0;
+
+  for (const room of rooms) {
+    if (cursorX > 0 && cursorX + room.w > MAX_ROW_WIDTH) {
+      rowCorridors[row] = rowY + rowH + ROW_GAP / 2;
+      row += 1;
+      rowY += rowH + ROW_GAP;
+      cursorX = 0;
+      rowH = 0;
+    }
+    room.row = row;
+    room.x = cursorX;
+    room.y = rowY;
+    cursorX += room.w + ROOM_COL_GAP;
+    rowH = Math.max(rowH, room.h);
+  }
+  rowCorridors[row] = rowY + rowH + ROW_GAP / 2;
+
+  const contentWidth = Math.max(...rooms.map((r) => r.x + r.w));
+  const contentHeight = rowY + rowH;
+
+  // Shift everything right to clear the vertical spine.
+  for (const room of rooms) room.x += SPINE_W;
+
+  const width = SPINE_W + contentWidth + 40;
+  const height = contentHeight + ROW_GAP * 0.55;
+
+  // ── Doors and corridors ───────────────────────────────────────────────────
+  const corridorY: Record<string, number> = {};
+  for (const room of rooms) {
+    room.door = { x: room.x + room.w / 2, y: room.y + room.h + 16 };
+    corridorY[room.id] = rowCorridors[room.row] ?? room.y + room.h + ROW_GAP / 2;
+  }
+
+  const deskOf: Record<string, Point> = {};
+  const roomOf: Record<string, string> = {};
+  for (const room of rooms) {
+    for (const desk of room.desks) {
+      deskOf[desk.agentId] = {
+        x: room.x + desk.x + DESK_W / 2,
+        y: room.y + desk.y + DESK_H - 30,
+      };
+      roomOf[desk.agentId] = room.id;
+    }
+  }
+
+  const find = (k: RoomKind) => rooms.find((r) => r.kind === k);
+  const commons = find('commons');
+  const breakRoom = find('break');
+
+  return {
+    rooms,
+    width,
+    height,
+    entrance: { x: SPINE_W / 2, y: height + ENTRANCE_MARGIN },
+    reviewTable: commons
+      ? { x: commons.x + commons.w / 2, y: commons.y + commons.h - 20 }
+      : { x: SPINE_W / 2, y: height / 2 },
+    breakSpot: breakRoom
+      ? { x: breakRoom.x + breakRoom.w / 2, y: breakRoom.y + breakRoom.h - 24 }
+      : { x: SPINE_W / 2, y: height - 20 },
+    deskOf,
+    roomOf,
+    agentOf,
+    corridorY,
+    spineX: SPINE_W / 2,
+  };
+}
+
+/** World position of the orchestrator's desk, if there is an orchestrator. */
+export function orchestratorSeat(office: Office): Point | null {
+  const room = office.rooms.find((r) => r.kind === 'orchestrator');
+  const desk = room?.desks[0];
+  if (!room || !desk) return null;
+  return { x: room.x + desk.x + DESK_W / 2, y: room.y + desk.y + DESK_H - 30 };
+}

@@ -252,14 +252,20 @@ function RoomDesks({
           decoration with no job, and a floor of identical lamps is what made the
           place feel crowded. */}
       <Plant x={room.x + room.w - ROOM_PAD - 14} y={room.y + room.h - 26} />
-      {room.seats > 3 && <Cabinet x={room.x + ROOM_PAD} y={room.y + room.h - 40} />}
       {room.seats > 5 && <Whiteboard x={room.x + room.w - 90} y={room.y + WALL_T + 6} w={110} h={50} />}
     </g>
   );
 }
 
-/** A conveyor: two rails and the ties across them. StarNet's floor is a station. */
-function Conveyor({ from, to, half = 11, tie = 30 }: { from: { x: number; y: number }; to: { x: number; y: number }; half?: number; tie?: number }) {
+/**
+ * A conveyor: two rails and the ties across them. StarNet's floor is a station.
+ *
+ * The ties are far apart and the lines thin on purpose. At a tie every 30 units
+ * across a 22-unit-wide path this was a ladder over the whole corridor network, and
+ * a floor covered in ladder reads as clutter long before it reads as a conveyor —
+ * the concept is a floor that moves work around, not one that shouts about it.
+ */
+function Conveyor({ from, to, half = 11, tie = 96 }: { from: { x: number; y: number }; to: { x: number; y: number }; half?: number; tie?: number }) {
   const dir = { x: to.x - from.x, y: to.y - from.y };
   const len = Math.hypot(dir.x, dir.y) || 1;
   const n = { x: -dir.y / len, y: dir.x / len };
@@ -283,10 +289,10 @@ function Conveyor({ from, to, half = 11, tie = 30 }: { from: { x: number; y: num
   }
   return (
     <g>
-      <polyline points={rail(-half)} fill="none" stroke="#46577a" strokeWidth={1.7} />
-      <polyline points={rail(half)} fill="none" stroke="#46577a" strokeWidth={1.7} />
+      <polyline points={rail(-half)} fill="none" stroke="#3b4a68" strokeWidth={1.2} />
+      <polyline points={rail(half)} fill="none" stroke="#3b4a68" strokeWidth={1.2} />
       {ties.map((points, i) => (
-        <polyline key={i} points={points} fill="none" stroke="#38455e" strokeWidth={1.2} />
+        <polyline key={i} points={points} fill="none" stroke="#2f3a51" strokeWidth={0.9} />
       ))}
     </g>
   );

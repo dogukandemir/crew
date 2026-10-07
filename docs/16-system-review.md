@@ -50,13 +50,13 @@ and a README quick start **already existed**, including a zero-key path
   exactly what it does and does not promise, and a README section showing the two commands.
 - `docker compose --profile mock up mock` runs the mock the same way.
 
-## P5 · First run without keys is a dead end — MEDIUM
+## P5 · First run without keys — CLOSED
 
-With no provider keys the backend cannot plan or hire, so the office is empty and nothing
-explains why.
-
-Action: covered by P4's mock for the demo path, plus a first-run message that names the
-missing setting.
+The zero-key path existed (the README's `CREW_OFFLINE_LLM=true`) but nothing on the screen
+said so, so an empty office looked like a broken app. The office's empty state now names
+the setting: set a provider key, or run the backend with `CREW_OFFLINE_LLM=true` for the
+same pipeline against the deterministic fake runner — and the mock in `dev/mock/` needs no
+backend at all.
 
 ## Office findings still open (docs/15 plus this review)
 

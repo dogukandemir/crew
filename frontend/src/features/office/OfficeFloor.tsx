@@ -802,7 +802,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
               <EmptyState
                 icon="🏢"
                 title="The office is empty"
-                description="Nobody has been hired yet. Start a run on Overview — the orchestrator works out the capabilities the goal needs, then hires the agents and their desks appear here."
+                description="Nobody has been hired yet. Start a run on Overview — the orchestrator works out the capabilities the goal needs, then hires the agents and their desks appear here. If nothing can be hired at all, the backend has no model provider key: set one in .env, or start it with CREW_OFFLINE_LLM=true to run the same pipeline against the deterministic fake runner."
               />
             </div>
           )}

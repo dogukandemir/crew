@@ -16,6 +16,8 @@ import type {
   BrainSearchHit,
   CommandAck,
   CommandBody,
+  Company,
+  CompanyReview,
   CouncilSession,
   CurrentUser,
   Decision,
@@ -211,6 +213,18 @@ export const api = {
   refresh: () => request<{ access_token: string }>('/api/auth/refresh', { method: 'POST' }),
   logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
   me: () => request<CurrentUser>('/api/auth/me'),
+
+  // ── Companies (ADR 0009) ───────────────────────────────────────────────────
+  listCompanies: () => request<Paged<Company>>('/api/companies'),
+  createCompany: (input: { name: string; mission?: string; budget_usd?: number }) =>
+    request<Company>('/api/companies', { method: 'POST', body: input }),
+  attachProjectToCompany: (companyId: string, projectId: string) =>
+    request<{ company_id: string; project_id: string }>(`/api/companies/${companyId}/projects`, {
+      method: 'POST',
+      body: { project_id: projectId },
+    }),
+  reviewCompany: (companyId: string) =>
+    request<CompanyReview>(`/api/companies/${companyId}/review`, { method: 'POST' }),
 
   // ── Projects ───────────────────────────────────────────────────────────────
   listProjects: () => request<Paged<Project>>('/api/projects'),

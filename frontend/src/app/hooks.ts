@@ -47,6 +47,11 @@ export function useProjects() {
   return useQuery({ queryKey: ['projects'], queryFn: api.listProjects });
 }
 
+export function useCompanies() {
+  // The company strip is optional: a backend without the company layer must not break Home.
+  return useQuery({ queryKey: ['companies'], queryFn: api.listCompanies, retry: 1 });
+}
+
 export function useProject(id: string | null | undefined) {
   return useQuery({
     queryKey: ['project', id],

@@ -119,6 +119,45 @@ export const STAGES: Stage[] = [
   'DONE',
 ];
 
+export type CompanyVerdictName = 'on_track' | 'at_risk' | 'no_activity' | 'stop';
+
+export interface CompanyVerdict {
+  project_id: string;
+  name: string;
+  verdict: CompanyVerdictName;
+  directive: string;
+  basis: Record<string, unknown>;
+}
+
+export interface CompanyLastReview {
+  ts: string;
+  projects: number;
+  verdicts: CompanyVerdict[];
+  counts?: Partial<Record<CompanyVerdictName, number>>;
+}
+
+/** The company layer (ADR 0009): a headquarters project holding the portfolio. */
+export interface Company {
+  id: string;
+  name: string;
+  mission: string;
+  status: string;
+  budget_usd: number;
+  spend_usd: number;
+  spend_ratio: number;
+  ceo: { id: string; name: string; grade?: number } | null;
+  roster: { id: string; name: string; role: string; grade: number }[];
+  projects: { id: string; name: string; status: string; spend_ratio: number }[];
+  last_review: CompanyLastReview | null;
+}
+
+export interface CompanyReview {
+  company_id: string;
+  verdicts: CompanyVerdict[];
+  counts: Record<string, number>;
+  review_event_id?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -127,6 +166,9 @@ export interface Project {
   description?: string;
   status: ProjectStatus;
   stage: Stage;
+  /** Additive (ADR 0009): companies are kind='company'; member projects carry company_id. */
+  kind?: 'project' | 'company';
+  company_id?: string | null;
   created_at: string;
   updated_at?: string;
   archived_at?: string | null;

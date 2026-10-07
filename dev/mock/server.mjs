@@ -14,6 +14,7 @@ const PROJECT = {
   goal: 'Build a launch plan for the Q3 campaign.',
   status: 'active',
   stage: 'EXECUTING',
+  company_id: 'co1',
   created_at: '2026-01-01T10:00:00.000Z',
   budget_cap_micros: 10_000_000,
   spend_micros: 3_800_000,
@@ -318,6 +319,25 @@ const agentsNow = () => {
 };
 
 const paged = (items) => ({ items, next_cursor: null, total: items.length });
+// ── The company (ADR 0009): a canned headquarters holding p1 ─────────────────
+const COMPANY = () => ({
+  id: 'co1', name: 'Northwind Pictures', mission: 'Own the Q3 launch portfolio', status: 'active',
+  budget_usd: 10, spend_usd: 3.8, spend_ratio: 0.38,
+  ceo: { id: 'c1', name: 'Vera', grade: 5 },
+  roster: [{ id: 'c1', name: 'Vera', role: 'ceo', grade: 5 }],
+  projects: [{ id: 'p1', name: PROJECT.name, status: 'active', spend_ratio: 0.38 }],
+  last_review: {
+    ts: ago(0),
+    projects: 1,
+    verdicts: [
+      { project_id: 'p1', name: PROJECT.name, verdict: 'on_track',
+        directive: 'keep going: 38% of the budget used, 1 completed so far',
+        basis: { spend_ratio: 0.38, completed: 1, failed: 0, attempted: 1 } },
+    ],
+    counts: { on_track: 1 },
+  },
+});
+
 const ack = { accepted: true, event_seq: 4123, unit: { kind: 'project', id: 'p1', name: PROJECT.name } };
 
 const routes = [
@@ -376,6 +396,14 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
       return res.end(JSON.stringify(fn(m)));
     }
+  }
+  if (/^\/api\/companies$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ items: [COMPANY()] }));
+  }
+  if (/^\/api\/companies\/[^/]+$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify(COMPANY()));
   }
   if (/^\/api\/projects\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });

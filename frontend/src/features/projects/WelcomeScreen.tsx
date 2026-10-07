@@ -1,4 +1,5 @@
 import { useProjects } from '../../app/hooks';
+import { CompaniesSection } from '../companies/CompaniesSection';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
 import { Button } from '../../components/ui/Button';
@@ -27,6 +28,8 @@ export function WelcomeScreen() {
         Open a project tab to watch its org form itself, execute, verify and pay out rewards. Each tab keeps
         its own route, filters and scroll position.
       </p>
+
+      <CompaniesSection />
 
       <div className="mt-5 flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-300">Projects</h2>

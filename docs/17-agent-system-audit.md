@@ -103,12 +103,30 @@ file, batch 2 is the next slice.
   steering, councils, decisions, rewards. The office floor reads the same stream the
   Events panel does.
 
+## 11. Office gossip (batch 2, the user's ask)
+
+Gossip is a first-class signal, not decoration (`control/gossip.py`):
+
+- every item is **mined from real state** — budget burn, failed tasks, blocked work,
+  people on probation — and carries `basis` (the rows it is retold from), so the
+  office can only repeat what the books already say. No invention;
+- `agent.gossip` names both mouths (the floor can animate them);
+- when the same topic is heard from ≥ 3 distinct agents, `gossip.surfaced` fires once
+  and the concern lands in the project brain — a rumour becomes a problem the
+  company has to look at.
+
+Open: nothing in the frontend renders `agent.gossip`/`agent.delegated` yet, and the
+mock tells no gossip stories yet — both are presentation work on a live contract.
+
 ## Batch plan
 
-**Batch 1 (this commit):** the three items that make existing machinery lie —
-approval consumption, zero-coverage matching, and the missing busy state. Each with a
-test in `tests/`.
+**Batch 1 (`a1efce3`):** approval consumption, zero-coverage matching, the busy state.
 
-**Batch 2 (next):** the collaboration loops — inbox + answer for `ask_colleague`,
-`council.requested` consumer, `agent.delegated`, the lead re-plan rung — plus the
-hiring budget gate.
+**Batch 2 (this commit):** the collaboration loops — inbox + answer for `ask_colleague`
+(a message IS an `agent.message` event; the recipient's next prompt carries the open
+question and `reply_colleague` closes it), the `council.requested` consumer
+(`_service_decisions`; the decision binds following work), `delegate_task` (a real
+task + `agent.delegated`), the lead re-plan rung in `_requeue_retries`, the hiring
+gate (breaker refuses hires; a staffing plan exceeding the headroom is refused before
+a row is written) — and the gossip layer above.
+

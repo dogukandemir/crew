@@ -18,8 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from crew.control import inbox
 from crew.core import events as ev
-from crew.core.models import Agent, Project
+from crew.core.db import session_scope
+from crew.core.models import Agent, Project, Task
 from crew.core.security import approval_granted, policy, redactor, request_approval, scan_injection
 from crew.core.settings import settings
 from crew.domain.enums import Capability, PolicyOutcome
@@ -280,13 +282,17 @@ async def _record_artifact(ctx: ToolContext, name: str, path: Path, size: int, d
 
 
 def h_ask_colleague(ctx: ToolContext, args: dict) -> dict:
-    msg = str(args.get("question", ""))[:2000]
+    question = str(args.get("question", ""))[:2000]
     to = str(args.get("agent", "manager"))
-    run_on_loop(ev.emit("agent.message", project_id=ctx.project_id, task_id=ctx.task_id,
-                        agent_id=ctx.agent.id if ctx.agent else None, title=f"→ {to}: {msg[:80]}",
-                        summary=msg, payload={"to": to, "text": msg, "direction": "out"}))
-    return {"ok": True, "data": {"delivered": True,
-                                 "note": "message queued; the recipient answers asynchronously"}}
+    sent = run_on_loop(inbox.deliver(ctx.project_id, sender=ctx.agent, handle=to, text=question,
+                                     task_id=ctx.task_id, run_id=ctx.run_id, kind="ask"))
+    recipient = sent.get("to_agent")
+    return {"ok": True, "data": {
+        "delivered": recipient is not None,
+        "to": recipient.name if recipient else to,
+        "message_id": (sent.get("event") or {}).get("id"),
+        "note": ("your question is in their inbox; they answer with reply_colleague and you will "
+                 "see it before your next task") if recipient else "nobody matches that name right now"}}
 
 
 def h_escalate(ctx: ToolContext, args: dict) -> dict:
@@ -315,6 +321,52 @@ def h_report(ctx: ToolContext, args: dict) -> dict:
                         agent_id=ctx.agent.id if ctx.agent else None, title=f"report: {text[:70]}",
                         summary=text, payload={"direction": "up", "text": text}))
     return {"ok": True, "data": {"reported": True}}
+
+
+def h_reply_colleague(ctx: ToolContext, args: dict) -> dict:
+    text = str(args.get("text", ""))[:2000]
+    to = str(args.get("agent", ""))
+    if not text:
+        return {"ok": False, "error": "text is required"}
+    sent = run_on_loop(inbox.deliver(ctx.project_id, sender=ctx.agent, handle=to, text=text,
+                                     task_id=ctx.task_id, run_id=ctx.run_id, kind="reply",
+                                     reply_to=str(args.get("answer_to", "")) or None))
+    return {"ok": True, "data": {"delivered": sent.get("to_agent") is not None}}
+
+
+def h_delegate(ctx: ToolContext, args: dict) -> dict:
+    brief = str(args.get("brief", ""))[:4000]
+    to = str(args.get("agent", ""))
+    if not brief or ctx.agent is None:
+        return {"ok": False, "error": "brief and a sender are required"}
+
+    async def _create() -> dict:
+        target = await inbox.resolve_recipient(ctx.project_id, to, sender=ctx.agent)
+        if target is None:
+            return {"ok": False, "error": f"no such colleague: {to}"}
+        async with session_scope() as s:
+            t = Task(project_id=ctx.project_id, run_id=ctx.run_id, parent_id=ctx.task_id,
+                     title=f"[delegated] {brief[:80]}", description=brief,
+                     deliverable="A short written result the delegator can verify.",
+                     acceptance_criteria=["The result addresses the brief"],
+                     effort="S", state="assigned", assignee_agent_id=target.id,
+                     assignee_squad_id=target.squad_id, department_id=target.department_id)
+            s.add(t)
+            await s.flush()
+            tid = t.id
+        await ev.emit("task.created", project_id=ctx.project_id, run_id=ctx.run_id, task_id=tid,
+                      agent_id=target.id, title=f"delegated to {target.name}: {brief[:60]}",
+                      payload={"task_id": tid, "title": f"[delegated] {brief[:80]}"},
+                      actor=f"agent:{ctx.agent.id}")
+        await ev.emit("agent.delegated", project_id=ctx.project_id, task_id=tid, run_id=ctx.run_id,
+                      agent_id=ctx.agent.id, title=f"{ctx.agent.name} → {target.name}",
+                      summary=brief[:200],
+                      payload={"from_agent_id": ctx.agent.id, "to_agent_id": target.id,
+                               "task_id": tid, "brief": brief[:400]},
+                      actor=f"agent:{ctx.agent.id}")
+        return {"ok": True, "data": {"delegated_to": target.name, "task_id": tid}}
+
+    return run_on_loop(_create())
 
 
 @dataclass(frozen=True)
@@ -364,6 +416,15 @@ TOOLS: dict[str, ToolSpec] = {
                               Capability.COMMS_ASK, _schema({"agent": {"type": "string"},
                                                              "question": {"type": "string"}},
                                                             ["question"]), h_ask_colleague),
+    "reply_colleague": ToolSpec("reply_colleague", "Answer a colleague's question (they see it before their next task).",
+                                Capability.COMMS_ASK, _schema({"agent": {"type": "string"},
+                                                               "text": {"type": "string"},
+                                                               "answer_to": {"type": "string"}},
+                                                              ["agent", "text"]), h_reply_colleague),
+    "delegate_task": ToolSpec("delegate_task", "Hand a piece of work to a colleague as a real task.",
+                              Capability.COMMS_ASK, _schema({"agent": {"type": "string"},
+                                                             "brief": {"type": "string"}},
+                                                            ["agent", "brief"]), h_delegate),
     "escalate": ToolSpec("escalate", "Escalate a blocker to your manager.",
                          Capability.COMMS_ESCALATE, _schema({"reason": {"type": "string"}}, ["reason"]), h_escalate),
     "request_decision": ToolSpec("request_decision", "Ask for a binding decision on a contested issue.",

@@ -23,7 +23,7 @@ from crew.core.models import (
     usd_to_micros,
 )
 from crew.core.reward import RewardEngine
-from crew.core.security import audit
+from crew.core.security import audit, budget
 from crew.core.settings import settings
 from crew.domain.catalog import ROLE_TEMPLATES, SKILLS_BY_ID, RoleSpec, skills_for_keywords
 from crew.domain.enums import BrainScope, Capability, Effort, Grade, ModelTier, Role, TaskState
@@ -197,6 +197,21 @@ async def create_squad(*, project_id: str, department_id: str, name: str, missio
 async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | None = None,
                      squad_id: str | None = None, manager_id: str | None = None,
                      rationale: str = "", actor: str = "system") -> dict:
+    # hiring respects the budget (docs/17 batch 2): a project at its ceiling must not be
+    # staffed into the ground by a planner loop. estimate_agent_cost finally guards a decision.
+    est = estimate_agent_cost(spec.role)
+    available = await budget.available_micros(project_id)
+    # The estimate rides in the message; the gate itself is the breaker — a project whose
+    # ceiling was already reached must not grow, while a fresh project's bootstrap hire
+    # passes (the cap governs SPEND, and staff_gaps' plan gate is what stops a planner
+    # loop from over-building a small project).
+    if budget.breaker_open(project_id):
+        await ev.emit("budget.exceeded", project_id=project_id, severity="warning",
+                      title="hire refused: no headroom",
+                      summary=f"a {spec.role.value} needs ~{est} micro-dollars of headroom",
+                      payload={"scope_kind": "org", "scope_id": project_id,
+                               "needed_micros": est, "available_micros": available})
+        raise ValueError("budget: not enough headroom to staff this project")
     async with session_scope() as s:
         p = await s.get(Project, project_id)
         active = int(await s.scalar(select(func.count(Agent.id)).where(
@@ -602,6 +617,19 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
         by_category.setdefault(skill.category, []).append(sid)
 
     for category, skill_ids in by_category.items():
+        # the cost of staffing this gap, checked before a single row is written
+        # (docs/17 batch 2 — estimate_agent_cost guards the decision it was written for)
+        est_workers = max(1, len(skill_ids) // 2)
+        plan_cost = (estimate_agent_cost(Role.HEAD) + estimate_agent_cost(Role.LEAD)
+                     + est_workers * estimate_agent_cost(Role.WORKER))
+        headroom = await budget.available_micros(project.id)
+        if plan_cost > headroom:
+            await ev.emit("budget.exceeded", project_id=project.id, run_id=run_id, severity="warning",
+                          title=f"staffing refused: {category}",
+                          summary=f"staffing {category} needs ~{plan_cost} µ$; {headroom} µ$ available",
+                          payload={"scope_kind": "org", "scope_id": project.id,
+                                   "needed_micros": plan_cost, "available_micros": headroom})
+            continue
         dept_name = CATEGORY_TO_DEPARTMENT.get(category, "Operations")
         dept = await department_for_category(project.id, category)
         if dept is None:
@@ -620,13 +648,17 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
             except ValueError as e:
                 log.info("department creation refused: %s", e)
                 continue
-            head = await hire_agent(
-                project_id=project.id,
-                spec=RoleSpec.from_template(Role.HEAD, mission=f"Head of {dept_name}", rationale=f"new department for {skill_ids}"),
-                department_id=dept_id, manager_id=orchestrator_id,
-                rationale=f"department {dept_name} needs a head to staff {', '.join(skill_ids)}",
-                actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
-            )
+            try:
+                head = await hire_agent(
+                    project_id=project.id,
+                    spec=RoleSpec.from_template(Role.HEAD, mission=f"Head of {dept_name}", rationale=f"new department for {skill_ids}"),
+                    department_id=dept_id, manager_id=orchestrator_id,
+                    rationale=f"department {dept_name} needs a head to staff {', '.join(skill_ids)}",
+                    actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+                )
+            except ValueError as e:
+                log.info("head hire refused: %s", e)
+                continue
             created.append({"kind": "agent", **head})
             async with session_scope() as s:
                 row = await s.get(Department, dept_id)
@@ -644,14 +676,18 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
             actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
         )
         created.append({"kind": "squad", **squad})
-        lead = await hire_agent(
-            project_id=project.id,
-            spec=RoleSpec.from_template(Role.LEAD, skills=skill_ids, mission=f"Lead the {dept_name} squad",
-                                        rationale=f"sequencing and integration for {skill_ids}"),
-            department_id=dept_id, squad_id=squad["id"],
-            manager_id=head_id, rationale=f"a squad of {len(skill_ids)} skills needs a lead",
-            actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
-        )
+        try:
+            lead = await hire_agent(
+                project_id=project.id,
+                spec=RoleSpec.from_template(Role.LEAD, skills=skill_ids, mission=f"Lead the {dept_name} squad",
+                                            rationale=f"sequencing and integration for {skill_ids}"),
+                department_id=dept_id, squad_id=squad["id"],
+                manager_id=head_id, rationale=f"a squad of {len(skill_ids)} skills needs a lead",
+                actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+            )
+        except ValueError as e:
+            log.info("lead hire refused: %s", e)
+            continue
         created.append({"kind": "agent", **lead})
         async with session_scope() as s:
             row = await s.get(Squad, squad["id"])

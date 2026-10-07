@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import desc, select, update
 
-from crew.control import org
+from crew.control import gossip, inbox, org
 from crew.control.council import council
 from crew.control.verify import verifier
 from crew.core import events as ev
@@ -19,7 +19,7 @@ from crew.core.models import Agent, AgentSkill, Event, Project, Run, Task
 from crew.core.reward import reward_engine
 from crew.core.security import BudgetExceeded, audit, budget
 from crew.core.settings import settings
-from crew.domain.enums import RunStage, RunStatus, TaskState
+from crew.domain.enums import Role, RunStage, RunStatus, TaskState
 from crew.execution.models import router
 from crew.execution.prompt import build_system_prompt, build_task_prompt
 from crew.execution.runner import (
@@ -234,6 +234,8 @@ class Orchestrator:
                     return RunStage(r.stage)
             # heal any stale `busy` from a crashed task before scheduling this wave
             await self._reap_occupancy(project.id)
+            # and serve any decision requests agents filed mid-task (docs/17 batch 2)
+            await self._service_decisions(project)
             tasks = await org.ready_tasks(project.id, run.id)
             runnable = [t for t in tasks if t.state == TaskState.ASSIGNED.value and t.assignee_agent_id]
             if not runnable:
@@ -248,6 +250,8 @@ class Orchestrator:
             await asyncio.gather(*[self._run_task(run, project, t.id, sem) for t in runnable])
             # tasks that failed and still have attempts left go back to the queue
             await self._requeue_retries(run)
+            # and the office talks about what actually happened (docs/17 batch 2)
+            await gossip.office_chatter(project.id)
         async with session_scope() as s:
             tasks = (await s.scalars(select(Task).where(Task.run_id == run.id))).all()
         pending = [t for t in tasks if t.state not in (TaskState.COMPLETED.value, TaskState.FAILED.value,
@@ -260,6 +264,7 @@ class Orchestrator:
                 row.state = TaskState.FAILED.value
                 row.escalation_reason = row.escalation_reason or "not completed within the run"
                 s.add(row)
+        await gossip.office_chatter(project.id)
         await self._reap_occupancy(project.id)
         await _emit_stage(run, RunStage.LEARNING, project.id)
         return RunStage.LEARNING
@@ -272,6 +277,24 @@ class Orchestrator:
                 if t.attempts < MAX_TASK_ATTEMPTS and t.state == TaskState.FAILED.value:
                     t.state = TaskState.ASSIGNED.value
                     t.escalation_reason = f"retry {t.attempts}"
+                    # the ladder's first rung (docs/03 §5): the FIRST failure goes back to
+                    # the producer's Lead, who re-plans it — rather than watching the same
+                    # worker fail the same way again.
+                    if t.attempts == 1 and t.assignee_agent_id:
+                        worker = await s.get(Agent, t.assignee_agent_id)
+                        lead = (await s.get(Agent, worker.manager_id)
+                                if worker is not None and worker.manager_id else None)
+                        if (lead is not None and lead.role == Role.LEAD.value
+                                and lead.state not in ("archived", "suspended")):
+                            t.assignee_agent_id = lead.id
+                            t.assignee_squad_id = lead.squad_id
+                            t.escalation_reason = f"retry {t.attempts} — lead re-plans"
+                            await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
+                                          task_id=t.id, agent_id=lead.id, severity="warning",
+                                          title=f"lead re-plans: {t.title[:50]}",
+                                          payload={"task_id": t.id, "reason": "lead re-plans",
+                                                   "rung": 1, "lead_id": lead.id},
+                                          actor="system:orchestrator")
                     s.add(t)
 
     async def _run_task(self, run: Run, project: Project, task_id: str,
@@ -339,6 +362,7 @@ class Orchestrator:
                 hits = []
             context_pack = render_context_pack(hits)
             steer = await self._steering(project.id, task_id, snapshot.id)
+            colleague_messages = await self._inbox_notes(project.id, snapshot.id)
             decisions = await council.decision_constraints(project_id=project.id)
 
             bundle = build_system_prompt(
@@ -352,6 +376,7 @@ class Orchestrator:
                 title=task_spec.title, description=task_spec.description, deliverable=task_spec.deliverable,
                 acceptance_criteria=task_spec.acceptance_criteria, output_contract=task_spec.output_contract,
                 effort=task_spec.effort, decision_constraints=decisions[:5], steer=steer,
+                colleague_messages=colleague_messages,
             )
             bundle.user = user_prompt
 
@@ -393,6 +418,63 @@ class Orchestrator:
                                            route=router.choice_for_agent(snapshot).model, attempts=attempts)  # type: ignore[arg-type]
             await self._verify_and_reward(run, project, task_id, result, attempts)
             await self._free_agent(snapshot.id)
+
+    async def _inbox_notes(self, project_id: str, agent_id: str) -> list[str]:
+        """Colleague traffic for this agent's prompt: open questions to answer and answers
+        that arrived for it (docs/17 batch 2 — without this the inbox exists but nobody
+        ever reads it, which would be the same defect in a new suit)."""
+        notes: list[str] = []
+        try:
+            open_qs = await inbox.open_questions(project_id, agent_id)
+            answers = await inbox.replies_for(project_id, agent_id)
+        except Exception:
+            log.exception("inbox read failed")
+            return notes
+        for q in open_qs[:4]:
+            notes.append(f"{q['from']} asks you (answer_to='{q['id']}'): {q['text'][:300]} — answer "
+                         f"with reply_colleague(agent='{q['from']}', answer_to='{q['id']}', text=...)")
+        for a in answers[:4]:
+            notes.append(f"{a['from']} answered your question: {a['text'][:300]}")
+        return notes
+
+    async def _service_decisions(self, project: Project) -> int:
+        """Consume `council.requested` (docs/17 batch 2). The request_decision tool used to
+        promise "the orchestrator will convene a council" with nothing behind it; here a
+        collected question becomes a real session, and its decision binds following work
+        through council.decision_constraints."""
+        async with session_scope() as s:
+            requests = (await s.scalars(select(Event).where(Event.project_id == project.id,
+                                                            Event.type == "council.requested")
+                                        .order_by(Event.seq.desc()).limit(20))).all()
+            convenes = (await s.scalars(select(Event).where(Event.project_id == project.id,
+                                                            Event.type == "council.convened")
+                                        .order_by(Event.seq.desc()).limit(50))).all()
+        seen = {" ".join(str((e.payload or {}).get("question", "")).split()).lower() for e in convenes}
+        served = 0
+        for r in requests:
+            if served >= 2:
+                break
+            question = " ".join(str((r.payload or {}).get("question", "")).split())
+            if not question or question.lower() in seen:
+                continue
+            options = [o for o in ((r.payload or {}).get("options") or []) if isinstance(o, dict)]
+            if len(options) < 2:
+                options = [{"id": "proceed", "label": "Proceed as questioned"},
+                           {"id": "hold", "label": "Hold and keep the current default"}]
+            try:
+                session = await council.convene(
+                    project=project, question=question, options=options, task_id=r.task_id,
+                    run_id=r.run_id, convened_by="system:orchestrator",
+                    rationale=f"requested by agent {r.agent_id} on task {r.task_id}")
+                await council.run_round(project_id=project.id, session_id=session["session_id"])
+                served += 1
+                try:
+                    await council.decide(project=project, session_id=session["session_id"])
+                except Exception:
+                    log.exception("council decide failed for request %s", r.id)
+            except Exception:
+                log.exception("council convene failed for request %s", r.id)
+        return served
 
     async def _free_agent(self, agent_id: str) -> None:
         """A finished task releases its agent (the inverse of the claim in _run_task)."""

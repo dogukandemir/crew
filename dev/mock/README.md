@@ -27,7 +27,7 @@ npm run dev                       # http://localhost:5173
   `council.position` events carry what each of them argues. At t+90 the decision lands —
   the room empties, the publish plan leaves `escalated` for `running`, and the approval
   it was waiting on is granted.
-- **The office talks.** From the start Iris whispers to Dev about the publish plan that
+- **The office talks.** From the start Iris whispers to Cleo about the publish plan that
   died twice; from t+48 and t+64 Zoe and Nils take the same worry further ("three mouths,
   one worry"), and at t+90 `gossip.surfaced` marks it as a concern the company has to look
   at. Every whisper carries its `basis` — the rumours only say what the story's own events

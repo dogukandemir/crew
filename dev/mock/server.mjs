@@ -156,9 +156,11 @@ const RAW_EVENTS = [
     { to: 'Cleo', text: 'the coffee machine is a war crime', direction: 'side', informal: true }],
   // Office talk between two people who are NOT on that task. The story's own record
   // says the publish plan died twice (the task.escalated above), so the rumour is
-  // allowed to say exactly that — no more. One of the three mouths that surface it.
-  ['a5', 'agent.gossip', 'Iris ⟷ Dev: the publish plan died twice', -6,
-    { informal: true, topic: 'failing_work', to: 'Dev', to_name: 'Dev', from_name: 'Iris',
+  // allowed to say exactly that — no more. Cleo is on the brief, not the publish plan;
+  // Dev (who escalated it) is deliberately not a mouth here. The stamp sits ahead of
+  // every other talk event so the whisper wins the recency race and stays visible.
+  ['a5', 'agent.gossip', 'Iris ⟷ Cleo: the publish plan died twice', -14,
+    { informal: true, topic: 'failing_work', to: 'Cleo', to_name: 'Cleo', from_name: 'Iris',
       text: 'did you hear — the publish plan died twice and nobody has said why?',
       basis: ['task:t3'] }],
   ['a3', 'agent.thought', 'the deck needs a pricing slide', 18],

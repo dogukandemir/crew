@@ -76,6 +76,15 @@ export function useOrg(id: string | null | undefined) {
     queryKey: ['project', id, 'org'],
     queryFn: () => api.getOrg(id as string),
     enabled: !!id,
+    // The organization is not a photograph. Agents are hired while the tab is open and
+    // departments open around them, and the office draws itself FROM this query — so
+    // without a poll the floor plan is whatever it was the moment the tab loaded: the
+    // new room exists in the database and nowhere on screen.
+    //
+    // A poll rather than a socket listener because the office needs the whole org, not
+    // one event. When the backend emits agent.hired / department.created on the bus,
+    // this should be invalidated from there and the interval dropped.
+    refetchInterval: 10_000,
   });
 }
 

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -20,8 +21,8 @@ from crew.control.orchestrator import orchestrator
 from crew.core.db import session_scope
 from crew.core.models import Agent, AgentSkill, Task
 from crew.core.security import approval_granted, decide_approval, request_approval
-from crew.domain.catalog import SKILLS
-from crew.domain.enums import Capability, TaskState
+from crew.domain.catalog import SKILLS, RoleSpec
+from crew.domain.enums import Capability, Role, TaskState
 from crew.execution.tools import ToolContext, invoker
 
 
@@ -139,3 +140,35 @@ async def test_reaper_frees_busy_agents_with_nothing_running(bound_loop, project
         held = await s.get(Agent, held_id)
     assert stuck.state == "idle", "no running task → freed"
     assert held.state == "busy", "a real run holds its agent"
+
+
+@pytest.mark.asyncio
+async def test_antithrash_has_a_window(bound_loop, project):
+    """A layoff blocks an identical no-rationale rehire within the window — and only within it."""
+    first = await org.hire_agent(project_id=project["id"],
+                                 spec=RoleSpec.from_template(Role.SPECIALIST), rationale="first hire")
+    async with session_scope() as s:
+        row = await s.get(Agent, first["id"])
+        row.state = "archived"
+        row.archived_at = datetime.now(UTC)
+        s.add(row)
+
+    with pytest.raises(ValueError, match="laid off recently"):
+        await org.hire_agent(project_id=project["id"],
+                             spec=RoleSpec.from_template(Role.SPECIALIST), rationale="")
+
+    second = await org.hire_agent(project_id=project["id"],
+                                  spec=RoleSpec.from_template(Role.SPECIALIST),
+                                  rationale="a real reason this time")
+    assert second["id"] != first["id"], "a rationale opens the door"
+
+    # age both archives beyond the project's layoff_idle_days window (14) — the door opens
+    async with session_scope() as s:
+        for aid in (first["id"], second["id"]):
+            row = await s.get(Agent, aid)
+            row.state = "archived"
+            row.archived_at = datetime.now(UTC) - timedelta(days=30)
+            s.add(row)
+    third = await org.hire_agent(project_id=project["id"],
+                                 spec=RoleSpec.from_template(Role.SPECIALIST), rationale="")
+    assert third["id"] not in (first["id"], second["id"]), "the window expires the rule"

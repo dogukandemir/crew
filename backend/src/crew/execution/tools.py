@@ -297,11 +297,38 @@ def h_ask_colleague(ctx: ToolContext, args: dict) -> dict:
 
 def h_escalate(ctx: ToolContext, args: dict) -> dict:
     reason = str(args.get("reason", ""))[:2000]
-    run_on_loop(ev.emit("task.escalated", project_id=ctx.project_id, task_id=ctx.task_id,
-                        agent_id=ctx.agent.id if ctx.agent else None, severity="warning",
-                        title=f"escalation: {reason[:80]}",
-                        payload={"task_id": ctx.task_id, "reason": reason, "by": ctx.agent.id if ctx.agent else None}))
-    return {"ok": True, "data": {"escalated": True}}
+
+    async def _record() -> dict:
+        """Escalating is a fact about the task, not just a ribbon on the floor.
+
+        The tool used to emit and return — the API has served `escalated_to` all along
+        and nothing ever wrote it. The reason and the manager it went to are persisted
+        now, so the panel, the verifier and the failure ladder read one escalation
+        (docs/17 batch 3).
+        """
+        target_id = ctx.agent.manager_id if ctx.agent else None
+        if target_id is None:
+            async with session_scope() as s:
+                p = await s.get(Project, ctx.project_id)
+                target_id = (p.settings or {}).get("orchestrator_id") if p else None
+        if ctx.task_id:
+            async with session_scope() as s:
+                t = await s.get(Task, ctx.task_id)
+                if t is not None:
+                    if not t.escalation_reason or t.escalation_reason.startswith("retry"):
+                        t.escalation_reason = f"escalated: {reason[:300]}"
+                    t.escalated_to = target_id
+                    s.add(t)
+        await ev.emit("task.escalated", project_id=ctx.project_id, task_id=ctx.task_id,
+                      agent_id=ctx.agent.id if ctx.agent else None, severity="warning",
+                      title=f"escalation: {reason[:80]}",
+                      payload={"task_id": ctx.task_id, "reason": reason,
+                               "by": ctx.agent.id if ctx.agent else None,
+                               "escalated_to": target_id},
+                      actor=(f"agent:{ctx.agent.id}" if ctx.agent else "system"))
+        return {"ok": True, "data": {"escalated": True, "escalated_to": target_id}}
+
+    return run_on_loop(_record())
 
 
 def h_request_decision(ctx: ToolContext, args: dict) -> dict:

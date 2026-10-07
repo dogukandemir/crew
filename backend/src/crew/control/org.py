@@ -219,12 +219,20 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
         cap = int(p.setting("max_agents", settings.max_agents_per_project))
         if active >= cap:
             raise ValueError(f"org_limit_reached: {active}/{cap} agents")
-        # anti-thrash: refuse an identical role laid off recently (docs/02 §5)
+        # anti-thrash: refuse an identical role laid off RECENTLY (docs/02 §5). "Recently"
+        # needs a clock — without the window an archive from any era blocks a no-rationale
+        # rehire until the project dies: a policy nothing ever expires (docs/17 batch 3).
+        from datetime import UTC, datetime, timedelta
+
+        window_days = int(p.setting("layoff_idle_days", 14) or 14)
+        floor = datetime.now(UTC) - timedelta(days=window_days)
         recent = await s.scalar(select(Agent).where(Agent.project_id == project_id,
                                                     Agent.role == spec.role.value,
-                                                    Agent.state == "archived").order_by(desc(Agent.archived_at)).limit(1))
+                                                    Agent.state == "archived",
+                                                    Agent.archived_at >= floor)
+                                .order_by(desc(Agent.archived_at)).limit(1))
         if recent and not rationale:
-            raise ValueError("hire refused: identical role was recently archived without a new rationale")
+            raise ValueError("hire refused: identical role was laid off recently without a new rationale")
 
         grade = spec.grade
         if spec.role in (Role.WORKER, Role.ANALYST) and grade > Grade.JUNIOR:

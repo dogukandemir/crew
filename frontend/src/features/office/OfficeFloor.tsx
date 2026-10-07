@@ -471,8 +471,18 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       }
       setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }));
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    // Ctrl+wheel is the browser's OWN page-zoom shortcut, and it wins unless a
+    // non-passive listener on the element actually under the pointer prevents it. The
+    // canvas is one element; the floor the reader hovers is the frame around it, and the
+    // label and bubble overlay lives inside that frame — so listen on the frame too.
+    // Without it, clicking into the game and then Ctrl+scrolling zoomed the whole PAGE
+    // instead of the floor, which is not what a game's own zoom gesture should do.
+    const frame = el.closest('[aria-label^="Office floor"]') as HTMLElement | null;
+    const targets: HTMLElement[] = frame && frame !== el ? [el, frame] : [el];
+    for (const t of targets) t.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      for (const t of targets) t.removeEventListener('wheel', onWheel);
+    };
   }, []);
 
   const focusRoom = useCallback(

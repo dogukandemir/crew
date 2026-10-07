@@ -125,7 +125,7 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
         stroke={mix('#101725', room.accent, 0.5)}
         strokeWidth={1}
       />
-      <text x={p.x} y={p.y - h + 15} fontSize={12} fontWeight={700} fill="#e8edf5" textAnchor="middle">
+      <text x={p.x} y={p.y - h + 15} fontSize={16} fontWeight={700} fill="#eef2f8" textAnchor="middle" stroke="#0b0e14" strokeWidth={3.2} paintOrder="stroke">
         {name}
       </text>
       <text x={p.x} y={p.y - h + 27} fontSize={9} fill="#8b98ad" textAnchor="middle">

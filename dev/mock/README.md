@@ -37,6 +37,13 @@ npm run dev                       # http://localhost:5173
   two departments and earns its chief: **Nadia (CMO)** joins with the executive avatar,
   and the story marks the chain the backend builds (ADR 0008): orchestrator → chief →
   head → lead → worker.
+- **The board exists.** The Board tab is served for `p1` (ADR 0010): an epic decomposed
+  into two features and four stories, one story carrying a live running task with a
+  helper (`+1 helping`), one in review, one done — and a **high-severity bug** (`w8`)
+  filed by Nils, sitting in Ready for the next wave. `GET /api/projects/p1/board`,
+  `?department_id=d1` scopes to Research. `POST …/board/items` adds a story or bug,
+  `PATCH /api/board/items/:id` moves an *unpromoted* item — a promoted one refuses,
+  exactly as the real backend does, because its column follows the task.
 - `POST /api/dev/reset` restarts that clock (the temporary reset-clock button on the
   office floor calls it).
 - Notices when you have been staring at it: the events it serves are re-timestamped per

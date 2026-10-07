@@ -154,6 +154,7 @@ class Capability(StrEnum):
     COMMS_ASK = "comms.ask"
     COMMS_ESCALATE = "comms.escalate"
     COMMS_REQUEST_DECISION = "comms.request_decision"
+    BOARD_WRITE = "board.write"
     NET_SEARCH = "net.search"
     NET_FETCH = "net.fetch"
     NET_POST = "net.post"

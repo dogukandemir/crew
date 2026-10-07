@@ -65,7 +65,8 @@ CATEGORY_TO_DEPARTMENT: dict[str, str] = {
 }
 
 COMMON_CAPS = [Capability.BRAIN_READ, Capability.BRAIN_WRITE, Capability.COMMS_ASK,
-               Capability.COMMS_ESCALATE, Capability.ARTIFACT_PUBLISH, Capability.HUMAN_APPROVE]
+               Capability.COMMS_ESCALATE, Capability.BOARD_WRITE, Capability.ARTIFACT_PUBLISH,
+               Capability.HUMAN_APPROVE]
 
 # Who actually does the work: individual contributors first, managers only when nobody else can
 # (docs/02 §2 authority matrix — a lead sequences and integrates, it does not absorb the backlog).
@@ -871,6 +872,8 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
                 if needed and coverage <= 0.0:
                     continue
                 score = coverage
+                if t.department_id and a.department_id == t.department_id:
+                    score += 0.05  # the work goes to the team that owns it (ADR 0010)
                 score += 0.05 * (a.grade / 5)          # slight preference for experience
                 score -= 0.001 * (a.tasks_done)        # spread the work
                 # managers manage: a lead only takes IC work when no hands are free (docs/02 §2)

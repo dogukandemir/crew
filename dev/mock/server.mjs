@@ -383,6 +383,34 @@ const routes = [
   [/^\/api\/secrets$/, () => paged([])],
 ];
 
+// The board demo (ADR 0010): a live task behind one story, a bug waiting for the wave,
+// a helper pair, and a done story — one card per column state.
+const BOARD_ITEMS = [
+  { id: 'w1', kind: 'epic', title: 'Ship the market brief', body: "The run's goal, decomposed into four stories.", state: 'in_progress', own_state: 'in_progress', severity: 'normal', priority: 2, parent_id: null, department_id: null, squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w2', kind: 'feature', title: 'Research workstream', body: 'Everything this run needs from the research capability.', state: 'in_progress', own_state: 'backlog', severity: 'normal', priority: 2, parent_id: 'w1', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w3', kind: 'feature', title: 'Engineering workstream', body: 'Everything this run needs from the engineering capability.', state: 'review', own_state: 'backlog', severity: 'normal', priority: 2, parent_id: 'w1', department_id: null, squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w4', kind: 'story', title: 'Map the competitive set', body: 'Twelve rivals, sourced.', state: 'in_progress', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w2', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a1', assignee_name: 'Ada', task_id: 't1', task_state: 'running', attempts: 0, helpers: ['a2'], acceptance: ['twelve rivals with sources'], tags: [] },
+  { id: 'w5', kind: 'story', title: 'Write the exporter module', body: 'CSV export for the brief.', state: 'review', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w3', department_id: null, squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a3', assignee_name: 'Nils', task_id: 't2', task_state: 'verifying', attempts: 1, helpers: [], acceptance: [], tags: [] },
+  { id: 'w6', kind: 'story', title: 'Draft the pricing section', body: '', state: 'ready', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w3', department_id: null, squad_id: null, created_by: 'user:demo', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w7', kind: 'story', title: 'Collect source citations', body: '', state: 'done', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w2', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: 'Zoe', task_id: 't3', task_state: 'completed', attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w8', kind: 'bug', title: 'Export crashes on empty rows', body: 'Found while working the exporter story — the writer divides by row count.', state: 'ready', own_state: 'ready', severity: 'high', priority: 1, parent_id: null, department_id: null, squad_id: null, created_by: 'a3', creator_name: 'Nils', assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: ['The reported problem is fixed and the fix is verified'], tags: [] },
+];
+
+function BOARD(url) {
+  const cols = ['backlog', 'ready', 'in_progress', 'review', 'done', 'blocked'];
+  const titles = { backlog: 'Backlog', ready: 'Ready', in_progress: 'In progress', review: 'Review', done: 'Done', blocked: 'Blocked' };
+  const dept = url.searchParams.get('department_id');
+  const squad = url.searchParams.get('squad_id');
+  let items = BOARD_ITEMS;
+  if (dept) items = items.filter((i) => i.department_id === dept && i.kind !== 'epic');
+  if (squad) items = items.filter((i) => i.squad_id === squad);
+  return {
+    project_id: 'p1',
+    columns: cols.map((k) => ({ key: k, title: titles[k], items: items.filter((i) => i.state === k) })),
+    filter: { department_id: dept, squad_id: squad },
+  };
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS);
@@ -404,6 +432,46 @@ const server = http.createServer((req, res) => {
   if (/^\/api\/companies\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
     return res.end(JSON.stringify(COMPANY()));
+  }
+  if (/^\/api\/projects\/[^/]+\/board$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify(BOARD(url)));
+  }
+  if (/^\/api\/projects\/[^/]+\/board\/items$/.test(url.pathname) && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* empty body is fine in the demo */ }
+      const isBug = b.kind === 'bug';
+      const item = {
+        id: `w${BOARD_ITEMS.length + 1}`, kind: isBug ? 'bug' : 'story',
+        title: String(b.title || 'Untitled story'), body: String(b.body || ''),
+        state: 'backlog', own_state: 'backlog',
+        severity: isBug ? (b.severity || 'normal') : 'normal', priority: 2,
+        parent_id: null, department_id: b.department_id || null, squad_id: b.squad_id || null,
+        created_by: 'user:demo', creator_name: null, assignee_agent_id: null, assignee_name: null,
+        task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [],
+      };
+      BOARD_ITEMS.push(item);
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify(item));
+    });
+    return;
+  }
+  if (/^\/api\/board\/items\/[^/]+$/.test(url.pathname)) {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      const id = url.pathname.split('/').pop();
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* keep the old state */ }
+      const item = BOARD_ITEMS.find((i) => i.id === id);
+      if (item && b.state) { item.state = b.state; item.own_state = b.state; }
+      res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify(item || { id, state: b.state || null }));
+    });
+    return;
   }
   if (/^\/api\/projects\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });

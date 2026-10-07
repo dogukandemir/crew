@@ -119,6 +119,48 @@ export const STAGES: Stage[] = [
   'DONE',
 ];
 
+export type BoardItemKind = 'epic' | 'feature' | 'story' | 'bug';
+export type BoardColumnKey = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done' | 'blocked';
+
+/** One card on the backlog board (ADR 0010). Promoted items derive `state` from their task. */
+export interface BoardItem {
+  id: string;
+  kind: BoardItemKind;
+  title: string;
+  body?: string;
+  state: BoardColumnKey;
+  own_state?: string;
+  severity: 'low' | 'normal' | 'high' | 'critical';
+  priority: number;
+  parent_id: string | null;
+  department_id?: string | null;
+  squad_id?: string | null;
+  created_by: string;
+  creator_name?: string | null;
+  assignee_agent_id?: string | null;
+  assignee_name?: string | null;
+  task_id?: string | null;
+  task_state?: string | null;
+  attempts?: number;
+  helpers: string[];
+  acceptance?: string[];
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BoardColumn {
+  key: BoardColumnKey;
+  title: string;
+  items: BoardItem[];
+}
+
+export interface Board {
+  project_id: string;
+  columns: BoardColumn[];
+  filter: { department_id: string | null; squad_id: string | null };
+}
+
 export type CompanyVerdictName = 'on_track' | 'at_risk' | 'no_activity' | 'stop';
 
 export interface CompanyVerdict {

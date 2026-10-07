@@ -8,6 +8,7 @@ SQLAlchemy 2.x declarative, async. SQLite in dev (WAL), Postgres in prod. All id
 ```
 projects ─┬─< project_settings (1:1)
           ├─< runs ──< tasks ──< task_deps (self, M:N)
+          ├─< work_items (epic > feature > story, bug) ──promoted──> tasks
           │             └─< jobs
           ├─< departments ──< squads ──< squad_members >── agents
           ├─< agents ──< agent_skills >── skills
@@ -76,6 +77,14 @@ effort(S|M|L|XL), priority(int), state(pending|blocked|ready|assigned|running|ve
 completed|failed|aborted|escalated), assignee_agent_id, assignee_squad_id, attempts,
 cost_micros, tokens_in, tokens_out, result_ref, started_at, ended_at, escalated_to,
 escalation_reason`
+
+### work_items (the board, ADR 0010)
+`id, project_id (FK), run_id?, parent_id (self; epic > feature > story), kind(epic|feature|story|bug),
+title, body, acceptance (JSON), state(backlog|ready|in_progress|review|done|blocked — authoritative only
+while unpromoted), severity(low|normal|high|critical), priority(1 = highest), department_id?, squad_id?,
+created_by (user:*|agent id|system:*), assignee_agent_id?, task_id (set on promotion; afterwards the
+column is derived from the task), tags (JSON), source (JSON: task_id/bug provenance), created_at,
+updated_at`; index `ix_work_items_project_state`.
 
 ### jobs (execution bookkeeping)
 `id, task_id, project_id, state(queued|running|suspended|done|failed|cancelled), attempt,

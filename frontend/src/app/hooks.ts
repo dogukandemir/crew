@@ -52,6 +52,16 @@ export function useCompanies() {
   return useQuery({ queryKey: ['companies'], queryFn: api.listCompanies, retry: 1 });
 }
 
+export function useBoard(projectId: string | null | undefined, departmentId?: string,
+                         squadId?: string) {
+  return useQuery({
+    queryKey: ['board', projectId, departmentId ?? '', squadId ?? ''],
+    queryFn: () => api.getBoard(projectId as string, { department_id: departmentId, squad_id: squadId }),
+    enabled: !!projectId,
+    refetchInterval: 10_000,
+  });
+}
+
 export function useProject(id: string | null | undefined) {
   return useQuery({
     queryKey: ['project', id],

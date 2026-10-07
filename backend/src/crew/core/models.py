@@ -238,9 +238,44 @@ class Task(Base):
     result_ref: Mapped[str] = mapped_column(String(200), default="")
     escalated_to: Mapped[str | None] = mapped_column(String(32), nullable=True)
     escalation_reason: Mapped[str] = mapped_column(Text, default="")
+    # colleagues who joined to help (ADR 0010): they are asked first when a retry needs
+    # new hands, so joint work actually finishes together
+    helpers: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=now)
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class WorkItem(Base):
+    """Backlog planning entity (ADR 0010): epic → feature → story, plus bugs.
+
+    Not executable. Executable work stays in `tasks`; a READY story or bug is promoted
+    into a real task by the orchestrator's board pass, and after that its board column
+    is DERIVED from the task's state — the board cannot disagree with the engine.
+    """
+
+    __tablename__ = "work_items"
+    __table_args__ = (Index("ix_work_items_project_state", "project_id", "state"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    department_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    squad_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    parent_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="story", index=True)  # epic|feature|story|bug
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text, default="")
+    acceptance: Mapped[list] = mapped_column(JSON, default=list)
+    state: Mapped[str] = mapped_column(String(20), default="backlog", index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=2)
+    severity: Mapped[str] = mapped_column(String(16), default="normal")  # bugs: low|normal|high|critical
+    created_by: Mapped[str] = mapped_column(String(60), default="user")  # agent id | user | system:planner
+    assignee_agent_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    task_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    updated_at: Mapped[datetime] = mapped_column(default=now, onupdate=now)
 
 
 class Job(Base):

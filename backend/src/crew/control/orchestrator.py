@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import desc, select, update
 
-from crew.control import gossip, inbox, org
+from crew.control import backlog, gossip, inbox, org
 from crew.control.council import council
 from crew.control.verify import verifier
 from crew.core import events as ev
@@ -182,6 +182,8 @@ class Orchestrator:
         total_est = 0
         async with session_scope() as s:
             tasks = (await s.scalars(select(Task).where(Task.run_id == run.id))).all()
+        # the board's hierarchy for this goal (ADR 0010): epic → features → linked stories
+        await backlog.plan_items(project_id=project.id, goal=goal, tasks=list(tasks))
         for t in tasks:
             total_est += estimated_cost_micros(t.effort, "fast")
         await ev.emit("run.planned", project_id=project.id, run_id=run.id, severity="notice",
@@ -236,6 +238,8 @@ class Orchestrator:
             await self._reap_occupancy(project.id)
             # and serve any decision requests agents filed mid-task (docs/17 batch 2)
             await self._service_decisions(project)
+            # the board: READY stories and bugs become real tasks for this wave (ADR 0010)
+            await backlog.promote_ready(project_id=project.id, run_id=run.id)
             tasks = await org.ready_tasks(project.id, run.id)
             runnable = [t for t in tasks if t.state == TaskState.ASSIGNED.value and t.assignee_agent_id]
             if not runnable:
@@ -282,19 +286,49 @@ class Orchestrator:
                     # worker fail the same way again.
                     if t.attempts == 1 and t.assignee_agent_id:
                         worker = await s.get(Agent, t.assignee_agent_id)
-                        lead = (await s.get(Agent, worker.manager_id)
-                                if worker is not None and worker.manager_id else None)
-                        if (lead is not None and lead.role == Role.LEAD.value
-                                and lead.state not in ("archived", "suspended")):
-                            t.assignee_agent_id = lead.id
-                            t.assignee_squad_id = lead.squad_id
-                            t.escalation_reason = f"retry {t.attempts} — lead re-plans"
+                        # joint work finishes together (ADR 0010): a helper who joined and
+                        # covers the skills takes the retry before the lead does
+                        helper_id = None
+                        needed = {r.get("skill"): float(r.get("weight", 1.0))
+                                  for r in (t.required_skills or [])}
+                        for hid in (t.helpers or []):
+                            if hid == t.assignee_agent_id:
+                                continue
+                            h = await s.get(Agent, hid)
+                            if h is None or h.state in ("archived", "suspended"):
+                                continue
+                            prof = {sid: float(p) for sid, p in (await s.execute(
+                                select(AgentSkill.skill_id, AgentSkill.proficiency)
+                                .where(AgentSkill.agent_id == hid))).all()}
+                            if not needed or sum(w * prof.get(sid, 0.0)
+                                                 for sid, w in needed.items()) > 0:
+                                helper_id = hid
+                                break
+                        if helper_id is not None:
+                            h = await s.get(Agent, helper_id)
+                            t.assignee_agent_id = helper_id
+                            t.assignee_squad_id = h.squad_id if h else None
+                            t.escalation_reason = f"retry {t.attempts} — helper takes over"
                             await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
-                                          task_id=t.id, agent_id=lead.id, severity="warning",
-                                          title=f"lead re-plans: {t.title[:50]}",
-                                          payload={"task_id": t.id, "reason": "lead re-plans",
-                                                   "rung": 1, "lead_id": lead.id},
+                                          task_id=t.id, agent_id=helper_id, severity="warning",
+                                          title=f"helper takes over: {t.title[:50]}",
+                                          payload={"task_id": t.id, "reason": "helper takes over",
+                                                   "rung": 1, "helper_id": helper_id},
                                           actor="system:orchestrator")
+                        else:
+                            lead = (await s.get(Agent, worker.manager_id)
+                                    if worker is not None and worker.manager_id else None)
+                            if (lead is not None and lead.role == Role.LEAD.value
+                                    and lead.state not in ("archived", "suspended")):
+                                t.assignee_agent_id = lead.id
+                                t.assignee_squad_id = lead.squad_id
+                                t.escalation_reason = f"retry {t.attempts} — lead re-plans"
+                                await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
+                                              task_id=t.id, agent_id=lead.id, severity="warning",
+                                              title=f"lead re-plans: {t.title[:50]}",
+                                              payload={"task_id": t.id, "reason": "lead re-plans",
+                                                       "rung": 1, "lead_id": lead.id},
+                                              actor="system:orchestrator")
                     s.add(t)
 
     async def _run_task(self, run: Run, project: Project, task_id: str,
@@ -434,7 +468,9 @@ class Orchestrator:
             return notes
         for q in open_qs[:4]:
             notes.append(f"{q['from']} asks you (answer_to='{q['id']}'): {q['text'][:300]} — answer "
-                         f"with reply_colleague(agent='{q['from']}', answer_to='{q['id']}', text=...)")
+                         f"with reply_colleague(agent='{q['from']}', answer_to='{q['id']}', text=...)"
+                         + (f" — or join_task(task_id='{q['task_id']}') to help them directly"
+                            if q.get("task_id") else ""))
         for a in answers[:4]:
             notes.append(f"{a['from']} answered your question: {a['text'][:300]}")
         return notes

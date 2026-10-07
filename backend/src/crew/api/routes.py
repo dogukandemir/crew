@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
-from crew.control import company, org
+from crew.control import backlog, company, org
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
@@ -87,6 +87,22 @@ class CompanyProjectBody(BaseModel):
 
 class CompanyChiefBody(BaseModel):
     function: str
+
+
+class BoardItemCreate(BaseModel):
+    kind: str = "story"
+    title: str = Field(min_length=1, max_length=280)
+    body: str = ""
+    acceptance: list[str] = []
+    parent_id: str | None = None
+    department_id: str | None = None
+    squad_id: str | None = None
+    priority: int = 2
+    severity: str = "normal"
+
+
+class BoardItemPatch(BaseModel):
+    state: str | None = None
 
 
 class ProjectPatch(BaseModel):
@@ -400,6 +416,42 @@ async def post_company_review(company_id: str, user: dict = Depends(require_user
         return await company.review(company_id=company_id, actor=f"user:{user['id']}")
     except KeyError as e:
         raise _problem(404, "company not found", company_id) from e
+
+
+# ── the board (ADR 0010) ─────────────────────────────────────────────────────────────
+@api.get("/projects/{project_id}/board")
+async def get_board(project_id: str, department_id: str | None = None,
+                    squad_id: str | None = None) -> dict:
+    return await backlog.board(project_id=project_id, department_id=department_id,
+                               squad_id=squad_id)
+
+
+@api.post("/projects/{project_id}/board/items", status_code=201)
+async def post_board_item(project_id: str, body: BoardItemCreate,
+                          user: dict = Depends(require_user)) -> dict:
+    try:
+        return await backlog.create_item(project_id=project_id, kind=body.kind, title=body.title,
+                                         body=body.body, acceptance=body.acceptance,
+                                         parent_id=body.parent_id, department_id=body.department_id,
+                                         squad_id=body.squad_id, priority=body.priority,
+                                         severity=body.severity, created_by=f"user:{user['id']}",
+                                         state="backlog")
+    except ValueError as e:
+        raise _problem(422, "invalid item", str(e)) from e
+
+
+@api.patch("/board/items/{item_id}")
+async def patch_board_item(item_id: str, body: BoardItemPatch,
+                           user: dict = Depends(require_user)) -> dict:
+    if not body.state:
+        return {"id": item_id, "state": None, "note": "nothing to change"}
+    try:
+        return await backlog.move_item_by_id(item_id=item_id, state=body.state,
+                                             actor=f"user:{user['id']}")
+    except KeyError as e:
+        raise _problem(404, "item not found", item_id) from e
+    except ValueError as e:
+        raise _problem(409, "cannot move", str(e)) from e
 
 
 @api.get("/projects/{project_id}")

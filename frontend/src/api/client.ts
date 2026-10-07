@@ -11,6 +11,8 @@ import type {
   Approval,
   Artifact,
   AuditEntry,
+  Board,
+  BoardItem,
   Brain,
   BrainEntry,
   BrainSearchHit,
@@ -225,6 +227,21 @@ export const api = {
     }),
   reviewCompany: (companyId: string) =>
     request<CompanyReview>(`/api/companies/${companyId}/review`, { method: 'POST' }),
+
+  // ── Board (ADR 0010) ───────────────────────────────────────────────────────
+  getBoard: (projectId: string, filters?: { department_id?: string; squad_id?: string }) => {
+    const q = new URLSearchParams();
+    if (filters?.department_id) q.set('department_id', filters.department_id);
+    if (filters?.squad_id) q.set('squad_id', filters.squad_id);
+    const suffix = q.toString() ? `?${q.toString()}` : '';
+    return request<Board>(`/api/projects/${projectId}/board${suffix}`);
+  },
+  createBoardItem: (
+    projectId: string,
+    input: { kind: string; title: string; body?: string; severity?: string; department_id?: string; squad_id?: string },
+  ) => request<BoardItem>(`/api/projects/${projectId}/board/items`, { method: 'POST', body: input }),
+  patchBoardItem: (itemId: string, patch: { state?: string }) =>
+    request<BoardItem>(`/api/board/items/${itemId}`, { method: 'PATCH', body: patch }),
 
   // ── Projects ───────────────────────────────────────────────────────────────
   listProjects: () => request<Paged<Project>>('/api/projects'),

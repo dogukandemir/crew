@@ -13,6 +13,7 @@ import { EventsPanel } from '../events/EventsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DrawerHost } from './DrawerHost';
 import { OfficeTab } from '../office/OfficeTab';
+import { BoardTab } from '../board/BoardTab';
 import { cn } from '../../lib/cn';
 
 /**
@@ -84,6 +85,8 @@ function Panel({ tab }: { tab: ProjectTab }) {
       return <OrgPanel projectId={tab.projectId} tabId={tab.id} />;
     case 'tasks':
       return <TasksPanel projectId={tab.projectId} tabId={tab.id} />;
+    case 'board':
+      return <BoardTab projectId={tab.projectId} />;
     case 'agents':
       return <AgentsPanel projectId={tab.projectId} tabId={tab.id} />;
     case 'brains':

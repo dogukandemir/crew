@@ -18,10 +18,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from crew.control import inbox
+from sqlalchemy import select
+
+from crew.control import backlog, inbox
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Project, Task
+from crew.core.models import Agent, Project, Task, WorkItem
 from crew.core.security import approval_granted, policy, redactor, request_approval, scan_injection
 from crew.core.settings import settings
 from crew.domain.enums import Capability, PolicyOutcome
@@ -292,7 +294,9 @@ def h_ask_colleague(ctx: ToolContext, args: dict) -> dict:
         "to": recipient.name if recipient else to,
         "message_id": (sent.get("event") or {}).get("id"),
         "note": ("your question is in their inbox; they answer with reply_colleague and you will "
-                 "see it before your next task") if recipient else "nobody matches that name right now"}}
+                 "see it before your next task") if recipient else "nobody matches that name right now",
+        "join_hint": (f"they can join_task(task_id='{ctx.task_id}') to help you directly"
+                      if recipient and ctx.task_id else None)}}
 
 
 def h_escalate(ctx: ToolContext, args: dict) -> dict:
@@ -396,6 +400,80 @@ def h_delegate(ctx: ToolContext, args: dict) -> dict:
     return run_on_loop(_create())
 
 
+def h_report_bug(ctx: ToolContext, args: dict) -> dict:
+    title = str(args.get("title", "")).strip()[:200]
+    body = str(args.get("body", ""))[:2000]
+    severity = str(args.get("severity", "normal")).lower()
+    if not title:
+        return {"ok": False, "error": "title is required"}
+    if severity not in ("low", "normal", "high", "critical"):
+        severity = "normal"
+
+    async def _file() -> dict:
+        # the bug lands on the board under the story being worked, READY — the next
+        # wave's board pass brings it to the team that owns it (ADR 0010)
+        parent = None
+        if ctx.task_id:
+            async with session_scope() as s:
+                parent = await s.scalar(select(WorkItem.id).where(
+                    WorkItem.project_id == ctx.project_id, WorkItem.task_id == ctx.task_id,
+                    WorkItem.kind == "story").limit(1))
+        item = await backlog.create_item(
+            project_id=ctx.project_id, kind="bug", title=title, body=body,
+            acceptance=["The reported problem is fixed and the fix is verified"],
+            parent_id=parent,
+            department_id=ctx.agent.department_id if ctx.agent else None,
+            squad_id=ctx.agent.squad_id if ctx.agent else None,
+            created_by=ctx.agent.id if ctx.agent else "system:agent", severity=severity,
+            state="ready",
+            source={"task_id": ctx.task_id,
+                    "by_name": ctx.agent.name if ctx.agent else None})
+        return {"ok": True, "data": {"item_id": item["id"], "state": "ready",
+                                     "note": "on the board, ready — the next wave brings it to the team"}}
+
+    return run_on_loop(_file())
+
+
+def h_join_task(ctx: ToolContext, args: dict) -> dict:
+    task_id = str(args.get("task_id", "")).strip()
+    if not task_id or ctx.agent is None:
+        return {"ok": False, "error": "task_id and a sender are required"}
+
+    async def _join() -> dict:
+        async with session_scope() as s:
+            t = await s.get(Task, task_id)
+            if t is None or t.project_id != ctx.project_id:
+                return {"ok": False, "error": f"no such task: {task_id}"}
+            if t.state in ("completed", "failed", "aborted"):
+                return {"ok": False, "error": f"task already {t.state}"}
+            if t.assignee_agent_id == ctx.agent.id:
+                return {"ok": False, "error": "this is your own task"}
+            helpers = list(t.helpers or [])
+            if ctx.agent.id in helpers:
+                return {"ok": True, "data": {"joined": True, "note": "already on it"}}
+            helpers.append(ctx.agent.id)
+            t.helpers = helpers
+            s.add(t)
+            assignee_id, title = t.assignee_agent_id, t.title
+        await ev.emit("task.helper.joined", project_id=ctx.project_id, task_id=task_id,
+                      agent_id=ctx.agent.id, severity="notice",
+                      title=f"{ctx.agent.name} joined: {title[:50]}",
+                      payload={"task_id": task_id, "agent_id": ctx.agent.id},
+                      actor=f"agent:{ctx.agent.id}")
+        if assignee_id:
+            async with session_scope() as s:
+                assignee = await s.get(Agent, assignee_id)
+            await inbox.deliver(ctx.project_id, sender=ctx.agent,
+                                handle=assignee.name if assignee else assignee_id,
+                                text=(f"I joined to help with “{title[:80]}” — ask me directly "
+                                      f"whenever the work needs another pair of hands."),
+                                task_id=task_id, run_id=ctx.run_id, kind="reply")
+        return {"ok": True, "data": {"joined": True, "task_id": task_id,
+                                     "note": "you are on it now; you are asked first if a retry needs new hands"}}
+
+    return run_on_loop(_join())
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -452,6 +530,14 @@ TOOLS: dict[str, ToolSpec] = {
                               Capability.COMMS_ASK, _schema({"agent": {"type": "string"},
                                                              "brief": {"type": "string"}},
                                                             ["agent", "brief"]), h_delegate),
+    "report_bug": ToolSpec("report_bug", "File a bug on the team's board (the next wave picks it up).",
+                           Capability.BOARD_WRITE, _schema({"title": {"type": "string"},
+                                                            "body": {"type": "string"},
+                                                            "severity": {"type": "string"}},
+                                                           ["title"]), h_report_bug),
+    "join_task": ToolSpec("join_task", "Join a colleague's task as a helper so you finish it together.",
+                          Capability.BOARD_WRITE, _schema({"task_id": {"type": "string"}},
+                                                          ["task_id"]), h_join_task),
     "escalate": ToolSpec("escalate", "Escalate a blocker to your manager.",
                          Capability.COMMS_ESCALATE, _schema({"reason": {"type": "string"}}, ["reason"]), h_escalate),
     "request_decision": ToolSpec("request_decision", "Ask for a binding decision on a contested issue.",

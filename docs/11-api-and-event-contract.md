@@ -88,6 +88,16 @@ response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 | POST | `/api/tasks/{id}/retry` \| `/cancel` \| `/reassign` \| `/escalate` | controls |
 | GET | `/api/tasks/{id}/artifacts` | artifact list |
 
+### Boards (ADR 0010)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/projects/{id}/board` | kanban view: columns with derived states; `?department_id=`/`?squad_id=` scope to a team |
+| POST | `/api/projects/{id}/board/items` | create `{kind: epic\|feature\|story\|bug, title, body?, acceptance?, parent_id?, severity?, department_id?, squad_id?, priority?}` (starts in Backlog) |
+| PATCH | `/api/board/items/{id}` | move an **unpromoted** item `{state}`; promoted items answer 409 (`its column follows the task`) |
+
+Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `item_id`,
+`kind`, and on promotion `task_id`), `task.helper.joined` (`task_id`, `agent_id`).
+
 ### Council & decisions
 | Method | Path | Purpose |
 |--------|------|---------|

@@ -81,7 +81,8 @@ async def open_questions(project_id: str, agent_id: str) -> list[dict]:
         p = e.payload or {}
         if p.get("kind") != "ask" or p.get("to_agent_id") != agent_id or e.id in answered:
             continue
-        out.append({"id": e.id, "from": await _name_of(e.agent_id), "text": str(p.get("text", ""))})
+        out.append({"id": e.id, "from": await _name_of(e.agent_id), "text": str(p.get("text", "")),
+                    "task_id": e.task_id})
     return out
 
 

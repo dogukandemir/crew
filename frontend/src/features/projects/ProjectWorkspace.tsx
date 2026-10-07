@@ -13,6 +13,7 @@ import { EventsPanel } from '../events/EventsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { DrawerHost } from './DrawerHost';
 import { OfficeTab } from '../office/OfficeTab';
+import { HqTab } from '../hq/HqTab';
 import { BoardTab } from '../board/BoardTab';
 import { cn } from '../../lib/cn';
 
@@ -79,6 +80,8 @@ function Panel({ tab }: { tab: ProjectTab }) {
   switch (tab.internalTab) {
     case 'office':
       return <OfficeTab projectId={tab.projectId} tabId={tab.id} />;
+    case 'hq':
+      return <HqTab companyId={tab.projectId} />;
     case 'overview':
       return <Overview projectId={tab.projectId} tabId={tab.id} />;
     case 'org':

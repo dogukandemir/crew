@@ -15,10 +15,11 @@ import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import type { BoardColumnKey, BoardItem, BoardItemKind, OrgNode, OrgTree } from '../../api/types';
 
-const KIND_BADGE: Record<BoardItemKind, { label: string; tone: 'accent' | 'info' | 'neutral' | 'danger' }> = {
+const KIND_BADGE: Record<BoardItemKind, { label: string; tone: 'accent' | 'info' | 'neutral' | 'success' | 'danger' }> = {
   epic: { label: 'EPIC', tone: 'accent' },
   feature: { label: 'FEATURE', tone: 'info' },
   story: { label: 'STORY', tone: 'neutral' },
+  task: { label: 'TASK', tone: 'success' },
   bug: { label: 'BUG', tone: 'danger' },
 };
 
@@ -64,7 +65,8 @@ const moveBtn =
 export function BoardTab({ projectId }: { projectId: string }) {
   const [departmentId, setDepartmentId] = useState('');
   const [squadId, setSquadId] = useState('');
-  const [kind, setKind] = useState<'story' | 'bug'>('story');
+  const [kind, setKind] = useState<BoardItemKind>('story');
+  const [parentId, setParentId] = useState('');
   const [title, setTitle] = useState('');
   const [severity, setSeverity] = useState('normal');
   const qc = useQueryClient();
@@ -85,6 +87,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
         severity: kind === 'bug' ? severity : undefined,
         department_id: departmentId || undefined,
         squad_id: squadId || undefined,
+        parent_id: parentId || undefined,
       }),
     onSuccess: () => {
       setTitle('');
@@ -100,6 +103,9 @@ export function BoardTab({ projectId }: { projectId: string }) {
   if (board.isPending) return <SkeletonRows rows={6} />;
   if (board.isError) return <PanelError error={board.error} onRetry={() => void board.refetch()} />;
   const total = board.data.columns.reduce((n, c) => n + c.items.length, 0);
+  const parents = board.data.columns
+    .flatMap((c) => c.items)
+    .filter((i) => i.kind === 'epic' || i.kind === 'feature');
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -136,13 +142,31 @@ export function BoardTab({ projectId }: { projectId: string }) {
         <div className="ml-auto flex items-center gap-1.5">
           <select
             value={kind}
-            onChange={(e) => setKind(e.target.value as 'story' | 'bug')}
+            onChange={(e) => setKind(e.target.value as BoardItemKind)}
             className={selectCls}
             aria-label="Item kind"
           >
+            <option value="epic">Epic</option>
+            <option value="feature">Feature</option>
             <option value="story">Story</option>
+            <option value="task">Task</option>
             <option value="bug">Bug</option>
           </select>
+          {(kind === 'story' || kind === 'task' || kind === 'bug') && parents.length > 0 && (
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className={selectCls}
+              aria-label="Parent"
+            >
+              <option value="">— top level —</option>
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.kind === 'epic' ? 'Epic' : 'Feature'} · {p.title.slice(0, 36)}
+                </option>
+              ))}
+            </select>
+          )}
           {kind === 'bug' && (
             <select
               value={severity}
@@ -172,7 +196,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
       {total === 0 ? (
         <EmptyState
           title="The board is empty"
-          description="Start a run — the planner writes its epic, features and stories here — or add a story or bug by hand."
+          description="Start a run — the planner writes its epic, features and stories here — or add an epic, feature, story, task or bug by hand; work moved to Ready is picked up by the next wave."
         />
       ) : (
         <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">

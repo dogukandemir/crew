@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useCompanies, useProjects } from '../../app/hooks';
+import { openProjectTab } from '../../stores/tabs';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import type { CompanyVerdictName } from '../../api/types';
@@ -114,6 +115,9 @@ export function CompaniesSection() {
               <div className="mt-2 flex items-center gap-2">
                 <Button size="xs" disabled={review.isPending} onClick={() => review.mutate(c.id)}>
                   Review now
+                </Button>
+                <Button size="xs" variant="primary" onClick={() => openProjectTab(c.id, 'main', 'hq')}>
+                  Open HQ
                 </Button>
                 <select
                   aria-label={`Attach a project to ${c.name}`}

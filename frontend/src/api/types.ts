@@ -119,7 +119,7 @@ export const STAGES: Stage[] = [
   'DONE',
 ];
 
-export type BoardItemKind = 'epic' | 'feature' | 'story' | 'bug';
+export type BoardItemKind = 'epic' | 'feature' | 'story' | 'task' | 'bug';
 export type BoardColumnKey = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done' | 'blocked';
 
 /** One card on the backlog board (ADR 0010). Promoted items derive `state` from their task. */
@@ -162,6 +162,71 @@ export interface Board {
 }
 
 export type CompanyVerdictName = 'on_track' | 'at_risk' | 'no_activity' | 'stop';
+
+/** One director on the company's board (ADR 0011). */
+export interface HqBoardSeat {
+  id: string;
+  name: string;
+  role: 'chair' | 'board_member';
+  grade?: number;
+}
+
+/** A C-level executive and the function they speak for. */
+export interface HqExecutive {
+  id: string;
+  name: string;
+  role: string;
+  title: string;
+  function: string;
+}
+
+export interface HqTeam {
+  id: string;
+  name: string;
+  head_name?: string | null;
+  agents: number;
+}
+
+/** A member project as the HQ floor shows it: verdict, books and its teams. */
+export interface HqProject {
+  id: string;
+  name: string;
+  status: string;
+  verdict: CompanyVerdictName;
+  directive?: string;
+  spend_ratio: number;
+  completed: number;
+  failed: number;
+  open_tasks: number;
+  teams: HqTeam[];
+  last_at?: string | null;
+}
+
+export interface HqActivity {
+  type: string;
+  at: string;
+  project_id?: string;
+  text?: string;
+  summary?: string | null;
+  payload?: Record<string, unknown>;
+}
+
+/** The whole company for one floor (GET /companies/{id}/hq). */
+export interface Hq {
+  company: {
+    id: string;
+    name: string;
+    mission?: string;
+    budget_usd: number;
+    spend_usd: number;
+    spend_ratio: number;
+  };
+  ceo: { id: string; name: string; grade?: number } | null;
+  executives: HqExecutive[];
+  board: HqBoardSeat[];
+  projects: HqProject[];
+  activity: HqActivity[];
+}
 
 export interface CompanyVerdict {
   project_id: string;

@@ -44,6 +44,16 @@ npm run dev                       # http://localhost:5173
   `?department_id=d1` scopes to Research. `POST …/board/items` adds a story or bug,
   `PATCH /api/board/items/:id` moves an *unpromoted* item — a promoted one refuses,
   exactly as the real backend does, because its column follows the task.
+- **The company has a board, a C-suite and three projects (ADR 0011).** Northwind
+  Pictures: CEO Vera, five function chiefs (Idris/CTO, Camille/CMO, Selma/CPO,
+  Marcus/COO, Ruth/CFO), a board of directors (Eleanor Voss chairs, Priya Raman, Tom
+  Okafor) — and three member projects: Market Brief (on_track), Arctic Light
+  (at_risk), Moonbase (stop, paused). `GET /api/companies/co1/hq` serves the whole
+  floor: executive suites, the board room, one pod per project with its teams, and the
+  governance activity the HQ scene animates from — a **board session is live** on load
+  (`board.convened` 38 s ago), so the directors take their chairs and the CEO walks in
+  with the topic in hand. `POST …/allocate` and `POST …/board-session` answer; the HQ
+  buttons (Review / Allocate / Convene board) call them.
 - `POST /api/dev/reset` restarts that clock (the temporary reset-clock button on the
   office floor calls it).
 - Notices when you have been staring at it: the events it serves are re-timestamped per

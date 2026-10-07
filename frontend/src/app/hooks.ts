@@ -62,6 +62,17 @@ export function useBoard(projectId: string | null | undefined, departmentId?: st
   });
 }
 
+export function useCompanyHq(companyId: string | null | undefined) {
+  // The HQ floor polls like the office does: the board convenes, money moves and
+  // leads walk to the CEO's office because the record changed — not on reload.
+  return useQuery({
+    queryKey: ['company-hq', companyId],
+    queryFn: () => api.getCompanyHq(companyId as string),
+    enabled: !!companyId,
+    refetchInterval: 10_000,
+  });
+}
+
 export function useProject(id: string | null | undefined) {
   return useQuery({
     queryKey: ['project', id],

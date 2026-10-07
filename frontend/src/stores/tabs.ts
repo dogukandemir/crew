@@ -11,6 +11,7 @@ import { persist } from 'zustand/middleware';
 import type { EventQuery } from '../api/types';
 
 export const WORKSPACE_TABS = [
+  'hq',
   'office',
   'overview',
   'org',
@@ -26,6 +27,7 @@ export const WORKSPACE_TABS = [
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
 export const WORKSPACE_TAB_LABEL: Record<WorkspaceTab, string> = {
+  hq: 'HQ',
   office: 'Office',
   overview: 'Overview',
   org: 'Org',

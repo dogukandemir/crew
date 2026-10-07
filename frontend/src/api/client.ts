@@ -28,6 +28,7 @@ import type {
   EventFilters,
   EventRow,
   Health,
+  Hq,
   LeaderboardEntry,
   Paged,
   Problem,
@@ -238,10 +239,15 @@ export const api = {
   },
   createBoardItem: (
     projectId: string,
-    input: { kind: string; title: string; body?: string; severity?: string; department_id?: string; squad_id?: string },
+    input: { kind: string; title: string; body?: string; severity?: string; department_id?: string; squad_id?: string; parent_id?: string },
   ) => request<BoardItem>(`/api/projects/${projectId}/board/items`, { method: 'POST', body: input }),
   patchBoardItem: (itemId: string, patch: { state?: string }) =>
     request<BoardItem>(`/api/board/items/${itemId}`, { method: 'PATCH', body: patch }),
+  getCompanyHq: (companyId: string) => request<Hq>(`/api/companies/${companyId}/hq`),
+  allocateCompany: (companyId: string) =>
+    request<{ headroom_micros: number }>(`/api/companies/${companyId}/allocate`, { method: 'POST' }),
+  conveneBoard: (companyId: string, input: { topic: string }) =>
+    request<{ session_id: string }>(`/api/companies/${companyId}/board-session`, { method: 'POST', body: input }),
 
   // ── Projects ───────────────────────────────────────────────────────────────
   listProjects: () => request<Paged<Project>>('/api/projects'),

@@ -482,10 +482,18 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     // early it is registered — which is why Ctrl+wheel kept zooming the PAGE. A
     // capture-phase listener at the window sees the event before anything else,
     // including the browser's default handling, and preventDefault actually lands.
-    // The guard keeps it to the game: only wheels whose target is inside the floor.
-    const overGame = (t: EventTarget | null) => t instanceof Node && el.contains(t);
+    // The guard is the whole GAME FRAME, found from the document rather than from `el`:
+    // the frame holds the svg, the label and bubble overlay, the hint bar and the dev
+    // button, and a wheel over any of them must zoom the floor. Guarding on `el` — whose
+    // element was never pinned down — silently dropped the gesture over most of the game,
+    // and a dropped wheel is not a no-op: the browser then reads it and zooms the PAGE.
+    // That is why this failed in Chrome as well as Firefox, and why the one measurement
+    // that "worked" was a dispatch straight onto the svg.
+    const frame = (el.closest('[aria-label^="Office floor"]') ??
+      document.querySelector('[aria-label^="Office floor"]')) as HTMLElement | null;
     const captureWheel = (e: WheelEvent) => {
-      if (!overGame(e.target)) return;
+      const target = e.target;
+      if (!frame || !(target instanceof Node) || !frame.contains(target)) return;
       onWheel(e);
     };
     window.addEventListener('wheel', captureWheel, { passive: false, capture: true });

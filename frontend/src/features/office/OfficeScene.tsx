@@ -10,7 +10,7 @@
  * rooms (far to near), then the people (far to near, by where they are headed),
  * so somebody standing behind a desk is drawn behind it.
  */
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { OrgNode } from '../../api/types';
 import type { Activity } from '../../sim/activity';
 import {
@@ -673,7 +673,14 @@ export function OfficeScene({
     [office.corridorY],
   );
 
-  const far = camera.scale < 0.4;
+  // Hysteresis, not a threshold. Tags and bubbles are hidden when the floor is far
+  // away, and with a single cut-off they blink on and off while the reader sits right
+  // on it — the second flicker this scene had. The state is sticky until the zoom is
+  // clearly on the other side, so nothing blinks at the boundary.
+  const farRef = useRef(camera.scale < 0.4);
+  if (camera.scale < 0.38) farRef.current = true;
+  else if (camera.scale > 0.44) farRef.current = false;
+  const far = farRef.current;
 
   return (
     <svg

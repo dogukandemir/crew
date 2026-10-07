@@ -471,17 +471,20 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       }
       setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }));
     };
-    // Ctrl+wheel is the browser's OWN page-zoom shortcut, and it wins unless a
-    // non-passive listener on the element actually under the pointer prevents it. The
-    // canvas is one element; the floor the reader hovers is the frame around it, and the
-    // label and bubble overlay lives inside that frame — so listen on the frame too.
-    // Without it, clicking into the game and then Ctrl+scrolling zoomed the whole PAGE
-    // instead of the floor, which is not what a game's own zoom gesture should do.
-    const frame = el.closest('[aria-label^="Office floor"]') as HTMLElement | null;
-    const targets: HTMLElement[] = frame && frame !== el ? [el, frame] : [el];
-    for (const t of targets) t.addEventListener('wheel', onWheel, { passive: false });
+    // Capture phase, on the window. The browser decides its OWN page zoom from a
+    // Ctrl+wheel event, and a listener on the game element loses that race however
+    // early it is registered — which is why Ctrl+wheel kept zooming the PAGE. A
+    // capture-phase listener at the window sees the event before anything else,
+    // including the browser's default handling, and preventDefault actually lands.
+    // The guard keeps it to the game: only wheels whose target is inside the floor.
+    const overGame = (t: EventTarget | null) => t instanceof Node && el.contains(t);
+    const captureWheel = (e: WheelEvent) => {
+      if (!overGame(e.target)) return;
+      onWheel(e);
+    };
+    window.addEventListener('wheel', captureWheel, { passive: false, capture: true });
     return () => {
-      for (const t of targets) t.removeEventListener('wheel', onWheel);
+      window.removeEventListener('wheel', captureWheel, { capture: true });
     };
   }, []);
 

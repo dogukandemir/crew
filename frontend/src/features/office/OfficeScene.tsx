@@ -10,9 +10,9 @@
  * rooms (far to near), then the people (far to near, by where they are headed),
  * so somebody standing behind a desk is drawn behind it.
  */
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OrgNode } from '../../api/types';
-import type { Activity } from '../../sim/activity';
+import type { Activity, Speech, SpeechKind } from '../../sim/activity';
 import {
   BREAK_TABLE_R,
   DESK_W,
@@ -520,31 +520,66 @@ function Sprite({
         {agent.name}
       </text>
 
-      {/* ONE bubble group, deliberately. The speech case and the emoji case used to be
-          two separate <g className="sprite-speech"> elements at two different heights, so
-          React unmounted one and mounted the other every time an activity crossed
-          between them — and `.sprite-speech` carries `animation: speech-pop 200ms`, so
-          every swap replayed the pop from the beginning. That replay is the flicker: an
-          animation that means "this is new" firing on a bubble that is not new at all.
-          The group now persists and only its contents and offset change. */}
+      {/* One bubble, revealed by content — see SpeechBubble for why it is a component. */}
       {(speech || activity.bubble) && (
-        <g
-          className="sprite-speech"
-          transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - (speech ? 32 : 28)).toFixed(0)})`}
-        >
-          {speech ? (
-            <>
-              <Bubble kind={speech.kind} text={speech.text} />
-              {speech.to && (
-                <text y={4} fontSize={8.5} textAnchor="middle" fill="#93a1b8">
-                  → {speech.to}
-                </text>
-              )}
-            </>
-          ) : (
-            <Bubble kind={emojiKind(activity)} text={activity.bubble ?? ''} maxWidth={60} />
+        <SpeechBubble
+          speech={speech}
+          emoji={activity.bubble}
+          emojiKind={activity.bubble ? emojiKind(activity) : undefined}
+          y={-FEET_Y * spriteScaleFactor() - (speech ? 32 : 28)}
+        />
+      )}
+    </g>
+  );
+}
+
+/**
+ * Shows a bubble once per CONTENT change, never per DOM move.
+ *
+ * The reveal is a transition (see `.sprite-speech` in office2d.css) and this hook is the
+ * only thing that toggles it: it drops the class for exactly one frame when the content
+ * changes, then puts it back, so the fade plays for a new bubble and never for an old one
+ * whose group happened to be re-appended by the depth sort.
+ */
+function useBubbleReveal(contentKey: string): boolean {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    setShown(false);
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [contentKey]);
+  return shown;
+}
+
+/** One character's bubble. Its own component so the reveal hook has a home. */
+function SpeechBubble({
+  speech,
+  emoji,
+  emojiKind,
+  y,
+}: {
+  speech?: Speech;
+  emoji?: string;
+  emojiKind?: SpeechKind;
+  y: number;
+}) {
+  const contentKey = speech
+    ? `${speech.kind}|${speech.text}|${speech.to ?? ''}`
+    : `emoji|${emoji ?? ''}`;
+  const shown = useBubbleReveal(contentKey);
+  return (
+    <g className={cn('sprite-speech', shown && 'is-in')} transform={`translate(0 ${y.toFixed(0)})`}>
+      {speech ? (
+        <>
+          <Bubble kind={speech.kind} text={speech.text} />
+          {speech.to && (
+            <text y={4} fontSize={8.5} textAnchor="middle" fill="#93a1b8">
+              → {speech.to}
+            </text>
           )}
-        </g>
+        </>
+      ) : (
+        <Bubble kind={emojiKind ?? 'talk'} text={emoji ?? ''} maxWidth={60} />
       )}
     </g>
   );

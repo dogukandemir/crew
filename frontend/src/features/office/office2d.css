@@ -134,8 +134,22 @@
   display: none;
 }
 
-.sprite-speech {
-  animation: speech-pop 200ms ease-out both;
+/* Reveal by TRANSITION, not by a keyframe animation.
+   The depth layer re-appends a person's group whenever the walk order changes, and
+   re-inserting an element cancels and replays its own AND its descendants' animations —
+   so the old keyframe pop ran again every time somebody walked past another desk, and
+   the bubble kept flickering between invisible and visible. Measured: computed opacity
+   hit 0 on every character, and re-appending the group produced a NEW animation object
+   sitting at currentTime 0. A transition never snaps back to its start value when it is
+   interrupted, so the worst case here is a reveal that finishes early. The class is
+   toggled by the component only when the bubble's CONTENT changes, which is the moment
+   the reveal is actually about. */
+.office-scene .sprite-speech {
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+.office-scene .sprite-speech.is-in {
+  opacity: 1;
 }
 
 /* The route somebody is walking: a dashed line that marches along the floor.

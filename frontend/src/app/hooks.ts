@@ -84,7 +84,13 @@ export function useOrg(id: string | null | undefined) {
     // A poll rather than a socket listener because the office needs the whole org, not
     // one event. When the backend emits agent.hired / department.created on the bus,
     // this should be invalidated from there and the interval dropped.
+    // ... and it polls in the BACKGROUND too, which is the difference between a floor
+    // plan that grows while you watch it and one that only catches up when you come
+    // back to the tab. React Query's default is to pause intervals on an unfocused
+    // window; for an office dashboard left open on a second monitor that is the wrong
+    // trade, and it is also what made this look broken from a headless tab.
     refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
   });
 }
 

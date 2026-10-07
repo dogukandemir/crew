@@ -37,7 +37,7 @@ export const ACTIVITY_ORDER: ActivityKind[] = [
   'idle',
 ];
 
-export type WalkTarget = 'desk' | 'commons' | 'orchestrator' | 'peer';
+export type WalkTarget = 'desk' | 'commons' | 'orchestrator' | 'peer' | 'meeting';
 
 /**
  * What kind of thing is being said, which decides the bubble's colour.
@@ -205,9 +205,11 @@ export interface ActivityInput {
   now: number;
   /** True while the character is still walking in from the door. */
   arriving?: boolean;
+  /** True while this agent sits in a council that is in session. */
+  inCouncil?: boolean;
 }
 
-export function deriveActivity({ agent, task, events, now, arriving }: ActivityInput): Activity {
+export function deriveActivity({ agent, task, events, now, arriving, inCouncil }: ActivityInput): Activity {
   const state = agent.state ?? 'idle';
 
   if (state === 'archived' || state === 'suspended') {
@@ -216,6 +218,14 @@ export function deriveActivity({ agent, task, events, now, arriving }: ActivityI
 
   if (arriving) {
     return { kind: 'walking', bubble: '👋', note: 'just hired — walking to their desk', where: 'desk' };
+  }
+
+  // 0. In a council. The meeting is the fact about this person, whatever else the
+  // log says: a panel member is not "working on a task" mid-sitting, they are
+  // deliberating — and the rule takes precedence over the escalation that called
+  // the council in the first place.
+  if (inCouncil) {
+    return { kind: 'talking', note: 'in council — deciding together', where: 'meeting' };
   }
 
   // 1. Something is wrong and a human/orchestrator may be needed.

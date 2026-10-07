@@ -43,6 +43,32 @@ export interface SpriteMotionRef {
 /** Seconds per frame of the two-frame walk. */
 const STRIDE = 0.22;
 
+/**
+ * Which atlas cell a figure shows — the floor's one rule about faces.
+ *
+ * Only somebody WORKING at their own desk faces it: you see their back, which is
+ * what sitting at a monitor looks like. Everybody else sits facing the room —
+ * idle, thinking, blocked, waiting, talking, in a meeting — and anyone on their
+ * feet faces the camera, walkers included. A back turned all day is exactly what
+ * "some characters look permanently turned away" was.
+ *
+ * The lab is untouched by this and stays as it was: nobody sits at the bench, so
+ * its people never were the ones with their backs to the room.
+ */
+export function figureCell(
+  activity: ActivityKind,
+  atDesk: boolean,
+  moving: boolean,
+  phase: number,
+): { face: 'front' | 'back'; pose: 'stand' | 'walkA' | 'walkB' | 'sit' } {
+  if (atDesk) {
+    const working = activity === 'typing' || activity === 'tool';
+    return { face: working ? 'back' : 'front', pose: 'sit' };
+  }
+  if (moving) return { face: 'front', pose: Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB' };
+  return { face: 'front', pose: 'stand' };
+}
+
 export function SpriteCharacter({
   name,
   activity,
@@ -81,19 +107,9 @@ export function SpriteCharacter({
       // review table keeps that activity after it arrives. Only real movement
       // plays the walk cycle, exactly as the rig did.
       //
-      // The walking figure is the FRONT view, mirrored for direction — the way the
-      // vector rig walked. The atlas's profile view carries the hair across two
-      // thirds of the head, and at this size that reads as a face with something
-      // over it, which is what it looked like on the floor.
-      let pose: 'stand' | 'walkA' | 'walkB' | 'sit' = 'stand';
-      if (atDesk) pose = 'sit';
-      else if (mov.moving) pose = Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB';
-
-      // A sitter faces their desk, so from the room you see their BACK. The atlas
-      // has carried char.N.back.sit all along and nothing asked for it, which is
-      // why every seated figure looked like it was sitting facing the camera with
-      // its chair behind it.
-      const e = cell(atDesk ? 'back' : 'front', pose) ?? cell('front', 'stand');
+      // Which way the figure faces, and in what pose, is one rule — see figureCell.
+      const { face, pose } = figureCell(activity, atDesk, mov.moving, phase);
+      const e = cell(face, pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
         // origin, at EXACTLY the sprite factor every prop uses. There is no second

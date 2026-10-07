@@ -65,6 +65,24 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         useConnection.getState().clear(id);
       }
     }
+
+    // The socket carries the live tail; where there is no socket, this slow poll of
+    // the latest page IS the live tail. One page every ten seconds, ingested through
+    // the same reducer (which dedupes), so it is a no-op where the socket already
+    // delivers — and where it does not, a log frozen at page-open is precisely what
+    // makes live features look broken: activity hangs off it, and so does a council
+    // summoning a meeting room forty seconds in.
+    const polls = wanted.map((id) =>
+      window.setInterval(() => {
+        void api
+          .listEvents(id, { limit: 200 })
+          .then((page) => {
+            if (page.items?.length) useEventLog.getState().ingest(id, page.items);
+          })
+          .catch(() => undefined);
+      }, 10_000),
+    );
+    return () => polls.forEach((t) => window.clearInterval(t));
   }, [key]);
 
   return <>{children}</>;

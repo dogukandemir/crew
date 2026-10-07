@@ -90,6 +90,28 @@ desk had not re-rendered yet.
 
 Tests: `src/sim/desk-screen.test.ts`. 213 frontend tests.
 
+## The meeting room, and the log that never updated
+
+Two features' worth of finding, one of them not a feature at all.
+
+- **A council now has a room.** `sim/meeting.ts` reads the sitting off the event log
+  (`council.convened` opens it, members are whoever emitted `council.position`, a
+  `decision.recorded` after it closes it); `buildOffice` opens a meeting room on demand
+  and keeps it thereafter; `meetingLayout` places the table and its eight chairs for
+  both the renderer and the simulation, so a chair and its sitter cannot drift apart.
+  Verified live: the room appeared at t+40, the panel walked across the floor, sat down
+  and talked; after the decision they dispersed and the publish plan left `escalated`.
+- **The event log was frozen at page-open.** `SocketProvider` backfills history once and
+  then relies on a socket — and the dev mock has no socket, so the office's whole
+  activity layer, the meeting room included, never saw anything that happened after the
+  page loaded. A ten-second poll of the latest page now stands in where the socket is
+  silent (the ingest dedupes, so it is a no-op when the socket delivers).
+- **The mock was re-numbering its own events.** Dropping the council's positions after
+  the decision shifted every id after them; the log's id-based dedupe then read the
+  decision as a duplicate and silently discarded it. Events now age instead of
+  disappearing, and the approval/escalation events age with the decision that resolved
+  them.
+
 ## Office findings still open (docs/15 plus this review)
 
 - O1 The arrival walk: the ARRIVAL is proven, and the walk MECHANISM is real — a

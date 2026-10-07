@@ -33,8 +33,8 @@ const PROJECT = {
   },
 };
 
-const agent = (id, name, role, grade, state, score, dept, spend, manager = null) => ({
-  id, kind: 'agent', project_id: 'p1', department_id: dept, squad_id: null, manager_id: manager, name, role, grade, state,
+const agent = (id, name, role, grade, state, score, dept, spend, manager = null, squad = null) => ({
+  id, kind: 'agent', project_id: 'p1', department_id: dept, squad_id: squad, manager_id: manager, name, role, grade, state,
   mission: `${role} on the launch`, autonomy: 'bounded', model_tier: 'standard', model_id: 'deepseek-chat',
   token_cap_per_step: 12000, spend_today_micros: 420_000, score, score_confidence: 0.8, evidence_count: 7,
   success_rate: 0.82, tasks_done: 5, tasks_failed: 1, penalty_count: 0, spend_micros: spend,
@@ -42,10 +42,13 @@ const agent = (id, name, role, grade, state, score, dept, spend, manager = null)
 });
 
 // ── The schedule ────────────────────────────────────────────────────────────
-// The office grows while you watch. The clock starts at the FIRST org request, not
-// at boot: the app opens its tab seconds after this process starts, and a clock that
-// began at boot would have finished hiring before anyone looked.
-const BEAT = { hire: 12, dept: 30, second: 48, third: 64 };
+// The office grows while you watch — and so does its plot: hires grow the org
+// (t+12..t+64), and at t+40 the escalated publish plan forces a COUNCIL, a panel
+// that actually meets in the meeting room until it decides at t+90 and everyone
+// walks back to work. The clock starts at the FIRST org request, not at boot: the
+// app opens its tab seconds after this process starts, and a clock that began at
+// boot would have finished hiring before anyone looked.
+const BEAT = { hire: 12, dept: 30, second: 48, third: 64, council: 40, decide: 90 };
 let T0 = null;
 const elapsed = () => {
   if (T0 === null) T0 = Date.now();
@@ -54,13 +57,13 @@ const elapsed = () => {
 
 const A = {
   a0: agent('a0', 'Alex', 'Orchestrator', 5, 'idle', 0.9, 'd1', 400_000),
-  a1: agent('a1', 'Ada', 'Market Researcher', 3, 'busy', 0.84, 'd1', 900_000, 'a0'),
-  a2: agent('a2', 'Bo', 'Data Analyst', 2, 'idle', 0.71, 'd1', 300_000, 'a1'),
-  a3: agent('a3', 'Cleo', 'Backend Engineer', 4, 'running', 0.91, 'd2', 1_400_000, 'a0'),
+  a1: agent('a1', 'Ada', 'Market Researcher', 3, 'busy', 0.84, 'd1', 900_000, 'a0', 's1'),
+  a2: agent('a2', 'Bo', 'Data Analyst', 2, 'busy', 0.71, 'd1', 300_000, 'a1', 's1'),
+  a3: agent('a3', 'Cleo', 'Backend Engineer', 4, 'busy', 0.91, 'd2', 1_400_000, 'a0'),
   a4: agent('a4', 'Dev', 'QA Verifier', 2, 'probation', 0.42, 'd2', 200_000, 'a3'),
   a5: agent('a5', 'Iris', 'Support Agent', 2, 'idle', 0.66, 'd3', 200_000, 'a0'),
   // Hired while you watch.
-  a6: agent('a6', 'Max', 'Backend Engineer', 2, 'idle', 0.55, 'd2', 60_000, 'a3'),
+  a6: agent('a6', 'Max', 'Backend Engineer', 2, 'busy', 0.55, 'd2', 60_000, 'a3'),
   a7: agent('a7', 'Zoe', 'Growth Lead', 3, 'idle', 0.6, 'd4', 40_000, 'a0'),
   a8: agent('a8', 'Nils', 'Content Strategist', 2, 'idle', 0.5, 'd4', 30_000, 'a7'),
   a9: agent('a9', 'Rae', 'SEO Analyst', 2, 'idle', 0.5, 'd4', 30_000, 'a7'),
@@ -104,13 +107,27 @@ const orgNow = () => {
   };
 };
 
-const TASKS = [
-  { id: 't1', project_id: 'p1', title: 'Market scan', state: 'completed', assignee_agent_id: 'a1', cost_micros: 420_000, attempts: 1, effort: 'M', acceptance_criteria: ['5 competitors', 'sources cited'] },
-  { id: 't2', project_id: 'p1', title: 'Positioning brief', state: 'running', assignee_agent_id: 'a3', cost_micros: 610_000, attempts: 2, effort: 'L' },
-  { id: 't3', project_id: 'p1', title: 'Publish plan', state: 'escalated', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S', escalation_reason: 'needs a budget decision above my envelope', escalated_to: 'a0' },
-  { id: 't4', project_id: 'p1', title: 'Verify launch deck', state: 'verifying', assignee_agent_id: 'a2', cost_micros: 90_000, attempts: 1, effort: 'M' },
-  { id: 't5', project_id: 'p1', title: 'Benchmark competitor pricing', state: 'running', assignee_agent_id: 'a1', cost_micros: 150_000, attempts: 1, effort: 'M' },
-];
+/**
+ * The tasks AS THEY STAND RIGHT NOW. After the council decides (t+90) the publish
+ * plan is unstuck: `escalated` becomes `running`. Before that it stays escalated —
+ * the escalation is the reason the council exists, and a task that resolves before
+ * its own decision would be a mock lying about its own story.
+ */
+const tasksNow = () => {
+  const t = elapsed();
+  const t3 =
+    t >= BEAT.decide
+      ? { id: 't3', project_id: 'p1', title: 'Publish plan', state: 'running', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S' }
+      : { id: 't3', project_id: 'p1', title: 'Publish plan', state: 'escalated', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S', escalation_reason: 'needs a budget decision above my envelope', escalated_to: 'a0' };
+  return [
+    { id: 't1', project_id: 'p1', title: 'Market scan', state: 'completed', assignee_agent_id: 'a1', cost_micros: 420_000, attempts: 1, effort: 'M', acceptance_criteria: ['5 competitors', 'sources cited'] },
+    { id: 't2', project_id: 'p1', title: 'Positioning brief', state: 'running', assignee_agent_id: 'a3', cost_micros: 610_000, attempts: 2, effort: 'L' },
+    t3,
+    { id: 't4', project_id: 'p1', title: 'Verify launch deck', state: 'verifying', assignee_agent_id: 'a2', cost_micros: 90_000, attempts: 1, effort: 'M' },
+    { id: 't5', project_id: 'p1', title: 'Benchmark competitor pricing', state: 'running', assignee_agent_id: 'a1', cost_micros: 150_000, attempts: 1, effort: 'M' },
+    { id: 't6', project_id: 'p1', title: 'Research experiment on pricing', state: 'running', assignee_agent_id: 'a6', cost_micros: 110_000, attempts: 1, effort: 'M' },
+  ];
+};
 
 // Freshly-timestamped events so every office pose has something real to render.
 // The last column is the event payload, which is what the office reads: a name
@@ -132,7 +149,7 @@ const RAW_EVENTS = [
   ['a2', 'verify.check', 'check passed: sources cited', 8],
   ['a0', 'agent.delegated', 'delegated "launch plan" to Engineering', 10],
   ['a3', 'agent.tool.call', 'tool: write_file("brief.md")', 12],
-  ['a1', 'task.completed', 'completed: Benchmark competitor pricing', 14],
+  ['a1', 'task.completed', 'completed: Market scan', 14],
   ['a4', 'task.escalated', 'escalated: Publish plan', 16],
   // Water-cooler talk: between two people, about nothing either is working on.
   ['a5', 'agent.message', 'message to Cleo: the coffee machine is a war crime', -9,
@@ -156,7 +173,75 @@ const buildEvents = () => {
   if (t >= BEAT.dept) hires.push(['a7', 'agent.thought', 'first day: mapping the growth backlog', 3]);
   if (t >= BEAT.second) hires.push(['a8', 'agent.tool.call', 'tool: write_file("content-plan.md")', 1.5]);
   if (t >= BEAT.third) hires.push(['a9', 'agent.tool.call', 'tool: web.search("keyword gaps")', 1]);
-  return [...RAW_EVENTS, ...hires].map((entry, i) => {
+
+  // The council. From t+40 the escalated publish plan has the panel in the meeting
+  // room: `council.convened` opens the sitting, each member's `council.position` is
+  // what makes them a MEMBER (the floor reads the panel off these), and a couple of
+  // messages between them give the room something to say. At t+90 `decision.recorded`
+  // closes it.
+  //
+  // The sitting's own record AGES after the decision instead of being dropped: the
+  // frontend's log dedupes by id, and an array that loses entries in the middle
+  // re-numbers everything after them — a re-indexed event reads as a duplicate and
+  // is silently discarded, which is exactly how a decision once went missing.
+  const council = [];
+  if (t >= BEAT.council) {
+    const past = t >= BEAT.decide ? t - BEAT.decide + 30 : 0;
+    council.push([
+      'a0',
+      'council.convened',
+      'council convened: ship the launch now, or fold it into Q3?',
+      6 + past,
+      {
+        session_id: 'c1',
+        question: 'Ship the launch now, or fold it into the Q3 campaign?',
+        options: [
+          { id: 'o1', label: 'Ship now on the current budget' },
+          { id: 'o2', label: 'Fold into Q3 with a raised envelope' },
+        ],
+        criteria: ['correctness', 'cost', 'risk', 'reversibility'],
+        rationale: 'Dev escalated the publish plan: the budget decision is above their envelope',
+      },
+    ]);
+    council.push(
+      ['a1', 'council.position', 'Ada on fold into Q3', 5 + past,
+        { session_id: 'c1', agent_id: 'a1', round: 1, option_id: 'o2', claim: 'the evidence favours folding: two of three competitors moved upmarket this quarter', confidence: 0.7, risks: ['we lose a quarter of momentum'] }],
+      ['a2', 'council.position', 'Bo on fold into Q3', 4.5 + past,
+        { session_id: 'c1', agent_id: 'a2', round: 1, option_id: 'o2', claim: 'the pricing benchmark only holds if the deck ships with Q3 numbers', confidence: 0.62, risks: ['forecasts are two weeks stale'] }],
+      ['a4', 'council.position', 'Dev on ship now', 4 + past,
+        { session_id: 'c1', agent_id: 'a4', round: 1, option_id: 'o1', claim: 'shipping now proves the pipeline; the spend is already committed', confidence: 0.4, risks: ['verification coverage is thin'] }],
+      ['a7', 'council.position', 'Zoe on fold into Q3', 3.5 + past,
+        { session_id: 'c1', agent_id: 'a7', round: 1, option_id: 'o2', claim: 'growth needs the campaign window; a half-launch now costs us the quarter either way', confidence: 0.66, risks: ['the envelope raise needs sign-off'] }],
+      ['a0', 'council.position', 'Alex on fold into Q3', 3 + past,
+        { session_id: 'c1', agent_id: 'a0', round: 2, option_id: 'o2', claim: 'the dissent is about verification depth, not timing — folding answers both', confidence: 0.74, risks: [] }],
+      ['a4', 'agent.message', 'message to Zoe: who signs the raised envelope?', 2.5 + past,
+        { to: 'Zoe', text: 'who signs off the raised envelope if we fold?', direction: 'side' }],
+      ['a7', 'agent.message', 'message to Dev: Alex can, above 4k', 2 + past,
+        { to: 'Dev', text: 'Alex can, anything above four thousand — that is why we are all in this room', direction: 'side' }],
+    );
+  }
+  if (t >= BEAT.decide) {
+    council.push(
+      ['a0', 'decision.recorded', 'council decided: fold the launch into Q3', 1,
+        { decision_id: 'dc1', chosen_option: 'o2' }],
+      ['a0', 'agent.message', 'message to Dev: unstuck — fold it in, new numbers by Friday', 1.5,
+        { to: 'Dev', text: 'unstuck: fold it into Q3, new numbers by Friday', direction: 'down' }],
+    );
+  }
+
+  return [...(() => {
+    // Two raw events only make sense while the publish plan is stuck: the approval
+    // request and the escalation itself. Once the council has decided they are
+    // history, and history — in this mock — means an old timestamp, not a fresh one
+    // that makes a granted approval look pending forever.
+    const t2 = elapsed();
+    if (t2 < BEAT.decide) return RAW_EVENTS;
+    return RAW_EVENTS.map((e) =>
+      e[1] === 'policy.approval.requested' || e[1] === 'task.escalated'
+        ? [e[0], e[1], e[2], 100 + (t2 - BEAT.decide), ...e.slice(4)]
+        : e,
+    );
+  })(), ...hires, ...council].map((entry, i) => {
     const [agent_id, type, title, secAgo, payload] = entry;
     return {
     id: `e${i}`,
@@ -205,9 +290,14 @@ const routes = [
   [/^\/api\/system\/status$/, () => ({ db: { ok: true }, bus: { ok: true } })],
   [/^\/api\/projects$/, () => paged([PROJECT])],
   [/^\/api\/projects\/([^/]+)\/org$/, () => orgNow()],
-  [/^\/api\/projects\/([^/]+)\/tasks$/, () => paged(TASKS)],
+  [/^\/api\/projects\/([^/]+)\/tasks$/, () => paged(tasksNow())],
   [/^\/api\/projects\/([^/]+)\/metrics$/, () => ({ cost_micros: 3_800_000, task_success_rate: 0.82, tasks_done: 1, tasks_total: 3 })],
-  [/^\/api\/projects\/([^/]+)\/approvals$/, () => paged([{ id: 'ap1', project_id: 'p1', capability: 'network.egress', agent_id: 'a3', task_id: 't2', state: 'pending', request: { host: 'api.example.com' }, created_at: '2026-01-01T12:00:00.000Z' }])],
+  [/^\/api\/projects\/([^/]+)\/approvals$/, () => {
+    const t = elapsed();
+    // The approval that was waiting on the budget decision: pending during the
+    // council, granted once it decides — the story and the list agree.
+    return paged([{ id: 'ap1', project_id: 'p1', capability: 'network.egress', agent_id: 'a4', task_id: 't3', state: t >= BEAT.decide ? 'granted' : 'pending', request: { host: 'cdn.example.com' }, created_at: '2026-01-01T12:00:00.000Z' }]);
+  }],
   [/^\/api\/projects\/([^/]+)\/runs$/, () => paged([])],
   [/^\/api\/projects\/([^/]+)\/leaderboard$/, () => paged([
     { agent_id: 'a3', name: 'Cleo', role: 'Backend Engineer', grade: 4, score: 0.91, success_rate: 0.9, cost_micros: 1_400_000, score_trend: [0.6, 0.7, 0.8, 0.91] },
@@ -228,7 +318,7 @@ const routes = [
   [/^\/api\/agents\/([^/]+)\/rewards$/, () => paged([{ id: 'rw1', project_id: 'p1', agent_id: 'a1', task_id: 't1', role_in_task: 'producer', verdict: 'pass', reward: 0.22, score_after: 0.84, components: { quality: 0.3, efficiency: 0.2 }, created_at: '2026-01-01T11:00:00.000Z' }])],
   [/^\/api\/agents\/([^/]+)$/, (m) => agentsNow()[m[1]] ?? null],
   [/^\/api\/tasks\/([^/]+)\/artifacts$/, () => paged([{ id: 'ar1', project_id: 'p1', task_id: 't1', kind: 'file', path: 'report.md', bytes: 2048, trust: 'verified', created_at: '2026-01-01T11:00:00.000Z' }])],
-  [/^\/api\/tasks\/([^/]+)$/, () => ({ ...TASKS[0], description: 'Scan the market.', required_skills: ['market-research'], depends_on: [], output_contract: { format: 'json' }, verification: { id: 'v1', task_id: 't1', verdict: 'pass', method: 'deterministic', checks: [{ name: 'sources cited', ok: true }], confidence: 0.9, created_at: '2026-01-01T11:00:00.000Z' }, rewards: [] })],
+  [/^\/api\/tasks\/([^/]+)$/, () => ({ ...tasksNow()[0], description: 'Scan the market.', required_skills: ['market-research'], depends_on: [], output_contract: { format: 'json' }, verification: { id: 'v1', task_id: 't1', verdict: 'pass', method: 'deterministic', checks: [{ name: 'sources cited', ok: true }], confidence: 0.9, created_at: '2026-01-01T11:00:00.000Z' }, rewards: [] })],
   [/^\/api\/departments\/([^/]+)$/, () => ({ id: 'd1', project_id: 'p1', name: 'Research', status: 'active', capabilities: ['market-research'], budget_envelope_micros: 4_000_000, spend_micros: 1_600_000, roster: [agent('a1', 'Ada', 'Market Researcher', 3, 'busy', 0.84, 'd1', 900_000)] })],
   [/^\/api\/system\/audit\/verify$/, () => ({ ok: true })],
   [/^\/api\/tools$/, () => paged([])],

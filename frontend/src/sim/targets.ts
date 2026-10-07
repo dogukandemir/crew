@@ -11,7 +11,7 @@
  */
 import type { Task, TaskState } from '../api/types';
 import type { Point } from './geometry';
-import { DESK_W, breakSeats, isResearchTask, type Office } from './floorplan';
+import { DESK_W, breakSeats, isResearchTask, meetingLayout, type Office } from './floorplan';
 import { anchorOf } from './paths';
 import { currentTaskFor, type Activity } from './activity';
 
@@ -45,6 +45,12 @@ export interface TargetInput {
   arriving: Set<string>;
   /** ms of idling before someone wanders off for coffee. */
   breakAfterMs?: number;
+  /**
+   * The council in session, if any. Its panel is IN A MEETING, and that outranks
+   * everything else a member might be doing — it is what is actually happening to
+   * them (docs/02 §4).
+   */
+  meeting?: { id: string; question: string; members: readonly string[] } | null;
 }
 
 const RING_RADIUS = 52;
@@ -141,8 +147,9 @@ function hash(s: string): number {
 }
 
 export function computeTargets(input: TargetInput): Record<string, Target> {
-  const { office, activities, tasks, now, idleSince, arriving } = input;
+  const { office, activities, tasks, now, idleSince, arriving, meeting } = input;
   const breakAfter = input.breakAfterMs ?? 16_000;
+  const meetingRoom = office.rooms.find((r) => r.kind === 'meeting');
 
   const out: Record<string, Target> = {};
   const shared: Record<string, string[]> = {};
@@ -152,6 +159,22 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
     const home = office.roomOf[agentId];
     const desk = office.deskOf[agentId];
     const act: Activity | undefined = activities[agentId];
+
+    // A council outranks everything else a member might be doing: they are in a
+    // meeting, and showing that is the floor's whole job for them right now.
+    if (meeting && meetingRoom && meeting.members.includes(agentId)) {
+      const seats = meetingLayout(meetingRoom).seats;
+      const seat = seats[meeting.members.indexOf(agentId) % seats.length];
+      out[agentId] = {
+        agentId,
+        roomId: meetingRoom.id,
+        point: { x: seat.x, y: seat.y },
+        reason: `in council: ${meeting.question}`,
+        faceTowards: seat.face,
+        seated: true,
+      };
+      continue;
+    }
 
     if (arriving.has(agentId)) {
       out[agentId] = { agentId, roomId: home, point: desk, reason: 'just hired — walking to their desk' };

@@ -22,6 +22,11 @@ npm run dev                       # http://localhost:5173
   the Growth department — a new room on the canvas — and t+48/t+64 grow it further. The
   clock starts on the **first request**, not at boot, so the growth begins when you open
   the page rather than before you looked.
+- **A council meets.** At t+40 the escalated publish plan calls a council: the meeting
+  room appears on the canvas, the panel walks there and gathers around the table, and
+  `council.position` events carry what each of them argues. At t+90 the decision lands —
+  the room empties, the publish plan leaves `escalated` for `running`, and the approval
+  it was waiting on is granted.
 - `POST /api/dev/reset` restarts that clock (the temporary reset-clock button on the
   office floor calls it).
 - Notices when you have been staring at it: the events it serves are re-timestamped per

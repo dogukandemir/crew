@@ -13,6 +13,7 @@ import { buildOffice, placementOf, type Placement, type Room } from '../../sim/f
 import { currentTaskFor, deriveActivity, type Activity } from '../../sim/activity';
 import { floorPulse } from '../../sim/rooms';
 import { computeTargets } from '../../sim/targets';
+import { liveCouncil } from '../../sim/meeting';
 import { routeBetween } from '../../sim/paths';
 import { fitCamera, isoBounds, project, screenOf, type Camera } from './iso';
 import type { Point } from '../../sim/geometry';
@@ -130,6 +131,14 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   /** The slots the last build produced, fed back into the next one. */
   const placement = useRef<Placement['slots']>({});
 
+  // ── The council in session, if any ─────────────────────────────────────────
+  // Straight off the event log (sim/meeting): a sitting is live from
+  // `council.convened` until a decision, or until it goes quiet. Its panel meets
+  // at the meeting room's table, and showing that is the floor's job for them.
+  const council = useMemo(() => liveCouncil(log.items, now), [log.items, now]);
+  const councilMembers = useMemo(() => new Set(council?.members ?? []), [council]);
+  const councilKey = council ? `${council.id}|${council.members.length}|${council.question}` : '';
+
   const office = useMemo(() => {
     // The floor is EXTENDED, never re-packed: the slots from the last build go back in,
     // so a room that already exists keeps its place and only new rooms are allocated.
@@ -139,10 +148,16 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     // The ref is written inside the memo on purpose: it is the memo's own output that
     // the next build needs. StrictMode calling this twice is harmless — the second call
     // restores the slots the first one just produced, which is the same placement.
-    const built = buildOffice(org.data?.root, { showArchived, prev: placement.current });
+    const built = buildOffice(org.data?.root, {
+      showArchived,
+      prev: placement.current,
+      meeting: council ? { question: council.question } : null,
+    });
     placement.current = placementOf(built);
     return built;
-  }, [org.data, showArchived]);
+    // `councilKey` and not `council`: the room has to appear when a sitting opens,
+    // and the memo must NOT rebuild on every clock tick.
+  }, [org.data, showArchived, councilKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const visibleIds = useMemo(() => Object.keys(office.deskOf).sort(), [office]);
   const rosterKey = visibleIds.join(',');
   const seenRooms = useRef<Set<string>>(new Set());
@@ -240,10 +255,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         events: recentByAgent.get(id) ?? [],
         now,
         arriving: at !== undefined && now - at < ARRIVAL_MS,
+        inCouncil: councilMembers.has(id),
       });
     }
     return out;
-  }, [visibleIds, office, tasks, recentByAgent, now]);
+  }, [visibleIds, office, tasks, recentByAgent, now, councilMembers]);
 
   // A department's pulse: who is producing, what it has shipped, is it new.
   const pulse = useMemo(
@@ -295,8 +311,9 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         now,
         idleSince: idleSince.current,
         arriving: arrivingIds,
+        meeting: council,
       }),
-    [office, activities, tasks, now, arrivingIds],
+    [office, activities, tasks, now, arrivingIds, council],
   );
 
   // ── Route reconciliation (only when a destination actually changes) ────────

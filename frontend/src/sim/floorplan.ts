@@ -52,6 +52,21 @@ export const SPINE_W = 96;
 export const MAX_ROW_WIDTH = 720;
 export const ENTRANCE_MARGIN = 44;
 
+/**
+ * The meeting room's table, in the metre this plan counts (`M_UNIT`).
+ *
+ * 3 × 1 m because that is the art `prop.table.3` actually carries — and because
+ * the room has to fit inside the block's pitch: a room wider than the pitch makes
+ * `placeRooms` re-lay the whole floor, and a council convening must not move the
+ * building. The room is sized FOR the table, not the table stretched to the room.
+ */
+export const MEETING_TABLE_W = 3 * M_UNIT;
+export const MEETING_TABLE_D = 1 * M_UNIT;
+/** How far a seated chair's centre stands off the table's own edge. */
+export const MEETING_CHAIR_GAP = 0.42 * M_UNIT;
+/** Room for one chair: the gap its centre stands at, plus the chair's own half. */
+const MEETING_CHAIR_ROOM = MEETING_CHAIR_GAP + 0.3 * M_UNIT;
+
 /** A room's place on the floor. Allocated once, and then never moved. */
 export interface RoomSlot {
   row: number;
@@ -131,7 +146,7 @@ export interface Placement {
  * `prev` is the placement from the last update. A room that already has a slot keeps it
  * verbatim, including its x and y. Only rooms without one are allocated.
  */
-export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: Placement['slots'] = {}): Placement {
+export function placeRooms(sizes: { id: string; w: number; h: number; fixed?: boolean }[], prev: Placement['slots'] = {}): Placement {
   const slots: Record<string, RoomSlot> = {};
   const taken = new Set<string>();
   let maxCol = -1;
@@ -149,9 +164,13 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
   let wasPitchH = 0;
   for (const room of sizes) {
     const was = prev[room.id];
+    // A room that never grows gets no bay slack: the meeting room's size IS its
+    // furniture (a table and eight chairs, nothing else ever). Slack on it would
+    // push the pitch past the block's and re-lay the whole floor the moment a
+    // council convened — a meeting must not move the building.
     const bay = {
-      w: Math.max(was?.bayW ?? room.w + BAY_SLACK.w, room.w),
-      h: Math.max(was?.bayH ?? room.h + BAY_SLACK.h, room.h),
+      w: Math.max(was?.bayW ?? (room.fixed ? room.w : room.w + BAY_SLACK.w), room.w),
+      h: Math.max(was?.bayH ?? (room.fixed ? room.h : room.h + BAY_SLACK.h), room.h),
     };
     bayOf[room.id] = bay;
     pitchW = Math.max(pitchW, bay.w);
@@ -373,7 +392,7 @@ export function breakLayout(room: { x: number; y: number; w: number; h: number }
   };
 }
 
-export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break' | 'lab';
+export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'break' | 'lab' | 'meeting';
 
 /**
  * Work that belongs at a lab bench rather than at a desk.
@@ -461,6 +480,12 @@ export interface Office {
 
 export interface BuildOptions {
   showArchived?: boolean;
+  /**
+   * The council in session, if any. A meeting room exists only while somebody
+   * has to decide together: it is created on demand, and then keeps its slot like
+   * any other room — a meeting room that has been built stays where it was.
+   */
+  meeting?: { question: string } | null;
   /**
    * The previous placement, so a room that already exists keeps the slot it was given
    * instead of being packed again. Omitting it is a fresh floor — correct for the first
@@ -641,6 +666,27 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     );
   }
 
+  // 3.6 Meeting room — the room a council needs. It appears on demand, and once it
+  // has been built it STAYS: its slot is in `prev` from then on, so it is drawn
+  // again every build and the next sitting lands in the same room. A meeting room
+  // that vanished between councils would move the next one somewhere new, and the
+  // reader would have to find it twice.
+  if (opts.meeting || opts.prev?.['__meeting']) {
+    rooms.push(
+      shell({
+        id: '__meeting',
+        kind: 'meeting',
+        name: 'Meeting room',
+        subtitle: opts.meeting ? opts.meeting.question.slice(0, 64) : 'between sessions',
+        accent: '#c9b27a',
+        w: ROOM_PAD * 2 + MEETING_TABLE_W + 2 * MEETING_CHAIR_ROOM,
+        h: ROOM_PAD * 2 + ROOM_HEADER + MEETING_TABLE_D + 2 * MEETING_CHAIR_ROOM,
+        cols: 1,
+        rows: 1,
+      }),
+    );
+  }
+
   // 4. One room per department.
   departments.forEach((dept, i) => {
     const roster = others
@@ -696,7 +742,10 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   // `placeRooms` and not a fresh pack on every update. A room that already exists keeps
   // the slot it was given, so hiring into engineering re-grids engineering's own desks
   // and moves nobody else — and a room stays where the reader last saw it.
-  const placement = placeRooms(rooms, opts.prev ?? {});
+  const placement = placeRooms(
+    rooms.map((r) => ({ id: r.id, w: r.w, h: r.h, fixed: r.kind === 'meeting' })),
+    opts.prev ?? {},
+  );
   for (const room of rooms) {
     const slot = placement.slots[room.id];
     room.row = slot.row;
@@ -758,6 +807,58 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     corridorY,
     spineX: SPINE_W / 2,
   };
+}
+
+export interface MeetingSeat {
+  x: number;
+  y: number;
+  /** What the sitter looks at — the middle of the table. */
+  face: Point;
+  /** Which way the chair art stands: true = its back toward the room's south. */
+  chairTurned: boolean;
+}
+
+export interface MeetingLayout {
+  /** The table's own corner and size, in plan units — `prop.table.4`'s metre. */
+  table: { x: number; y: number; w: number; d: number };
+  /** Eight seats, in a fixed order: see below. */
+  seats: MeetingSeat[];
+}
+
+/**
+ * Where the meeting room's table and its eight chairs stand.
+ *
+ * ONE derivation, because two things need it: the renderer draws the chairs, the
+ * simulation seats people on them — two formulas is how a sitter and their chair
+ * end up half a metre apart.
+ *
+ * The seat order alternates across the table — south-left, north-right,
+ * south-middle, north-middle, south-right, north-left, west head, east head — so
+ * that two people at a two-person meeting face each other across it rather than
+ * sitting shoulder to shoulder on the same side.
+ */
+export function meetingLayout(room: { x: number; y: number; w: number; h: number }): MeetingLayout {
+  const tw = MEETING_TABLE_W;
+  const td = MEETING_TABLE_D;
+  const tx = room.x + (room.w - tw) / 2;
+  const ty = room.y + (room.h - td) / 2;
+  const cx = tx + tw / 2;
+  const cy = ty + td / 2;
+  const gap = MEETING_CHAIR_GAP;
+  const face = { x: cx, y: cy };
+  const south = (k: number): MeetingSeat => ({ x: tx + (tw * k) / 4, y: ty + td + gap, face, chairTurned: true });
+  const north = (k: number): MeetingSeat => ({ x: tx + (tw * k) / 4, y: ty - gap, face, chairTurned: false });
+  const seats: MeetingSeat[] = [
+    south(1),
+    north(3),
+    south(2),
+    north(2),
+    south(3),
+    north(1),
+    { x: tx - gap, y: cy, face, chairTurned: false }, // west head
+    { x: tx + tw + gap, y: cy, face, chairTurned: true }, // east head
+  ];
+  return { table: { x: tx, y: ty, w: tw, d: td }, seats };
 }
 
 /**

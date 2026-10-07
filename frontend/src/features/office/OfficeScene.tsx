@@ -21,6 +21,7 @@ import {
   SPINE_W,
   breakSeats,
   deskSeat,
+  meetingLayout,
   type Office,
   type Room,
 } from '../../sim/floorplan';
@@ -401,6 +402,34 @@ function roomItems(
       const sx = benchLeft + i * benchRun.tile + benchRun.tile / 2;
       at(`${room.id}-stool-${i}`, sx, stoolY, <AtlasSprite key={`${room.id}-stool-${i}`} name="prop.stool" x={sx - stool.x} y={stoolY - stool.y} />);
     }
+  }
+
+  if (room.kind === 'meeting') {
+    // The table and its eight chairs come from ONE derivation the simulation also
+    // seats people with — `meetingLayout` — so a chair and its sitter cannot drift
+    // apart. The table is drawn at its art's own size: the room was sized FOR it.
+    const layout = meetingLayout(room);
+    at(
+      `${room.id}-table`,
+      layout.table.x,
+      layout.table.y,
+      <AtlasSprite key={`${room.id}-table`} name="prop.table.3" x={layout.table.x} y={layout.table.y} />,
+    );
+    layout.seats.forEach((s, i) => {
+      at(
+        `${room.id}-chair-${i}`,
+        s.x,
+        s.y,
+        <Chair key={`${room.id}-chair-${i}`} at={{ x: s.x, y: s.y }} turned={s.chairTurned} />,
+      );
+    });
+    // The room's own dressing, exactly like a department gets: a board on the far
+    // wall and a plant in the corner, so an empty meeting room still reads as a
+    // room rather than a rectangle with a table.
+    const bw = Math.min(150, room.w - 60);
+    const bx = room.x + (room.w - bw) / 2;
+    at(`${room.id}-board`, bx, room.y + 10, <Whiteboard key={`${room.id}-board`} x={bx} y={room.y + 10} w={bw} />);
+    at(`${room.id}-plant`, room.x + 14, room.y + 48, <Plant key={`${room.id}-plant`} x={room.x + 14} y={room.y + 48} />);
   }
 
   if (room.kind === 'commons') {

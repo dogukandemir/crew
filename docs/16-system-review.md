@@ -60,15 +60,18 @@ backend at all.
 
 ## Office findings still open (docs/15 plus this review)
 
-- O1 The arrival walk of a newly hired agent has not been measured to their own desk yet.
-  The handle is known now: the character's own transform plus its `data-depth` (a world
-  coordinate — an existing character read 2216.5), NOT the static `sprite-body` wrapper
-  that an earlier probe kept reading. Two attempts still missed the transition: a fresh
-  page load seats everyone at once without walking (correct: `rosterReady` gate), and a
-  `POST /api/dev/reset` issued while the page was open did not reach the page inside the
-  sampling window (the org is re-read on a 10s interval). Next method, written down so it
-  is not re-derived: reset while the page is open, then poll for the id to *vanish* for
-  thirty seconds or more, and start tracing the moment it reappears.
+- O1 The arrival walk of a newly hired agent: the ARRIVAL is now proven, the WALK is not.
+  Observed live, page open throughout, with a `POST /api/dev/reset` and a 250ms sampler:
+  at t+6 the roster dropped to 6 seats and the agent vanished; at t+17 the same id
+  reappeared (7 seats, sprite count 61) as a genuine mid-session hire; at t+39 the Growth
+  department's room appeared on the canvas (8 seats, sprites 66) without disturbing any
+  other room. What the sampler could not show is movement, because of O9 below.
+- O9 A person who arrives in a live update never gets `data-depth` written. The same
+  character read 2216.5 when seated at page load and a flat `0` for the 22 seconds after
+  arriving mid-session, so their draw order is wrong from the moment they appear. The walk
+  loop writes that attribute per frame for walkers, and everything else about the arrival
+  works — so this is the thread to pull for O1: if the attribute is not written, the
+  position the walk animates from may not be either.
 - O2 `.is-new` room animation still unverified, for a related reason: the marker is
   transient and by the time it was inspected it had expired (`class=""`, `animation-name:
   none`). It has to be observed in the same breath as the arrival.

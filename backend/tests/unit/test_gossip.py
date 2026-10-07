@@ -6,9 +6,10 @@ import pytest
 from sqlalchemy import select
 
 from crew.control import gossip
+from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Event, Task
+from crew.core.models import Agent, Event, Project, Task
 
 
 async def _agent(s, project_id: str, name: str) -> Agent:
@@ -67,3 +68,35 @@ async def test_a_single_mouth_is_not_a_concern(bound_loop, project, request=None
                   payload={"topic": "vibes", "text": "something is off", "basis": ["x"],
                            "from_agent_id": a.id})
     assert await gossip.maybe_surface(project["id"], "vibes") is False
+
+
+@pytest.mark.asyncio
+async def test_a_surfaced_concern_reaches_the_council_(bound_loop, project):
+    """The office's worry becomes an agenda item: surfaced topic → a real session with
+    topic-shaped options, served once (docs/17 batch 4)."""
+    async with session_scope() as s:
+        a = await _agent(s, project["id"], "Mouth A")
+        b = await _agent(s, project["id"], "Mouth B")
+        c = await _agent(s, project["id"], "Mouth C")
+        ids = [a.id, b.id, c.id]
+    for aid in ids:
+        await ev.emit("agent.gossip", project_id=project["id"], agent_id=aid, severity="notice",
+                      title="whisper", summary="the budget is nearly gone",
+                      payload={"topic": "budget", "text": "the budget is nearly gone",
+                               "basis": ["spend:high"], "from_agent_id": aid})
+    assert await gossip.maybe_surface(project["id"], "budget") is True
+
+    async with session_scope() as s:
+        p = await s.get(Project, project["id"])
+    served = await orchestrator._service_decisions(p)
+    assert served >= 1, "a surfaced concern must reach the agenda"
+    async with session_scope() as s:
+        conv = (await s.scalars(select(Event).where(Event.project_id == project["id"],
+                                                    Event.type == "council.convened"))).all()
+    budget_councils = [e for e in conv
+                       if "concern surfaced" in str((e.payload or {}).get("question", "")).lower()
+                       and "budget" in str((e.payload or {}).get("question", "")).lower()]
+    assert budget_councils, "the session question names the concern"
+    opts = budget_councils[0].payload.get("options") or []
+    assert len(opts) >= 2, "a council needs real choices"
+    assert await orchestrator._service_decisions(p) == 0, "never re-litigated"

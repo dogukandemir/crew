@@ -2,7 +2,7 @@
 
 Written after reading the control/execution layers against docs/02 §2–5, docs/03 §3–6,
 docs/04 §4 and docs/08 §4. Every item says what to check and what it turned out to be;
-findings carry `file:line`. Three batches came out of it — all committed; each item below
+findings carry `file:line`. Four batches came out of it — all committed; each item below
 says what it turned out to be and, when it was broken, what fixed it.
 
 ## 1. Agent creation (docs/02 §5: how new units are born)
@@ -127,10 +127,14 @@ Gossip is a first-class signal, not decoration (`control/gossip.py`):
   and the concern lands in the project brain — a rumour becomes a problem the
   company has to look at.
 
-Open: the mock tells the gossip story (three mouths + a surfaced concern); the real
-backend emits the same contract from mined state (`control/gossip.py`). The floor
-reads `agent.gossip` (whisper bubble, walk-to-peer), `agent.delegated` and
-`gossip.surfaced` shows in the log.
+The mock tells the gossip story (three mouths + a surfaced concern); the real backend
+emits the same contract from mined state (`control/gossip.py`). The floor reads
+`agent.gossip` (whisper bubble, walk-to-peer) and `agent.delegated`; `gossip.surfaced`
+shows in the log.
+
+And it is **served**: `_service_decisions` turns a surfaced concern into a council
+session with topic-shaped options (batch 4) — the debate is about what to DO — and the
+decision binds following work like any other. The rumour genuinely reaches the agenda.
 
 ## Batch plan
 
@@ -149,11 +153,14 @@ a row is written) — and the gossip layer above.
 and the anti-thrash rule gets its window (`layoff_idle_days`): a layoff expires instead
 of blocking a rehire forever.
 
+**Batch 4 (this commit):** surfaced concerns reach the council — `_service_decisions`
+serves `gossip.surfaced` with topic-shaped options (budget / failing_work / blocked_work
+/ struggling_agent), announced once per topic, the outcome binding through the same
+decision-constraint channel as every other council.
+
 ## Left deliberately open
 
 - Frontend gesture for `agent.delegated` on the floor (the event renders; no dedicated
   walk/hand-off animation yet).
-- Surfaced gossip feeding the council agenda (`gossip.surfaced` → a decision question)
-  — the mechanism exists; the wiring is a product choice.
 - Real-engine runs still need provider keys (offline runner covers every test).
 

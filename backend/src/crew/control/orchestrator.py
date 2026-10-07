@@ -438,10 +438,31 @@ class Orchestrator:
         return notes
 
     async def _service_decisions(self, project: Project) -> int:
-        """Consume `council.requested` (docs/17 batch 2). The request_decision tool used to
-        promise "the orchestrator will convene a council" with nothing behind it; here a
-        collected question becomes a real session, and its decision binds following work
-        through council.decision_constraints."""
+        """Serve collected questions AND surfaced concerns (docs/17 batches 2, 4).
+
+        Agent requests: `request_decision` promised "the orchestrator will convene a
+        council" with nothing behind it; a collected question becomes a real session here.
+        Office concerns: a `gossip.surfaced` topic gets a question of its own with
+        topic-shaped options — a rumour enough people repeat reaches the agenda, and
+        either outcome binds following work through council.decision_constraints."""
+        concern_options: dict[str, list[dict]] = {
+            "budget": [
+                {"id": "tighten", "label": "Tighten spend now: smaller reservations and cheap models until the run lands"},
+                {"id": "continue", "label": "Continue as planned; the ledger and the breaker are already in force"},
+            ],
+            "failing_work": [
+                {"id": "investigate", "label": "Put a senior pair on the failing work before its next attempt"},
+                {"id": "ladder", "label": "Leave it to the failure ladder and the council it already calls"},
+            ],
+            "blocked_work": [
+                {"id": "staff", "label": "Staff the missing skills the blocked tasks need"},
+                {"id": "descope", "label": "Reduce scope so the blocked work can move with who is here"},
+            ],
+            "struggling_agent": [
+                {"id": "support", "label": "Pair them with their lead and lighten the queue"},
+                {"id": "engine", "label": "Leave it to the reward engine's probation and grade rules"},
+            ],
+        }
         async with session_scope() as s:
             requests = (await s.scalars(select(Event).where(Event.project_id == project.id,
                                                             Event.type == "council.requested")
@@ -449,31 +470,57 @@ class Orchestrator:
             convenes = (await s.scalars(select(Event).where(Event.project_id == project.id,
                                                             Event.type == "council.convened")
                                         .order_by(Event.seq.desc()).limit(50))).all()
+            surfaced = (await s.scalars(select(Event).where(Event.project_id == project.id,
+                                                            Event.type == "gossip.surfaced")
+                                        .order_by(Event.seq.desc()).limit(20))).all()
         seen = {" ".join(str((e.payload or {}).get("question", "")).split()).lower() for e in convenes}
-        served = 0
+        candidates: list[dict] = []
         for r in requests:
-            if served >= 2:
-                break
             question = " ".join(str((r.payload or {}).get("question", "")).split())
-            if not question or question.lower() in seen:
-                continue
             options = [o for o in ((r.payload or {}).get("options") or []) if isinstance(o, dict)]
             if len(options) < 2:
                 options = [{"id": "proceed", "label": "Proceed as questioned"},
                            {"id": "hold", "label": "Hold and keep the current default"}]
+            candidates.append({"question": question, "options": options, "task_id": r.task_id,
+                               "run_id": r.run_id, "event_id": r.id,
+                               "why": f"requested by agent {r.agent_id} on task {r.task_id}"})
+        # the office's own agenda: a surfaced concern gets topic-shaped options, so the
+        # debate is about what to DO, not about whether the complaint is real.
+        for c in surfaced:
+            topic = str((c.payload or {}).get("topic", "")).strip()
+            if not topic:
+                continue
+            candidates.append({
+                "question": f"Concern surfaced by the office: {topic}",
+                "options": concern_options.get(topic) or [
+                    {"id": "act", "label": "Act on the concern with a named owner"},
+                    {"id": "hold", "label": "Keep going; the record is enough for now"},
+                ],
+                "task_id": c.task_id, "run_id": c.run_id, "event_id": c.id,
+                "why": (f"gossip.surfaced ({topic}); mouths={(c.payload or {}).get('mouths')}; "
+                        f"basis={(c.payload or {}).get('basis')}"),
+            })
+        served = 0
+        for cand in candidates:
+            if served >= 2:
+                break
+            question = str(cand["question"])
+            if not question or question.lower() in seen:
+                continue
             try:
                 session = await council.convene(
-                    project=project, question=question, options=options, task_id=r.task_id,
-                    run_id=r.run_id, convened_by="system:orchestrator",
-                    rationale=f"requested by agent {r.agent_id} on task {r.task_id}")
+                    project=project, question=question, options=cand["options"],
+                    task_id=cand["task_id"], run_id=cand["run_id"],
+                    convened_by="system:orchestrator", rationale=str(cand["why"]))
                 await council.run_round(project_id=project.id, session_id=session["session_id"])
+                seen.add(question.lower())
                 served += 1
                 try:
                     await council.decide(project=project, session_id=session["session_id"])
                 except Exception:
-                    log.exception("council decide failed for request %s", r.id)
+                    log.exception("council decide failed for %s", cand["event_id"])
             except Exception:
-                log.exception("council convene failed for request %s", r.id)
+                log.exception("council convene failed for %s", cand["event_id"])
         return served
 
     async def _free_agent(self, agent_id: str) -> None:

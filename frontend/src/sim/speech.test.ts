@@ -107,4 +107,30 @@ describe('the words in the bubble', () => {
     });
     expect(activity.speech).toBeUndefined();
   });
+
+  it('hears a real agent.gossip the same way: whisper pair, walk included', () => {
+    const activity = deriveActivity({
+      agent,
+      events: [
+        event('agent.gossip', 2, {
+          to: 'Bo',
+          to_name: 'Bo',
+          from_name: 'Iris',
+          informal: true,
+          topic: 'budget',
+          text: 'the budget is nearly gone and the run is not done',
+          basis: ['spend:900000'],
+        }),
+      ],
+      now: NOW,
+    });
+    expect(activity.kind).toBe('talking');
+    expect(activity.speech).toEqual({
+      kind: 'gossip',
+      text: 'the budget is nearly gone and the run is not done',
+      to: 'Bo',
+    });
+    expect(activity.peerName).toBe('Bo');
+    expect(activity.where).toBe('peer');
+  });
 });

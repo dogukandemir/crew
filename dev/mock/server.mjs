@@ -154,6 +154,13 @@ const RAW_EVENTS = [
   // Water-cooler talk: between two people, about nothing either is working on.
   ['a5', 'agent.message', 'message to Cleo: the coffee machine is a war crime', -9,
     { to: 'Cleo', text: 'the coffee machine is a war crime', direction: 'side', informal: true }],
+  // Office talk between two people who are NOT on that task. The story's own record
+  // says the publish plan died twice (the task.escalated above), so the rumour is
+  // allowed to say exactly that — no more. One of the three mouths that surface it.
+  ['a5', 'agent.gossip', 'Iris ⟷ Dev: the publish plan died twice', -6,
+    { informal: true, topic: 'failing_work', to: 'Dev', to_name: 'Dev', from_name: 'Iris',
+      text: 'did you hear — the publish plan died twice and nobody has said why?',
+      basis: ['task:t3'] }],
   ['a3', 'agent.thought', 'the deck needs a pricing slide', 18],
   ['a2', 'agent.thought', 'checking the deck against the acceptance criteria', 20],
   ['a0', 'budget.spent', 'budget: $0.42 settled to Engineering', 24],
@@ -173,6 +180,29 @@ const buildEvents = () => {
   if (t >= BEAT.dept) hires.push(['a7', 'agent.thought', 'first day: mapping the growth backlog', 3]);
   if (t >= BEAT.second) hires.push(['a8', 'agent.tool.call', 'tool: write_file("content-plan.md")', 1.5]);
   if (t >= BEAT.third) hires.push(['a9', 'agent.tool.call', 'tool: web.search("keyword gaps")', 1]);
+
+  // The office's whisper network: same worry, three mouths, each grounded in what the
+  // story already shows. Zoe heard the envelope talk (her council position says so),
+  // Nils hears it from her, Rae from him — and at t+90 the topic has enough mouths to
+  // surface as a concern the company has to look at (`gossip.surfaced`). The floor
+  // reads `to` to walk the speaker over and `informal` to colour the bubble.
+  const whispers = [];
+  if (t >= BEAT.second) {
+    whispers.push(['a7', 'agent.gossip', 'Zoe ⟷ Nils: the envelope ask is really about the plan', 2,
+      { informal: true, topic: 'failing_work', to: 'Nils', to_name: 'Nils', from_name: 'Zoe',
+        text: 'they are asking Alex for a bigger envelope — for a plan that died twice',
+        basis: ['task:t3'] }]);
+  }
+  if (t >= BEAT.third) {
+    whispers.push(['a8', 'agent.gossip', 'Nils ⟷ Rae: three mouths, one worry', 2,
+      { informal: true, topic: 'failing_work', to: 'Rae', to_name: 'Rae', from_name: 'Nils',
+        text: 'Zoe says the council is really about the plan that keeps dying — watch the room',
+        basis: ['task:t3'] }]);
+  }
+  if (t >= BEAT.decide) {
+    whispers.push(['a0', 'gossip.surfaced', 'concern surfaced: failing_work', 4,
+      { topic: 'failing_work', mouths: 3, basis: ['task:t3'] }]);
+  }
 
   // The council. From t+40 the escalated publish plan has the panel in the meeting
   // room: `council.convened` opens the sitting, each member's `council.position` is
@@ -241,7 +271,7 @@ const buildEvents = () => {
         ? [e[0], e[1], e[2], 100 + (t2 - BEAT.decide), ...e.slice(4)]
         : e,
     );
-  })(), ...hires, ...council].map((entry, i) => {
+  })(), ...hires, ...whispers, ...council].map((entry, i) => {
     const [agent_id, type, title, secAgo, payload] = entry;
     return {
     id: `e${i}`,

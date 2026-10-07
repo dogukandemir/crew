@@ -85,6 +85,8 @@ async def office_chatter(project_id: str, *, max_items: int = 2) -> int:
                       title=f"{a.name} ⟷ {b.name}: {seed['topic']}",
                       summary=seed["text"],
                       payload={"topic": seed["topic"], "text": seed["text"],
+                               "informal": True, "direction": "side",
+                               "to": b.name,
                                "from_agent_id": a.id, "from_name": a.name,
                                "to_agent_id": b.id, "to_name": b.name,
                                "basis": seed["basis"]})

@@ -115,8 +115,10 @@ Gossip is a first-class signal, not decoration (`control/gossip.py`):
   and the concern lands in the project brain — a rumour becomes a problem the
   company has to look at.
 
-Open: nothing in the frontend renders `agent.gossip`/`agent.delegated` yet, and the
-mock tells no gossip stories yet — both are presentation work on a live contract.
+Open: the mock tells the gossip story (three mouths + a surfaced concern); the real
+backend emits the same contract from mined state (`control/gossip.py`). The floor
+reads `agent.gossip` (whisper bubble, walk-to-peer), `agent.delegated` and
+`gossip.surfaced` shows in the log.
 
 ## Batch plan
 

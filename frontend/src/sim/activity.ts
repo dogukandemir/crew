@@ -277,7 +277,11 @@ export function deriveActivity({ agent, task, events, now, arriving, inCouncil }
 
   const talk = newest(
     events,
-    (e) => e.type === 'agent.message' || e.type === 'agent.delegated' || e.type === 'agent.escalated',
+    (e) =>
+      e.type === 'agent.message' ||
+      e.type === 'agent.gossip' ||
+      e.type === 'agent.delegated' ||
+      e.type === 'agent.escalated',
     WINDOWS.talk,
     now,
   );

@@ -76,6 +76,8 @@ ROLE_ASSIGNMENT_PENALTY: dict[str, float] = {
     "head": 0.60, "decider": 0.60, "orchestrator": 1.0, "ceo": 1.0,
     # the executive tier manages a function; it takes IC work last (ADR 0008)
     "cto": 0.80, "cmo": 0.80, "cpo": 0.80, "coo": 0.80,
+    # governance and finance never take IC work (ADR 0011)
+    "cfo": 0.80, "chair": 1.0, "board_member": 1.0,
 }
 
 # The executive tier (ADR 0008, docs/02 §2): each C-role owns a FUNCTION — a group of
@@ -89,9 +91,11 @@ FUNCTION_OF_CATEGORY: dict[str, str] = {
 }
 C_ROLE_OF_FUNCTION: dict[str, Role] = {
     "technology": Role.CTO, "market": Role.CMO, "product": Role.CPO, "operations": Role.COO,
+    "finance": Role.CFO,
 }
 FUNCTION_TITLE: dict[str, str] = {
     "technology": "Technology", "market": "Market", "product": "Product", "operations": "Operations",
+    "finance": "Finance",
 }
 
 
@@ -121,13 +125,30 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
         # orchestrator: ordinary runs never touch it (ADR 0009).
         ceo = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CEO),
                                rationale="company bootstrap: the portfolio chair")
+        # governance (ADR 0011): the board is seated with the company — a chair and two
+        # owners' seats — and the CEO reports to the chair, not to the floor.
+        chair = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CHAIR),
+                                 rationale="company bootstrap: the board's chair")
+        members = [await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.BOARD_MEMBER),
+                                    rationale="company bootstrap: an owners' seat at the table")
+                   for _ in range(2)]
         async with session_scope() as s:
             row = await s.get(Project, pid)
-            row.settings = {**row.settings, "ceo_id": ceo["id"]}
+            row.settings = {**row.settings, "ceo_id": ceo["id"], "chair_id": chair["id"],
+                            "board_ids": [chair["id"], *[m["id"] for m in members]]}
+            ceo_row = await s.get(Agent, ceo["id"])
+            if ceo_row is not None:
+                ceo_row.manager_id = chair["id"]  # CEO → chair of the board
+                s.add(ceo_row)
             s.add(row)
         await ev.emit("company.created", project_id=pid, severity="notice",
                       title=f"company created: {name}",
                       payload={"name": name, "ceo_id": ceo["id"]}, actor="user")
+        await ev.emit("board.seated", project_id=pid, agent_id=chair["id"], severity="notice",
+                      title=f"board seated: {chair['name']} chairs, {len(members)} owners' seats",
+                      payload={"company_id": pid, "chair_id": chair["id"],
+                               "members": [{"id": m["id"], "name": m["name"]} for m in members]},
+                      actor="user")
         await audit(actor_kind="user", actor_id=owner_id or "local", action="company.created",
                     resource_kind="company", resource_id=pid, reason=f"budget=${cap_usd}")
         return await get_project(pid)

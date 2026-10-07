@@ -56,6 +56,9 @@ ALWAYS_APPROVAL: set[Capability] = {Capability.NET_POST, Capability.FS_DELETE, C
 MIN_TIER_FOR_ROLE: dict[Role, ModelTier] = {
     Role.ORCHESTRATOR: ModelTier.REASONING,
     Role.CEO: ModelTier.REASONING,
+    Role.CHAIR: ModelTier.REASONING,
+    Role.BOARD_MEMBER: ModelTier.REASONING,
+    Role.CFO: ModelTier.REASONING,
     Role.CTO: ModelTier.REASONING,
     Role.CMO: ModelTier.REASONING,
     Role.CPO: ModelTier.REASONING,
@@ -93,6 +96,12 @@ _FUNCTION_CHIEF_CAPS = _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capab
                                  Capability.COMMS_REQUEST_DECISION, Capability.BUDGET_REQUEST,
                                  Capability.NET_SEARCH, Capability.NET_FETCH)
 
+# Governance (ADR 0011): the board oversees, it does not operate. It chairs its own
+# sessions and binds the outcome, reads the record, and asks for money — it never hires
+# into the org it governs, so authority cannot eat itself.
+_BOARD_CAPS = _COMMS + (Capability.COUNCIL_CONVENE, Capability.DECISION_BIND,
+                        Capability.BUDGET_REQUEST)
+
 ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
     Role.ORCHESTRATOR: _t(
         Role.ORCHESTRATOR, "Orchestrator",
@@ -112,6 +121,33 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         "portfolio's course, hold project executives to their spend and their failures, and record "
         "the reasoning so the next review can disagree with it.",
         _FUNCTION_CHIEF_CAPS,
+    ),
+    Role.CHAIR: _t(
+        Role.CHAIR, "Chair of the Board",
+        "Chair the board of directors: hold the CEO to the portfolio's numbers, open the "
+        "sessions that decide money and direction, and be the signature on the outcome.",
+        Grade.CHIEF, ("governance", "oversight", "fiduciary-duty"),
+        "Speak last in the sessions you chair. Nothing reaches the agenda without a number "
+        "behind it; the board's minutes are the CEO's scoreboard, not a courtesy.",
+        _BOARD_CAPS,
+    ),
+    Role.BOARD_MEMBER: _t(
+        Role.BOARD_MEMBER, "Board Member",
+        "Represent the owners' interest: challenge the portfolio's direction and vote the "
+        "allocation the record actually justifies.",
+        Grade.CHIEF, ("independent-judgment", "domain-expertise", "fiduciary-duty"),
+        "Ask the uncomfortable question once, with its evidence. Vote your read of the "
+        "record, not the room's mood.",
+        _BOARD_CAPS,
+    ),
+    Role.CFO: _t(
+        Role.CFO, "Chief Financial Officer",
+        "Own the money across the portfolio: budget envelopes, allocation truth, and the "
+        "record of every dollar the company commits.",
+        Grade.CHIEF, ("financial-planning", "budget-ownership", "tradeoff-analysis"),
+        "Every envelope cites the spend it was sized from. Say the money's truth upward "
+        "before the spend finds out for you.",
+        _FUNCTION_CHIEF_CAPS + (Capability.DECISION_BIND,),
     ),
     Role.CTO: _t(
         Role.CTO, "Chief Technology Officer",

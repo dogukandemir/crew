@@ -24,6 +24,10 @@ class Role(StrEnum):
     ORCHESTRATOR = "orchestrator"
     # The company layer (ADR 0009): the portfolio chair, living in the company project.
     CEO = "ceo"
+    # Governance (ADR 0011): the board of directors and the money chair.
+    CHAIR = "chair"
+    BOARD_MEMBER = "board_member"
+    CFO = "cfo"
     # The executive tier (ADR 0008): one chief per function, between orchestrator and heads.
     CTO = "cto"
     CMO = "cmo"

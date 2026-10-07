@@ -75,14 +75,26 @@ those departments' heads then report to the chief, and the chain reads
 `orchestrator → chief → head → lead → worker`. One chief per function at a time. The
 chief chairs the function's councils and arbitration; it does not do IC work.
 
-### The company layer (ADR 0009)
+### The company layer (ADR 0009) and governance (ADR 0011)
 
 Above projects sits the optional **company**: a project with `kind='company'` whose
 agents are the **CEO** (hired at bootstrap) and, on demand, the same function chiefs one
-scope up (`cto`/`cmo`/`cpo`/`coo`). A member project's orchestrator reports to the CEO;
-`company.review()` reads every member's books and writes one grounded directive into
-each member's event stream, and orchestrators read directives into their task prompts
-as binding work — "COMPANY DIRECTIVES (from the board)".
+scope up (`cto`/`cmo`/`cpo`/`coo`/`cfo`). A member project's orchestrator reports to the
+CEO; `company.review()` reads every member's books and writes one grounded directive
+into each member's event stream, and orchestrators read directives into their task
+prompts as binding work — "COMPANY DIRECTIVES (from the board)".
+
+Seated with the CEO are the **board of directors**: a `chair` (the CEO's manager) and
+two `board_member` seats (`projects.settings.chair_id` / `board_ids`). The chain reads
+`chair → CEO → orchestrator → chief? → head → lead → worker`. The board convenes
+sessions on the council machinery (`board.convened`) and its caps are deliberately
+narrow: it reads, convenes, binds and asks for money — it never hires into the org it
+governs. **Money between projects is a decision**: `company.portfolio()` ranks members
+by their record (shared verdict helper with the review) and `company.allocate()` writes
+the caps — a `stop` project's cap lands exactly on its spend, so "no new money" is
+enforceable, and `company.allocation.decided` carries every line with its basis. The
+whole company renders on one floor (`GET /companies/{id}/hq`): executive suites, the
+board room, one pod per member project with its teams.
 
 ### Authority matrix
 
@@ -109,6 +121,9 @@ text. Prompts express the *intent*; the policy engine expresses the *law*.
 |------|---------|---------------|-----------|
 | `orchestrator` | Executive: decompose goals, hire, arbitrate, settle rewards | Principal | reasoning |
 | `ceo` | Executive: the portfolio — which projects run, at what budget, what stops | Chief | reasoning |
+| `chair` | Governance: chairs the board of directors; the CEO's manager | Chief | reasoning |
+| `board_member` | Governance: an owners' seat — challenges direction, votes the record | Chief | reasoning |
+| `cfo` | Executive: the money function — envelopes, allocation truth, the ledger | Chief | reasoning |
 | `cto` | Executive: the technology function (engineering, data, security) | Chief | reasoning |
 | `cmo` | Executive: the market function (research, business) | Chief | reasoning |
 | `cpo` | Executive: the product function (design, content, media) | Chief | reasoning |

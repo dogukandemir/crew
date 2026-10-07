@@ -105,6 +105,15 @@ class BoardItemPatch(BaseModel):
     state: str | None = None
 
 
+class BoardSessionBody(BaseModel):
+    topic: str = Field(min_length=1, max_length=280)
+    options: list[str] | None = None
+
+
+class BoardSeatBody(BaseModel):
+    role: str = "board_member"
+
+
 class ProjectPatch(BaseModel):
     name: str | None = None
     goal: str | None = None
@@ -416,6 +425,52 @@ async def post_company_review(company_id: str, user: dict = Depends(require_user
         return await company.review(company_id=company_id, actor=f"user:{user['id']}")
     except KeyError as e:
         raise _problem(404, "company not found", company_id) from e
+
+
+# ── governance: portfolio, board of directors, the HQ floor (ADR 0011) ─────────────
+@api.get("/companies/{company_id}/hq")
+async def get_company_hq(company_id: str) -> dict:
+    try:
+        return await company.hq(company_id=company_id)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
+@api.get("/companies/{company_id}/portfolio")
+async def get_company_portfolio(company_id: str) -> dict:
+    try:
+        return await company.portfolio(company_id=company_id)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
+@api.post("/companies/{company_id}/allocate")
+async def post_company_allocate(company_id: str, user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.allocate(company_id=company_id, actor=f"user:{user['id']}")
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
+@api.post("/companies/{company_id}/board-session", status_code=201)
+async def post_board_session(company_id: str, body: BoardSessionBody,
+                             user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.board_session(company_id=company_id, topic=body.topic,
+                                           options=body.options, actor=f"user:{user['id']}")
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
+@api.post("/companies/{company_id}/board", status_code=201)
+async def post_board_seat(company_id: str, body: BoardSeatBody,
+                          user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.add_board_member(company_id=company_id, role=body.role)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+    except ValueError as e:
+        raise _problem(422, "invalid seat", str(e)) from e
 
 
 # ── the board (ADR 0010) ─────────────────────────────────────────────────────────────

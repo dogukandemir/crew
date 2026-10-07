@@ -21,7 +21,7 @@ from crew.domain.catalog import SKILLS_BY_ID
 
 log = logging.getLogger(__name__)
 
-KINDS = ("epic", "feature", "story", "bug")
+KINDS = ("epic", "feature", "story", "task", "bug")
 COLUMNS = ("backlog", "ready", "in_progress", "review", "done", "blocked")
 COLUMN_TITLES = {"backlog": "Backlog", "ready": "Ready", "in_progress": "In progress",
                  "review": "Review", "done": "Done", "blocked": "Blocked"}
@@ -141,7 +141,7 @@ async def promote_ready(*, project_id: str, run_id: str) -> list[dict]:
             WorkItem.project_id == project_id,
             WorkItem.state == "ready",
             WorkItem.task_id.is_(None),
-            WorkItem.kind.in_(("story", "bug"))))).all()
+            WorkItem.kind.in_(("story", "bug", "task"))))).all()
         for item in items:
             prefix = "[bug] " if item.kind == "bug" else ""
             task = Task(project_id=project_id, run_id=run_id, department_id=item.department_id,
@@ -151,6 +151,8 @@ async def promote_ready(*, project_id: str, run_id: str) -> list[dict]:
                         acceptance_criteria=list(item.acceptance) or (
                             ["The reported problem is fixed and the fix is verified"]
                             if item.kind == "bug"
+                            else ["The task's outcome is delivered and verified"]
+                            if item.kind == "task"
                             else ["The story's outcome is delivered and verified"]),
                         effort="S" if item.kind == "bug" else "M",
                         priority=1 if item.severity in ("high", "critical") else item.priority,

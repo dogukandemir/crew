@@ -319,23 +319,107 @@ const agentsNow = () => {
 };
 
 const paged = (items) => ({ items, next_cursor: null, total: items.length });
-// ── The company (ADR 0009): a canned headquarters holding p1 ─────────────────
+// ── The company (ADR 0009/0011): a headquarters with a board, C-level and 3 projects ──
+const DIRECTORS = [
+  { id: 'b1', name: 'Eleanor Voss', role: 'chair', grade: 5 },
+  { id: 'b2', name: 'Priya Raman', role: 'board_member', grade: 5 },
+  { id: 'b3', name: 'Tom Okafor', role: 'board_member', grade: 5 },
+];
+const EXECUTIVES = [
+  { id: 'c1', name: 'Vera', role: 'ceo', title: 'Chief Executive Officer', function: 'executive' },
+  { id: 'c2', name: 'Idris', role: 'cto', title: 'Chief Technology Officer', function: 'technology' },
+  { id: 'c3', name: 'Camille', role: 'cmo', title: 'Chief Marketing Officer', function: 'market' },
+  { id: 'c4', name: 'Selma', role: 'cpo', title: 'Chief Product Officer', function: 'product' },
+  { id: 'c5', name: 'Marcus', role: 'coo', title: 'Chief Operations Officer', function: 'operations' },
+  { id: 'c6', name: 'Ruth', role: 'cfo', title: 'Chief Financial Officer', function: 'finance' },
+];
+const MEMBERS = [
+  { id: 'p1', name: PROJECT.name, status: 'active', verdict: 'on_track', spend_ratio: 0.38,
+    directive: 'keep going: 38% of the budget used, 3 completed so far',
+    completed: 3, failed: 0, open_tasks: 2,
+    teams: [{ id: 'd1', name: 'Research', head_name: 'Ada', agents: 3 },
+            { id: 'd2', name: 'Growth', head_name: 'Bo', agents: 2 }] },
+  { id: 'p2', name: 'Arctic Light — documentary', status: 'active', verdict: 'at_risk', spend_ratio: 0.84,
+    directive: 'quality alarm: 3 of 5 tasks failed — put a senior pair on the recurring failure',
+    completed: 2, failed: 3, open_tasks: 4,
+    teams: [{ id: 'd3', name: 'Production', head_name: 'Nils', agents: 4 },
+            { id: 'd4', name: 'Sound', head_name: 'Zoe', agents: 2 }] },
+  { id: 'p3', name: 'Moonbase — kids series', status: 'paused', verdict: 'stop', spend_ratio: 0.97,
+    directive: 'stop and fold: 97% of the budget is spent — no new spend without a fresh rationale',
+    completed: 6, failed: 1, open_tasks: 0,
+    teams: [{ id: 'd5', name: 'Animation', head_name: 'Iris', agents: 5 }] },
+];
 const COMPANY = () => ({
   id: 'co1', name: 'Northwind Pictures', mission: 'Own the Q3 launch portfolio', status: 'active',
   budget_usd: 10, spend_usd: 3.8, spend_ratio: 0.38,
   ceo: { id: 'c1', name: 'Vera', grade: 5 },
-  roster: [{ id: 'c1', name: 'Vera', role: 'ceo', grade: 5 }],
-  projects: [{ id: 'p1', name: PROJECT.name, status: 'active', spend_ratio: 0.38 }],
+  board: DIRECTORS,
+  roster: EXECUTIVES.map((e) => ({ id: e.id, name: e.name, role: e.role, grade: 5 })),
+  projects: MEMBERS.map((m) => ({ id: m.id, name: m.name, status: m.status, spend_ratio: m.spend_ratio })),
   last_review: {
     ts: ago(0),
-    projects: 1,
-    verdicts: [
-      { project_id: 'p1', name: PROJECT.name, verdict: 'on_track',
-        directive: 'keep going: 38% of the budget used, 1 completed so far',
-        basis: { spend_ratio: 0.38, completed: 1, failed: 0, attempted: 1 } },
-    ],
-    counts: { on_track: 1 },
+    projects: MEMBERS.length,
+    verdicts: MEMBERS.map((m) => ({ project_id: m.id, name: m.name, verdict: m.verdict,
+                                    directive: m.directive,
+                                    basis: { spend_ratio: m.spend_ratio, completed: m.completed,
+                                             failed: m.failed, attempted: m.completed + m.failed } })),
+    counts: { on_track: 1, at_risk: 1, stop: 1 },
   },
+});
+
+// ── The HQ floor (ADR 0011): the whole company on one screen ────────────────
+const HQ = () => ({
+  company: {
+    id: 'co1', name: 'Northwind Pictures', mission: 'Own the Q3 launch portfolio',
+    budget_usd: 10, spend_usd: 3.8, spend_ratio: 0.38,
+  },
+  ceo: { id: 'c1', name: 'Vera', grade: 5 },
+  executives: EXECUTIVES,
+  board: DIRECTORS,
+  projects: MEMBERS.map((m) => ({ ...m, last_at: ago(m.verdict === 'on_track' ? 40 : m.verdict === 'at_risk' ? 150 : 3600) })),
+  activity: [
+    { type: 'board.convened', at: ago(38), project_id: 'co1',
+      text: 'board session: Q3 portfolio allocation', summary: null,
+      payload: { topic: 'Q3 portfolio allocation', session_id: 'cs-1',
+                 members: ['Vera', 'Eleanor Voss', 'Priya Raman', 'Tom Okafor'] } },
+    { type: 'council.position', at: ago(31), project_id: 'co1',
+      text: 'Eleanor Voss took a position', summary: 'vote the read of the record, not the room',
+      payload: { session_id: 'cs-1', agent_id: 'b1' } },
+    { type: 'decision.recorded', at: ago(24), project_id: 'co1',
+      text: 'the board approved the allocation', summary: 'approve the plan as recorded',
+      payload: { session_id: 'cs-1' } },
+    { type: 'company.allocation.decided', at: ago(22), project_id: 'co1',
+      text: 'portfolio allocation: 3 projects ranked',
+      summary: 'Market Brief: #1 → $4.30 · Arctic Light: #2 → $3.10 · Moonbase: #3 → $2.60',
+      payload: { allocations: [
+        { project_id: 'p1', name: PROJECT.name, priority: 1, verdict: 'on_track', share: 0.55,
+          old_cap_micros: 3_800_000, new_cap_micros: 4_300_000 },
+        { project_id: 'p2', name: 'Arctic Light — documentary', priority: 2, verdict: 'at_risk',
+          share: 0.29, old_cap_micros: 3_400_000, new_cap_micros: 3_100_000 },
+        { project_id: 'p3', name: 'Moonbase — kids series', priority: 3, verdict: 'stop',
+          share: 0.0, old_cap_micros: 2_800_000, new_cap_micros: 2_600_000 }] } },
+    { type: 'company.directive', at: ago(16), project_id: 'p2',
+      text: 'company directive: at_risk — Arctic Light', summary: MEMBERS[1].directive,
+      payload: { verdict: 'at_risk', project_id: 'p2', directive: MEMBERS[1].directive } },
+    { type: 'company.directive', at: ago(900), project_id: 'p3',
+      text: 'company directive: stop — Moonbase', summary: MEMBERS[2].directive,
+      payload: { verdict: 'stop', project_id: 'p3', directive: MEMBERS[2].directive } },
+    { type: 'board.seated', at: ago(1800), project_id: 'co1',
+      text: "board seated: Eleanor Voss chairs, 2 owners' seats", summary: null,
+      payload: { role: 'chair', agent_id: 'b1' } },
+  ],
+});
+
+const PORTFOLIO = () => ({
+  company_id: 'co1', cap_micros: 10_000_000, spend_micros: 3_800_000, headroom_micros: 6_200_000,
+  projects: MEMBERS.map((m, i) => ({
+    project_id: m.id, name: m.name, verdict: m.verdict, severity: 'notice',
+    directive: m.directive, basis: { spend_ratio: m.spend_ratio }, weight: 1 - i * 0.3,
+    success_rate: 0.7, share: [0.55, 0.29, 0.16][i], priority: i + 1,
+    spend_micros: m.spend_ratio * 8_000_000, cap_micros: 8_000_000,
+    new_cap_micros: [4_300_000, 3_100_000, 2_600_000][i],
+  })),
+  method: 'cap_i = spend_i + share_i of company headroom; a stop verdict funds nothing new',
 });
 
 const ack = { accepted: true, event_seq: 4123, unit: { kind: 'project', id: 'p1', name: PROJECT.name } };
@@ -429,6 +513,38 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
     return res.end(JSON.stringify({ items: [COMPANY()] }));
   }
+  if (/^\/api\/companies\/[^/]+\/hq$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify(HQ()));
+  }
+  if (/^\/api\/companies\/[^/]+\/portfolio$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify(PORTFOLIO()));
+  }
+  if (/^\/api\/companies\/[^/]+\/allocate$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    const p = PORTFOLIO();
+    return res.end(JSON.stringify({ company_id: 'co1', projects: p.projects,
+                                    headroom_micros: p.headroom_micros, method: p.method }));
+  }
+  if (/^\/api\/companies\/[^/]+\/board-session$/.test(url.pathname)) {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* demo */ }
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify({ session_id: `cs-${Date.now()}`, question: String(b.topic || 'board session'),
+                               panel: DIRECTORS.map((x) => x.id).concat(['c1']),
+                               members: DIRECTORS.map((x) => x.name) }));
+    });
+    return;
+  }
+  if (/^\/api\/companies\/[^/]+\/board$/.test(url.pathname)) {
+    res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ id: `b${DIRECTORS.length + 1}`, name: 'New Seat',
+                                    role: 'board_member', grade: 5 }));
+  }
   if (/^\/api\/companies\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
     return res.end(JSON.stringify(COMPANY()));
@@ -443,9 +559,10 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       let b = {};
       try { b = JSON.parse(raw); } catch { /* empty body is fine in the demo */ }
-      const isBug = b.kind === 'bug';
+      const kind = ['story', 'task', 'bug', 'epic', 'feature'].includes(b.kind) ? b.kind : 'story';
+      const isBug = kind === 'bug';
       const item = {
-        id: `w${BOARD_ITEMS.length + 1}`, kind: isBug ? 'bug' : 'story',
+        id: `w${BOARD_ITEMS.length + 1}`, kind,
         title: String(b.title || 'Untitled story'), body: String(b.body || ''),
         state: 'backlog', own_state: 'backlog',
         severity: isBug ? (b.severity || 'normal') : 'normal', priority: 2,

@@ -120,6 +120,23 @@ async def test_report_bug_files_under_the_story_of_the_current_task(bound_loop, 
 
 
 @pytest.mark.asyncio
+async def test_a_user_task_kind_promotes_too(bound_loop, project):
+    item = await backlog.create_item(project_id=project["id"], kind="task",
+                                     title="wire the settings page", created_by="user:tester",
+                                     state="ready")
+    promoted = await backlog.promote_ready(project_id=project["id"], run_id="r-5")
+    assert len(promoted) == 1 and promoted[0]["kind"] == "task"
+    async with session_scope() as s:
+        t = await s.get(Task, promoted[0]["task_id"])
+    assert not t.title.startswith("[bug] ")
+    assert t.acceptance_criteria == ["The task's outcome is delivered and verified"]
+    # and it sits on the board under its own badge
+    b = await backlog.board(project_id=project["id"])
+    card = next(i for col in b["columns"] for i in col["items"] if i["id"] == item["id"])
+    assert card["kind"] == "task" and card["state"] == "backlog"
+
+
+@pytest.mark.asyncio
 async def test_join_task_and_the_helper_takes_the_retry(bound_loop, project):
     run = await orchestrator.start_run(project_id=project["id"], goal="helpers finish it")
     async with session_scope() as s:

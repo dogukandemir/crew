@@ -22,7 +22,10 @@ async def test_company_bootstrap_hires_a_ceo_not_an_orchestrator(bound_loop):
         agents = (await s.scalars(select(Agent).where(Agent.project_id == co["id"]))).all()
         created = (await s.scalars(select(Event).where(Event.project_id == co["id"],
                                                        Event.type == "company.created"))).all()
-    assert {a.role for a in agents} == {Role.CEO.value}, "a company's executive is the CEO"
+    roles = [a.role for a in agents]
+    assert Role.CEO.value in roles, "a company's executive is the CEO"
+    assert Role.CHAIR.value in roles, "the board is seated with the company (ADR 0011)"
+    assert roles.count(Role.BOARD_MEMBER.value) == 2, "two owners' seats"
     assert created and created[0].payload["name"] == "Northwind"
     # and it stays out of the ordinary project list
     listed = await org.list_projects()

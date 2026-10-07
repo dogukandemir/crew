@@ -98,6 +98,18 @@ response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `item_id`,
 `kind`, and on promotion `task_id`), `task.helper.joined` (`task_id`, `agent_id`).
 
+### Governance (ADR 0011)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/companies/{id}/hq` | the whole company for one floor: executives, board, member pods with teams, governance activity |
+| GET | `/api/companies/{id}/portfolio` | the ranked portfolio view: verdicts, weights, shares, proposed caps |
+| POST | `/api/companies/{id}/allocate` | the CEO's portfolio call — **writes the member caps**; a `stop` verdict funds nothing new |
+| POST | `/api/companies/{id}/board-session` | convene the board of directors `{topic, options?}` (council machinery; `board.convened`) |
+| POST | `/api/companies/{id}/board` | seat another director `{role: chair\|board_member}` |
+
+Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
+`company.allocation.decided` (`company_id`, `allocations`, `headroom_micros`, `method`).
+
 ### Council & decisions
 | Method | Path | Purpose |
 |--------|------|---------|

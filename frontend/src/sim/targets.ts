@@ -396,6 +396,30 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
   return out;
 }
 
+/**
+ * Is the machine at a desk being worked at, right now?
+ *
+ * This used to be asked of `activity` alone — `typing` or `tool` — which is the
+ * wrong question: activity says what somebody is doing, never where they are. A
+ * researcher with a live task works at the lab bench; the junior of a squad pair
+ * works at the senior's desk; somebody on another department's task stands in
+ * that department. In each case the desk at home lit up with an empty chair,
+ * which reads as a machine running by itself — and where the person actually was
+ * had no screen at all. Tying the screen to sitting at its own desk makes the
+ * screen and the body the same fact, so they cannot disagree.
+ */
+export function deskInUse(
+  target: Target | undefined,
+  act: Activity | undefined,
+  homeRoomId: string | undefined,
+  moving = false,
+): boolean {
+  if (moving) return false;
+  if (!target?.seated || !act || !homeRoomId) return false;
+  if (target.roomId !== homeRoomId) return false;
+  return act.kind === 'typing' || act.kind === 'tool';
+}
+
 /** Desks are wide; keep the ring from pushing anyone into a wall. */
 export function targetIsInsideRoom(office: Office, t: Target): boolean {
   const room = office.rooms.find((r) => r.id === t.roomId);

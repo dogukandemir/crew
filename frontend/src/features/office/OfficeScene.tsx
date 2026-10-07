@@ -25,7 +25,7 @@ import {
   type Room,
 } from '../../sim/floorplan';
 import type { FloorPulse } from '../../sim/rooms';
-import type { Target } from '../../sim/targets';
+import { deskInUse, type Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
 import { SPRITE_UNIT, spriteTiles, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
 import { Bubble } from './Bubble';
@@ -296,6 +296,8 @@ function roomItems(
   room: Room,
   office: Office,
   activities: Record<string, Activity>,
+  targets: Record<string, Target>,
+  motions: Map<string, SvgMotionRef>,
   pulse: FloorPulse['rooms'][string] | undefined,
   stagger: number,
 ): Drawable[] {
@@ -316,12 +318,22 @@ function roomItems(
       const deskX = room.x + desk.x;
       const deskY = room.y + desk.y;
       const act = activities[desk.agentId];
-      const busy = act?.kind === 'typing' || act?.kind === 'tool';
+      // Lit only when its owner is sitting at THIS desk, working — see `deskInUse`
+      // for why activity alone was the wrong question. `moving` matters because the
+      // target says "seated" the moment somebody is ON THEIR WAY to a seat — after
+      // the floor re-grids, that walk can be long, and a screen burning over an
+      // empty chair for the length of it is the same lie in miniature.
+      const busy = deskInUse(
+        targets[desk.agentId],
+        act,
+        office.roomOf[desk.agentId],
+        motions.get(desk.agentId)?.current.moving ?? false,
+      );
       at(
         `desk-${desk.agentId}`,
         deskX,
         deskY,
-        <g key={`desk-${desk.agentId}`}>
+        <g key={`desk-${desk.agentId}`} data-desk={desk.agentId} data-busy={busy ? '1' : '0'}>
           {/* The bay this desk sits in: ONE partition, at the desk's left, which is
               what makes one place end and the next begin. Two per desk read as a
               room full of panels — bays are a run, not a cage. */}
@@ -667,7 +679,7 @@ export function OfficeScene({
   const drawables = useMemo(() => {
     const out: Drawable[] = [];
     for (const room of rooms) {
-      out.push(...roomItems(room, office, activities, pulse.rooms[room.id], staggers[room.id] ?? 0));
+      out.push(...roomItems(room, office, activities, targets, motions, pulse.rooms[room.id], staggers[room.id] ?? 0));
     }
     for (const id of people) {
       const agent = office.agentOf[id];

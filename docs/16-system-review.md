@@ -58,6 +58,38 @@ the setting: set a provider key, or run the backend with `CREW_OFFLINE_LLM=true`
 same pipeline against the deterministic fake runner — and the mock in `dev/mock/` needs no
 backend at all.
 
+## FIXED · The desk screens lied about who was working
+
+Reported: on some computers the machine looked busy with nobody at it, and at
+others it looked idle under somebody who was working. One cause, two directions:
+the screen was lit from `activity` — `typing`/`tool` — which says what a person is
+doing, never where they are. A researcher with a live task works at the lab bench,
+the junior of a squad pair works at the senior's desk, somebody on another
+department's task stands in that department; in all three the desk at home burned
+with an empty chair, and where the person actually was had no screen at all.
+
+How it was found, because the method is the point: the desk sprite's two states
+(`prop.desk` vs `prop.desk.busy`) were told apart in the live DOM by decoding the
+clip rect and the image offset back into an atlas cell origin, and each desk was
+then compared against the person nearest it. Live proof of the bug: Max, given a
+task whose title is research vocabulary, walked to the lab bench and typed there —
+his home desk was lit and empty the whole time.
+
+The fix is `deskInUse` (sim/targets.ts): the screen is on only when its owner is
+seated at its own desk, working — and not mid-walk (the target says "seated" the
+moment somebody is on their way, and after the floor re-grids that walk can be
+long). Desks also now carry `data-desk`/`data-busy`, so the next report of this
+kind can be measured instead of guessed at.
+
+Verified live, 100 seconds spanning a clock reset and every beat (hire, new
+department, two more hires, all the re-grids that follow): Max at the bench in
+35/35 samples with his own screen lit 0 times; busy screens observed 36 times
+(the run is not vacuous); zero lit-and-abandoned desks. The only two mismatch
+samples were single 2-second frames where somebody had just sat down and the
+desk had not re-rendered yet.
+
+Tests: `src/sim/desk-screen.test.ts`. 213 frontend tests.
+
 ## Office findings still open (docs/15 plus this review)
 
 - O1 The arrival walk of a newly hired agent: the ARRIVAL is now proven, the WALK is not.

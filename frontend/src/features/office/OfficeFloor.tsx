@@ -455,17 +455,15 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
   // ── Camera interaction ─────────────────────────────────────────────────────
   useEffect(() => {
-    // NOTHING here may depend on the canvas ref being populated when this runs. The
-    // effect has an empty dependency list, so it runs exactly once; if `canvasRef.current`
-    // is still null at that moment the listener was never attached at all — no
-    // preventDefault, so the browser took every Ctrl+wheel as its own page zoom, in
-    // Chrome and Firefox alike. The frame is looked up from the document instead, which
-    // is true whenever the office is on screen.
-    const frame = (canvasRef.current?.closest('[aria-label^="Office floor"]') ??
-      document.querySelector('[aria-label^="Office floor"]')) as HTMLElement | null;
-    const onWheel = (e: WheelEvent) => {
+    // The frame is resolved FROM THE EVENT, on every wheel, and never captured at mount.
+    // The captured version came back null — the office's labelled element does not exist
+    // yet when this effect first runs — so every wheel was rejected, no preventDefault
+    // was called, and the browser took the gesture as its own page zoom, in Chrome and
+    // Firefox alike. The handler's own trace said exactly that:
+    //   { mounted: true, frameTag: null, sawEvent: true, inFrame: false }
+    const onWheel = (e: WheelEvent, host: HTMLElement) => {
       e.preventDefault();
-      const rect = (frame ?? document.body).getBoundingClientRect();
+      const rect = host.getBoundingClientRect();
       // Ctrl (or ⌘) is the zoom modifier, the same one the browser itself uses. A plain
       // wheel scrolls the floor instead of zooming it: without the modifier, a trackpad
       // two-finger scroll flung the zoom about while the reader was only trying to look
@@ -483,22 +481,33 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       }
       setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }));
     };
-    // Capture phase, on the window. The browser decides its OWN page zoom from a
-    // Ctrl+wheel event, and a listener on the game element loses that race however
-    // early it is registered — which is why Ctrl+wheel kept zooming the PAGE. A
-    // capture-phase listener at the window sees the event before anything else,
-    // including the browser's default handling, and preventDefault actually lands.
-    // The guard is the whole GAME FRAME, found from the document rather than from `el`:
-    // the frame holds the svg, the label and bubble overlay, the hint bar and the dev
-    // button, and a wheel over any of them must zoom the floor. Guarding on `el` — whose
-    // element was never pinned down — silently dropped the gesture over most of the game,
-    // and a dropped wheel is not a no-op: the browser then reads it and zooms the PAGE.
-    // That is why this failed in Chrome as well as Firefox, and why the one measurement
-    // that "worked" was a dispatch straight onto the svg.
+    // Capture phase, on the window: a browser decides its own page zoom from a Ctrl+wheel
+    // event, so preventDefault has to land before the default action — and a dropped
+    // wheel is not a no-op, the browser takes it as page zoom. That is what was
+    // happening: the gesture was rejected here, not by the browser.
+    // The guard resolves the game frame FROM THE EVENT (see captureWheel), never from a
+    // value captured when this effect ran. The captured one was null, because the office's
+    // labelled element does not exist yet at first mount, so every wheel was rejected.
     const captureWheel = (e: WheelEvent) => {
       const target = e.target;
-      if (!frame || !(target instanceof Node) || !frame.contains(target)) return;
-      onWheel(e);
+      // Walk up from whatever the wheel landed on. `closest` finds the game frame (or the
+      // scene svg, which carries the same label) whatever the mount order was, and
+      // whatever `canvasRef` happens to point at.
+      const host = target instanceof Element
+        ? (target.closest('[aria-label^="Office floor"]') as HTMLElement | null)
+        : null;
+      if (import.meta.env.DEV) {
+        (window as unknown as { __officeWheel?: Record<string, unknown> }).__officeWheel = {
+          sawEvent: true,
+          inGame: !!host,
+          ctrl: e.ctrlKey,
+          alt: e.altKey,
+          targetTag: target instanceof Element ? target.tagName : typeof target,
+          at: new Date().toISOString(),
+        };
+      }
+      if (!host) return;
+      onWheel(e, host);
     };
     window.addEventListener('wheel', captureWheel, { passive: false, capture: true });
     return () => {

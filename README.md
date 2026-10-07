@@ -16,6 +16,7 @@ backend/          Python 3.12 · FastAPI · SQLAlchemy · CrewAI execution engin
 frontend/         React 19 · TypeScript · Vite · tabbed control room
 docs/             Refinement documentation (read this first)
 docs/adr/         Architecture Decision Records
+dev/mock/         Zero-dependency API mock — the UI and the office, with no backend and no keys
 scripts/          Dev/ops helpers
 ```
 
@@ -55,6 +56,20 @@ npm run dev                      # http://localhost:5173
 # 3. optional: same pipeline with zero spend and zero keys (deterministic fake runner)
 CREW_OFFLINE_LLM=true uv run python -m crew serve
 ```
+
+### Fastest possible look: the mock, no backend and no keys
+
+If you only want to see the control room and the office — no Python, no provider keys, no
+spend — run the API mock instead of the backend:
+
+```bash
+node dev/mock/server.mjs                                  # http://127.0.0.1:8788
+cd frontend && echo 'VITE_API_BASE=http://127.0.0.1:8788' > .env.local && npm run dev
+```
+
+Open the project and the office floor: the organization grows on its own while you watch
+(a hire at t+12, a whole new department at t+30). See [dev/mock/README.md](dev/mock/README.md)
+for what it does and does not promise.
 
 Useful commands:
 

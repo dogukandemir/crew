@@ -35,14 +35,20 @@ the toolbar you would need to get out of it.
 
 Action: a boundary around the app shell with a recoverable error state.
 
-## P4 · Nobody else can run it — HIGH
+## P4 · Nobody else can run it — CLOSED, and partly my own misreading
 
-No Dockerfile, no compose, no service file. The README covers project layout and reading
-order but not "clone → run → see the office". The dev mock that makes the office work with
-no provider keys lives outside the repository, on one machine.
+The first scan was wrong about the missing pieces: `.env.example`, `frontend/.env.example`
+and a README quick start **already existed**, including a zero-key path
+(`CREW_OFFLINE_LLM=true`, the deterministic fake runner). What was genuinely missing:
 
-Action: a real quick start, `.env.example`, and the mock shipped under `dev/mock/` so the
-office is inspectable with zero keys and zero spend.
+- **No compose, no Dockerfile of any kind.** Added: `docker-compose.yml` plus small
+  backend and frontend images. `docker compose up` boots the pair with the offline runner
+  by default, so it needs no keys at all, and `.env` or the environment overrides it.
+- **The API mock lived outside the repository**, on one machine, so the one thing a
+  stranger could not do was look at the office without the whole stack. It is now
+  `dev/mock/server.mjs` (264 lines, zero dependencies) with `dev/mock/README.md` saying
+  exactly what it does and does not promise, and a README section showing the two commands.
+- `docker compose --profile mock up mock` runs the mock the same way.
 
 ## P5 · First run without keys is a dead end — MEDIUM
 

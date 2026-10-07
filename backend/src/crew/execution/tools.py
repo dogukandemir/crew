@@ -20,7 +20,7 @@ from typing import Any
 
 from crew.core import events as ev
 from crew.core.models import Agent, Project
-from crew.core.security import policy, redactor, request_approval, scan_injection
+from crew.core.security import approval_granted, policy, redactor, request_approval, scan_injection
 from crew.core.settings import settings
 from crew.domain.enums import Capability, PolicyOutcome
 
@@ -399,18 +399,29 @@ class ToolInvoker:
             self._denied(ctx, name, spec.capability, decision.reason)
             return {"ok": False, "error": "policy_denied", "detail": decision.reason}
         if decision.outcome == PolicyOutcome.REQUIRE_APPROVAL:
-            approval_id = run_on_loop(request_approval(
-                ctx.project_id, capability=spec.capability.value,
-                agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
-                request={"tool": name, "args": {k: str(v)[:200] for k, v in args.items()}},
-            ))
-            run_on_loop(ev.emit("policy.approval.requested", project_id=ctx.project_id, task_id=ctx.task_id,
-                                agent_id=ctx.agent.id if ctx.agent else None, severity="warning",
-                                title=f"approval needed: {spec.capability.value}",
-                                payload={"capability": spec.capability.value, "tool": name,
-                                         "approval_id": approval_id}))
-            return {"ok": False, "error": "approval_required", "detail": decision.reason,
-                    "approval_id": approval_id}
+            # The gate opens when a decision is ALREADY on file. Without this half the
+            # human's "granted" was recorded and then ignored: the retried call was denied
+            # forever and the approval queue was theatre (docs/17 batch 1).
+            if run_on_loop(approval_granted(ctx.project_id,
+                                            agent_id=ctx.agent.id if ctx.agent else None,
+                                            capability=spec.capability.value, task_id=ctx.task_id)):
+                run_on_loop(ev.emit("policy.approval.used", project_id=ctx.project_id, task_id=ctx.task_id,
+                                    agent_id=ctx.agent.id if ctx.agent else None, severity="notice",
+                                    title=f"approval on file: {spec.capability.value}",
+                                    payload={"capability": spec.capability.value, "tool": name}))
+            else:
+                approval_id = run_on_loop(request_approval(
+                    ctx.project_id, capability=spec.capability.value,
+                    agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
+                    request={"tool": name, "args": {k: str(v)[:200] for k, v in args.items()}},
+                ))
+                run_on_loop(ev.emit("policy.approval.requested", project_id=ctx.project_id, task_id=ctx.task_id,
+                                    agent_id=ctx.agent.id if ctx.agent else None, severity="warning",
+                                    title=f"approval needed: {spec.capability.value}",
+                                    payload={"capability": spec.capability.value, "tool": name,
+                                             "approval_id": approval_id}))
+                return {"ok": False, "error": "approval_required", "detail": decision.reason,
+                        "approval_id": approval_id}
 
         run_on_loop(ev.emit("agent.tool.call", project_id=ctx.project_id, task_id=ctx.task_id,
                             run_id=ctx.run_id, agent_id=ctx.agent.id if ctx.agent else None,

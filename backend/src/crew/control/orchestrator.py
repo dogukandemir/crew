@@ -7,7 +7,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 
 from crew.control import org
 from crew.control.council import council
@@ -232,6 +232,8 @@ class Orchestrator:
                 r = await s.get(Run, run.id)
                 if r.status == RunStatus.PAUSED.value or r.stage == RunStage.DONE.value:
                     return RunStage(r.stage)
+            # heal any stale `busy` from a crashed task before scheduling this wave
+            await self._reap_occupancy(project.id)
             tasks = await org.ready_tasks(project.id, run.id)
             runnable = [t for t in tasks if t.state == TaskState.ASSIGNED.value and t.assignee_agent_id]
             if not runnable:
@@ -258,6 +260,7 @@ class Orchestrator:
                 row.state = TaskState.FAILED.value
                 row.escalation_reason = row.escalation_reason or "not completed within the run"
                 s.add(row)
+        await self._reap_occupancy(project.id)
         await _emit_stage(run, RunStage.LEARNING, project.id)
         return RunStage.LEARNING
 
@@ -283,6 +286,19 @@ class Orchestrator:
                     task.state = TaskState.BLOCKED.value
                     task.escalation_reason = "no assignee"
                     s.add(task)
+                    return
+                # One agent, one task at a time. The claim is an atomic conditional UPDATE
+                # on purpose: a read-then-write would race its sibling coroutine in the
+                # same wave. `busy` is what org.assign_tasks filters on — nothing used to
+                # set it, so the filter never bit and one agent could be handed several
+                # concurrent tasks (docs/17 batch 1).
+                claimed = await s.execute(update(Agent)
+                                          .where(Agent.id == agent.id,
+                                                 Agent.state.in_(("idle", "probation")))
+                                          .values(state="busy"))
+                if claimed.rowcount == 0:
+                    # somebody else holds them: leave the task assigned; the next wave
+                    # picks it up once its holder is done.
                     return
                 dept = None
                 if agent.department_id:
@@ -364,6 +380,7 @@ class Orchestrator:
                                                        "needed_micros": e.needed_micros,
                                                        "available_micros": e.available_micros},
                               actor="system:budget")
+                await self._free_agent(snapshot.id)
                 return
 
             started = asyncio.get_event_loop().time()
@@ -375,6 +392,35 @@ class Orchestrator:
             await self._record_task_result(run, project, task_id, snapshot, result, elapsed_ms,
                                            route=router.choice_for_agent(snapshot).model, attempts=attempts)  # type: ignore[arg-type]
             await self._verify_and_reward(run, project, task_id, result, attempts)
+            await self._free_agent(snapshot.id)
+
+    async def _free_agent(self, agent_id: str) -> None:
+        """A finished task releases its agent (the inverse of the claim in _run_task)."""
+        async with session_scope() as s:
+            a = await s.get(Agent, agent_id)
+            if a is not None and a.state == "busy":
+                a.state = "idle"
+                s.add(a)
+
+    async def _reap_occupancy(self, project_id: str) -> None:
+        """The safety net: any agent marked busy with no task RUNNING is freed.
+
+        An exception between claim and release must not quietly remove somebody from
+        every future assignment — this runs at the head of every wave, so the fleet
+        heals itself within one tick.
+        """
+        async with session_scope() as s:
+            busy = (await s.scalars(select(Agent).where(Agent.project_id == project_id,
+                                                        Agent.state == "busy"))).all()
+            if not busy:
+                return
+            running = set((await s.scalars(select(Task.assignee_agent_id).where(
+                Task.assignee_agent_id.in_([a.id for a in busy]),
+                Task.state == TaskState.RUNNING.value))).all())
+            for a in busy:
+                if a.id not in running:
+                    a.state = "idle"
+                    s.add(a)
 
     async def _record_task_result(self, run: Run, project: Project, task_id: str, snapshot: AgentSnapshot,
                                   result, elapsed_ms: int, route: str, attempts: int) -> None:

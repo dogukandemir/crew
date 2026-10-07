@@ -468,6 +468,26 @@ async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, rea
     return row
 
 
+async def approval_granted(project_id: str, *, agent_id: str | None, capability: str,
+                           task_id: str | None) -> bool:
+    """Is there a GRANTED approval that covers this call?
+
+    `policy.check` will keep answering "requires human approval" — that is correct; what
+    was missing is the other half: nothing ever CONSUMED a grant, so approving a request
+    was recorded and then ignored, and the retried call was denied forever. A grant
+    covers one agent and one capability, scoped to the task it was requested for, or to
+    the agent's general scope when it was requested without a task (task_id NULL).
+    """
+    async with session_scope() as s:
+        q = select(Approval).where(Approval.project_id == project_id,
+                                   Approval.capability == capability,
+                                   Approval.state == "granted")
+        if agent_id is not None:
+            q = q.where(Approval.agent_id == agent_id)
+        rows = (await s.scalars(q.order_by(Approval.decided_at.desc()).limit(20))).all()
+    return any(r.task_id in (None, task_id) for r in rows)
+
+
 async def ensure_default_caps(project: Project) -> None:
     """Guard: a project can never be given a cap above the configured hard ceiling."""
     if project.budget_cap_micros > usd_to_micros(settings.hard_budget_usd):

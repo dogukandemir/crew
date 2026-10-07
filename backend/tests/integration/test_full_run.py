@@ -186,3 +186,13 @@ async def test_projects_are_isolated(bound_loop, project):
         other_ids = {b.id for b in brains}
         own = (await s.scalars(select(BrainEntry).where(BrainEntry.project_id == project["id"]))).all()
     assert not ({e.brain_id for e in own} & other_ids), "brain namespaces must not leak across projects"
+
+
+@pytest.mark.asyncio
+async def test_nobody_is_left_marked_busy(bound_loop, project):
+    """`busy` is claimed at task start and released on every end path (docs/17 batch 1)."""
+    await _advance(project["id"], "List three risks of overnight deployments")
+    async with session_scope() as s:
+        stuck = (await s.scalars(select(Agent).where(Agent.project_id == project["id"],
+                                                     Agent.state == "busy"))).all()
+    assert not stuck, f"agents left marked busy: {[a.name for a in stuck]}"

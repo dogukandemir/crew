@@ -703,18 +703,24 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
             if t.state not in (TaskState.PENDING.value, TaskState.READY.value):
                 continue
             needed = {r["skill"]: float(r.get("weight", 1.0)) for r in (t.required_skills or [])}
-            best, best_score = None, 0.0
+            best, best_score, best_coverage = None, 0.0, 0.0
             for a in agents:
                 if a.role in (Role.ORCHESTRATOR.value, Role.HEAD.value) or a.state in ("busy", "archived", "suspended"):
                     continue
                 prof = skills_by_agent.get(a.id, {})
-                score = sum(w * prof.get(sid, 0.0) for sid, w in needed.items())
+                coverage = sum(w * prof.get(sid, 0.0) for sid, w in needed.items())
+                # Grade is not coverage: without this check an agent holding NONE of the
+                # required skills still scored +0.01 on the grade bonus and took the task,
+                # when the honest answer was to park it (docs/02 §4, docs/03 §5).
+                if needed and coverage <= 0.0:
+                    continue
+                score = coverage
                 score += 0.05 * (a.grade / 5)          # slight preference for experience
                 score -= 0.001 * (a.tasks_done)        # spread the work
                 # managers manage: a lead only takes IC work when no hands are free (docs/02 §2)
                 score -= ROLE_ASSIGNMENT_PENALTY.get(a.role, 0.25)
                 if score > best_score:
-                    best, best_score = a, score
+                    best, best_score, best_coverage = a, score, coverage
             if best is None:
                 # no capable agent: park the task for escalation rather than running it badly
                 t.state = TaskState.BLOCKED.value
@@ -734,7 +740,8 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
             await ev.emit("task.assigned", project_id=project_id, run_id=run_id, task_id=t.id,
                           agent_id=best.id, department_id=best.department_id, squad_id=best.squad_id,
                           title=f"{best.name} ← {t.title[:50]}",
-                          payload={"task_id": t.id, "agent_id": best.id, "match_score": round(best_score, 3)},
+                          payload={"task_id": t.id, "agent_id": best.id, "match_score": round(best_score, 3),
+                                   "coverage": round(best_coverage, 3)},
                           actor="system:scheduler")
     return assigned
 

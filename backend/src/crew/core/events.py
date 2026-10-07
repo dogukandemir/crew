@@ -185,6 +185,7 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "decision.recorded": ("decision_id", "chosen_option"),
     "policy.denied": ("capability",),
     "policy.approval.requested": ("capability",),
+    "policy.approval.used": ("capability",),
     "budget.exceeded": ("scope_kind", "scope_id"),
     "security.injection.detected": ("where",),
     "user.steering": ("target_kind", "text"),

@@ -67,12 +67,6 @@ describe('the office grows', () => {
       if (!before) continue;
       if (before.x !== room.x || before.y !== room.y) moved.push(`${room.id} ${before.x},${before.y} -> ${room.x},${room.y}`);
     }
-    // Growing a department grows its BAY and may grow the whole block's cell pitch if a
-    // roster outgrows the cell — the one honest case where a standing room moves. Every
-    // other room in every other row must be exactly where it was.
-    if (moved.length > 0) {
-      for (const line of moved) expect(line).toContain('__');
-    }
     expect(moved).toEqual([]);
   });
 

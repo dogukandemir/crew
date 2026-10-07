@@ -460,8 +460,16 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = el.getBoundingClientRect();
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      setCam((c) => zoomAt(c, factor, e.clientX - rect.left, e.clientY - rect.top));
+      // Ctrl (or ⌘) is the zoom modifier, the same one the browser itself uses. A plain
+      // wheel scrolls the floor instead of zooming it: without the modifier, a trackpad
+      // two-finger scroll flung the zoom about while the reader was only trying to look
+      // around, which is not what that gesture means anywhere else.
+      if (e.ctrlKey || e.metaKey) {
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        setCam((c) => zoomAt(c, factor, e.clientX - rect.left, e.clientY - rect.top));
+        return;
+      }
+      setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -729,7 +737,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           )}
 
           <div className="office-hint">
-            drag to pan · scroll to zoom · click a character for thinking &amp; output · <kbd>F</kbd> fit ·{' '}
+            drag to pan · <kbd>Ctrl</kbd>+scroll to zoom · scroll to pan · click a character for thinking &amp; output ·{' '}
+            <kbd>F</kbd> fit ·{' '}
             <kbd>Esc</kbd> deselect
           </div>
 

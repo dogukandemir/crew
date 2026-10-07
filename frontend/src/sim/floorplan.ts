@@ -68,25 +68,25 @@ export interface RoomSlot {
    */
   bayW: number;
   bayH: number;
+  /** The pitch the block was laid out with, so a rebuild can tell it has changed. */
+  pitchW: number;
+  pitchH: number;
   /** Which cell of the block the room sits in. Position is a pure function of this. */
   col: number;
 }
 
 /**
- * The cell a room is given in the block: room for a five-desk department, which is the
- * largest a 24-agent project spread over six departments can field, plus its bay.
+ * The block's pitch: how far apart two cells are.
  *
- * A FIXED cell is what makes a square block possible at all. Because every room's
- * position is its cell times the same two numbers, the square can grow by a ring —
- * three-by-three to four-by-four — and nothing inside it moves: the ninth room fills
- * the ninth cell, the tenth starts the next ring. Size a cell to whatever rooms happen
- * to be in it and the block reshuffles itself on every hire, which is the sliding
- * building this placement exists to stop.
+ * It is the smallest it can be for the rooms that exist — a two-desk department plus its
+ * bay — and it GROWS when a department's roster outgrows that, so a room is always as
+ * big as the people in it and the block stays tight instead of being a grid of empty
+ * bays. Every slot carries the pitch it was laid out with, so the number survives
+ * between builds; only when it has to grow does the block re-lay itself, which is a
+ * visible, honest event ("more agents, bigger building") rather than every hire sliding
+ * something.
  */
-const CELL = {
-  w: ROOM_PAD * 2 + 5 * DESK_W + 4 * DESK_GAP_X,
-  h: ROOM_PAD * 2 + ROOM_HEADER + 3 * DESK_H + 2 * DESK_GAP_Y + DESK_H + DESK_GAP_Y,
-};
+const MIN_PITCH_HOLDER = null;
 
 /**
  * The slack a fresh bay gets: one more desk, each way.
@@ -97,6 +97,12 @@ const CELL = {
  * department, and a different department on the far side of the floor moves.
  */
 const BAY_SLACK = { w: DESK_W + DESK_GAP_X, h: DESK_H + DESK_GAP_Y };
+
+/** The block's pitch: how far apart two cells are. Declared after the slack it uses. */
+const MIN_PITCH = {
+  w: ROOM_PAD * 2 + 2 * DESK_W + DESK_GAP_X + BAY_SLACK.w,
+  h: ROOM_PAD * 2 + ROOM_HEADER + 2 * DESK_H + DESK_GAP_Y + BAY_SLACK.h,
+};
 
 export interface Placement {
   slots: Record<string, RoomSlot>;
@@ -131,16 +137,57 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
   let maxCol = -1;
   let maxRow = -1;
 
-  // 1. Rooms that already exist keep the cell they were given, and their exact x and y
-  // — never recomputed from the cell, because a carried position is a promise and a
-  // recomputed one is arithmetic that can drift.
+  // 0. The bays FIRST, then the pitch that has to hold them — in that order, because the
+  // pitch must be sized by what a room is RESERVED, not by what it happens to hold. The
+  // bay is sticky: a hire eats into it, and only outgrowing it grows the pitch. Sizing
+  // the pitch off the current width instead made every hire re-lay the whole block,
+  // which is the sliding building this placement exists to stop.
+  const bayOf: Record<string, { w: number; h: number }> = {};
+  let pitchW = MIN_PITCH.w;
+  let pitchH = MIN_PITCH.h;
+  let wasPitchW = 0;
+  let wasPitchH = 0;
+  for (const room of sizes) {
+    const was = prev[room.id];
+    const bay = {
+      w: Math.max(was?.bayW ?? room.w + BAY_SLACK.w, room.w),
+      h: Math.max(was?.bayH ?? room.h + BAY_SLACK.h, room.h),
+    };
+    bayOf[room.id] = bay;
+    pitchW = Math.max(pitchW, bay.w);
+    pitchH = Math.max(pitchH, bay.h);
+    if (was) {
+      wasPitchW = Math.max(wasPitchW, was.pitchW ?? 0);
+      wasPitchH = Math.max(wasPitchH, was.pitchH ?? 0);
+    }
+  }
+  pitchW = Math.max(pitchW, wasPitchW);
+  pitchH = Math.max(pitchH, wasPitchH);
+  // A pitch that grew means the grid itself changed: the whole block re-lays from its
+  // cells, deliberately and at once, rather than leaving new rooms on a grid the old
+  // ones are not on.
+  const repitch = wasPitchW > 0 && (wasPitchW !== pitchW || wasPitchH !== pitchH);
+
+  // 1. Rooms that already exist keep the cell they were given, and — unless the pitch
+  // itself changed — their exact x and y. A carried position is a promise; a recomputed
+  // one is arithmetic that can drift.
   for (const room of sizes) {
     const was = prev[room.id];
     if (!was) continue;
-    const col = was.col ?? Math.max(0, Math.round((was.x - SPINE_W) / (CELL.w + ROOM_COL_GAP)));
-    const bayW = Math.max(was.bayW ?? room.w + BAY_SLACK.w, room.w);
-    const bayH = Math.max(was.bayH ?? room.h + BAY_SLACK.h, room.h);
-    slots[room.id] = { ...was, col, w: room.w, h: room.h, bayW, bayH };
+    const col = was.col ?? Math.max(0, Math.round((was.x - SPINE_W) / (pitchW + ROOM_COL_GAP)));
+    const { w: bayW, h: bayH } = bayOf[room.id];
+    slots[room.id] = {
+      ...was,
+      col,
+      x: repitch ? SPINE_W + col * (pitchW + ROOM_COL_GAP) : was.x,
+      y: repitch ? was.row * (pitchH + ROW_GAP) : was.y,
+      w: room.w,
+      h: room.h,
+      bayW,
+      bayH,
+      pitchW,
+      pitchH,
+    };
     taken.add(`${col},${was.row}`);
     maxCol = Math.max(maxCol, col);
     maxRow = Math.max(maxRow, was.row);
@@ -174,17 +221,18 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
       scan += 1;
     }
     taken.add(`${col},${row}`);
-    const bayW = room.w + BAY_SLACK.w;
-    const bayH = room.h + BAY_SLACK.h;
+    const { w: bayW, h: bayH } = bayOf[room.id];
     slots[room.id] = {
       row,
       col,
-      x: SPINE_W + col * (CELL.w + ROOM_COL_GAP),
-      y: row * (CELL.h + ROW_GAP),
+      x: SPINE_W + col * (pitchW + ROOM_COL_GAP),
+      y: row * (pitchH + ROW_GAP),
       w: room.w,
       h: room.h,
       bayW,
       bayH,
+      pitchW,
+      pitchH,
     };
   }
 
@@ -193,14 +241,14 @@ export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: 
   const rowTops: number[] = [];
   const rowHeights: number[] = [];
   for (let r = 0; r < side; r += 1) {
-    rowTops[r] = r * (CELL.h + ROW_GAP);
-    rowHeights[r] = CELL.h;
+    rowTops[r] = r * (pitchH + ROW_GAP);
+    rowHeights[r] = pitchH;
   }
 
   const gapsW = Math.max(0, side - 1) * ROOM_COL_GAP;
   const gapsH = Math.max(0, side - 1) * ROW_GAP;
-  const contentWidth = side * CELL.w + gapsW;
-  const contentHeight = side * CELL.h + gapsH;
+  const contentWidth = side * pitchW + gapsW;
+  const contentHeight = side * pitchH + gapsH;
   return {
     slots,
     rows: side,

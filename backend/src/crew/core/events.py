@@ -171,6 +171,7 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "org.agent.demoted": ("agent_id", "grade_before", "grade_after"),
     "org.agent.probation": ("agent_id",),
     "org.agent.archived": ("agent_id",),
+    "org.function.formed": ("function", "chief_id"),
     "task.created": ("task_id", "title"),
     "task.assigned": ("task_id", "agent_id"),
     "task.completed": ("task_id",),

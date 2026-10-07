@@ -54,6 +54,10 @@ ALWAYS_APPROVAL: set[Capability] = {Capability.NET_POST, Capability.FS_DELETE, C
 # Roles that must never be run on a cheap model (docs/04 §2).
 MIN_TIER_FOR_ROLE: dict[Role, ModelTier] = {
     Role.ORCHESTRATOR: ModelTier.REASONING,
+    Role.CTO: ModelTier.REASONING,
+    Role.CMO: ModelTier.REASONING,
+    Role.CPO: ModelTier.REASONING,
+    Role.COO: ModelTier.REASONING,
     Role.DECIDER: ModelTier.REASONING,
     Role.CRITIC: ModelTier.REASONING,
     Role.ARCHITECT: ModelTier.REASONING,
@@ -81,6 +85,12 @@ def _t(role: Role, title: str, mission: str, grade: Grade, skills: tuple[str, ..
 _COMMS = (Capability.BRAIN_READ, Capability.BRAIN_WRITE, Capability.COMMS_ASK,
           Capability.COMMS_ESCALATE, Capability.ARTIFACT_PUBLISH, Capability.HUMAN_APPROVE)
 
+# The executive tier owns a function: hire/fire inside it, chair its councils, guard its
+# budget envelope, and say the function's delivery truth upward (ADR 0008).
+_FUNCTION_CHIEF_CAPS = _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capability.COUNCIL_CONVENE,
+                                 Capability.COMMS_REQUEST_DECISION, Capability.BUDGET_REQUEST,
+                                 Capability.NET_SEARCH, Capability.NET_FETCH)
+
 ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
     Role.ORCHESTRATOR: _t(
         Role.ORCHESTRATOR, "Orchestrator",
@@ -90,6 +100,44 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         "gaps. Never do IC work yourself; delegate. Escalate to the user for one-way-door decisions.",
         _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capability.COUNCIL_CONVENE,
                   Capability.COMMS_REQUEST_DECISION, Capability.BUDGET_REQUEST, Capability.BRAIN_READ),
+    ),
+    Role.CTO: _t(
+        Role.CTO, "Chief Technology Officer",
+        "Own the technology function across every engineering, data and security unit: standards, "
+        "technical councils and delivery truth.",
+        Grade.CHIEF, ("domain-leadership", "system-design", "tradeoff-analysis"),
+        "Chair the function's decisions instead of doing its work. Keep the technical standard in the "
+        "function brain, arbitrate between departments before the orchestrator has to, and report the "
+        "function's delivery truth upward — never a rosier version of it.",
+        _FUNCTION_CHIEF_CAPS,
+    ),
+    Role.CMO: _t(
+        Role.CMO, "Chief Marketing Officer",
+        "Own the market function: positioning, demand and the quality of market evidence across the "
+        "research and business units.",
+        Grade.CHIEF, ("domain-leadership", "market-research", "evidence-synthesis"),
+        "Chair the function's decisions instead of doing its work. Hold the market evidence to one "
+        "standard across units, settle positioning conflicts between departments, and report the "
+        "function's truth upward — including what the data refuses to support.",
+        _FUNCTION_CHIEF_CAPS,
+    ),
+    Role.CPO: _t(
+        Role.CPO, "Chief Product Officer",
+        "Own the product function: what gets built and why, across the design, content and media units.",
+        Grade.CHIEF, ("domain-leadership", "interface-design", "planning"),
+        "Chair the function's decisions instead of doing its work. Keep one product story across units, "
+        "kill ideas with a reason before they cost a quarter, and report what the function actually "
+        "shipped versus what it said it would.",
+        _FUNCTION_CHIEF_CAPS,
+    ),
+    Role.COO: _t(
+        Role.COO, "Chief Operating Officer",
+        "Own operations: delivery discipline, support and process across the operations-facing units.",
+        Grade.CHIEF, ("domain-leadership", "quality-assurance", "planning"),
+        "Chair the function's decisions instead of doing its work. Own the operating cadence, keep "
+        "quality and support from trading blame, and report the function's bottlenecks upward with "
+        "names and numbers.",
+        _FUNCTION_CHIEF_CAPS,
     ),
     Role.HEAD: _t(
         Role.HEAD, "Department Head",

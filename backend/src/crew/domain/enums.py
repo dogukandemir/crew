@@ -22,6 +22,11 @@ class Grade(IntEnum):
 
 class Role(StrEnum):
     ORCHESTRATOR = "orchestrator"
+    # The executive tier (ADR 0008): one chief per function, between orchestrator and heads.
+    CTO = "cto"
+    CMO = "cmo"
+    CPO = "cpo"
+    COO = "coo"
     HEAD = "head"
     LEAD = "lead"
     WORKER = "worker"

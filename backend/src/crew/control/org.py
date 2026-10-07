@@ -73,6 +73,24 @@ ROLE_ASSIGNMENT_PENALTY: dict[str, float] = {
     "worker": 0.0, "specialist": 0.0, "analyst": 0.0, "critic": 0.05,
     "evaluator": 0.10, "architect": 0.10, "lead": 0.30, "librarian": 0.30,
     "head": 0.60, "decider": 0.60, "orchestrator": 1.0,
+    # the executive tier manages a function; it takes IC work last (ADR 0008)
+    "cto": 0.80, "cmo": 0.80, "cpo": 0.80, "coo": 0.80,
+}
+
+# The executive tier (ADR 0008, docs/02 §2): each C-role owns a FUNCTION — a group of
+# departments that share an executive concern. A chief appears once a function has two
+# departments to chair; the chain then reads orchestrator → chief → head → lead → worker.
+FUNCTION_OF_CATEGORY: dict[str, str] = {
+    "engineering": "technology", "data": "technology", "security": "technology",
+    "research": "market", "business": "market",
+    "design": "product", "content": "product", "media": "product",
+    "org": "operations", "meta": "operations",
+}
+C_ROLE_OF_FUNCTION: dict[str, Role] = {
+    "technology": Role.CTO, "market": Role.CMO, "product": Role.CPO, "operations": Role.COO,
+}
+FUNCTION_TITLE: dict[str, str] = {
+    "technology": "Technology", "market": "Market", "product": "Product", "operations": "Operations",
 }
 
 
@@ -613,6 +631,76 @@ async def department_for_category(project_id: str, category: str) -> Department 
                                                        Department.status != "archived"))
 
 
+async def _function_chief_id(project_id: str, category: str) -> str | None:
+    """The active chief of this category's function, if one has been staffed (ADR 0008)."""
+    function = FUNCTION_OF_CATEGORY.get(category)
+    if function is None:
+        return None
+    async with session_scope() as s:
+        return await s.scalar(select(Agent.id).where(
+            Agent.project_id == project_id,
+            Agent.role == C_ROLE_OF_FUNCTION[function].value,
+            Agent.state.notin_(("archived", "suspended")))
+            .order_by(desc(Agent.created_at)).limit(1))
+
+
+async def _staff_function_chiefs(*, project: Project, run_id: str,
+                                 orchestrator_id: str | None) -> list[dict]:
+    """Hire a function's chief once it has two departments, and re-seat the chain (ADR 0008).
+
+    One chief per function at a time — the check is against ACTIVE agents, so a laid-off
+    chief can be replaced but a working one is never duplicated. A refused hire (budget)
+    leaves the function headless: the departments keep reporting to the orchestrator,
+    a legal chain, just a flatter one.
+    """
+    created: list[dict] = []
+    async with session_scope() as s:
+        depts = (await s.scalars(select(Department).where(Department.project_id == project.id,
+                                                          Department.status != "archived"))).all()
+        agents = (await s.scalars(select(Agent).where(Agent.project_id == project.id,
+                                                      Agent.state != "archived"))).all()
+    by_function: dict[str, list[tuple[str, str | None]]] = {}
+    for d in depts:
+        category = str((d.charter or {}).get("category", ""))
+        function = FUNCTION_OF_CATEGORY.get(category)
+        if function:
+            by_function.setdefault(function, []).append((d.id, d.head_agent_id))
+
+    for function, members in by_function.items():
+        if len(members) < 2:
+            continue
+        role = C_ROLE_OF_FUNCTION[function]
+        if any(a.role == role.value for a in agents):
+            continue
+        title = FUNCTION_TITLE[function]
+        try:
+            chief = await hire_agent(
+                project_id=project.id,
+                spec=RoleSpec.from_template(role, mission=f"Chief of the {title} function",
+                                            rationale=f"the function reached {len(members)} departments"),
+                manager_id=orchestrator_id,
+                rationale=f"the {title} function now spans {len(members)} departments; someone must chair it",
+                actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+            )
+        except ValueError as e:
+            log.info("function chief refused: %s", e)
+            continue
+        created.append({"kind": "agent", **chief})
+        async with session_scope() as s:
+            for _dept_id, head_id in members:
+                head = await s.get(Agent, head_id) if head_id else None
+                if head is not None and head.state != "archived":
+                    head.manager_id = chief["id"]
+                    s.add(head)
+        await ev.emit("org.function.formed", project_id=project.id, run_id=run_id,
+                      agent_id=chief["id"], severity="notice",
+                      title=f"{chief['name']} chairs the {title} function",
+                      summary=f"{len(members)} departments now report up through {chief['name']}",
+                      payload={"function": function, "chief_id": chief["id"], "departments": len(members)},
+                      actor=f"agent:{orchestrator_id}" if orchestrator_id else "system")
+    return created
+
+
 async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id: str,
                      orchestrator_id: str | None = None, per_department_budget_usd: float = 1.5) -> list[dict]:
     """Turn capability gaps into departments/agents (docs/02 §5). Cheap by default."""
@@ -656,11 +744,13 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
             except ValueError as e:
                 log.info("department creation refused: %s", e)
                 continue
+            # a head reports to its function's chief when one exists, else to the orchestrator
+            chief_id = (await _function_chief_id(project.id, category)) or orchestrator_id
             try:
                 head = await hire_agent(
                     project_id=project.id,
                     spec=RoleSpec.from_template(Role.HEAD, mission=f"Head of {dept_name}", rationale=f"new department for {skill_ids}"),
-                    department_id=dept_id, manager_id=orchestrator_id,
+                    department_id=dept_id, manager_id=chief_id,
                     rationale=f"department {dept_name} needs a head to staff {', '.join(skill_ids)}",
                     actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
                 )
@@ -727,6 +817,9 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
             except ValueError as e:
                 log.info("hire refused: %s", e)
                 break
+    # the executive tier: a function with two departments earns its chief (ADR 0008)
+    created += await _staff_function_chiefs(project=project, run_id=run_id,
+                                            orchestrator_id=orchestrator_id)
     return created
 
 
@@ -749,7 +842,9 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
             needed = {r["skill"]: float(r.get("weight", 1.0)) for r in (t.required_skills or [])}
             best, best_score, best_coverage = None, 0.0, 0.0
             for a in agents:
-                if a.role in (Role.ORCHESTRATOR.value, Role.HEAD.value) or a.state in ("busy", "archived", "suspended"):
+                if a.role in (Role.ORCHESTRATOR.value, Role.HEAD.value,
+                              Role.CTO.value, Role.CMO.value, Role.CPO.value, Role.COO.value) \
+                        or a.state in ("busy", "archived", "suspended"):
                     continue
                 prof = skills_by_agent.get(a.id, {})
                 coverage = sum(w * prof.get(sid, 0.0) for sid, w in needed.items())

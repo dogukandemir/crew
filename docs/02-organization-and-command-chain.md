@@ -10,7 +10,7 @@ an event. New units appear when the work requires a capability the org does not 
 | 0 | **Project** | User | Until archived | Goal, budget, policies, project brain, org tree |
 | 1 | **Department** | Orchestrator (hire event) | Persistent while its capability recurs | Domain mission, roster, dept brain, budget envelope, tool grants |
 | 2 | **Squad** | Department Head (or Orchestrator) | One workstream; dissolved at completion | Backlog slice, squad lead, working memory, artifacts |
-| 3 | **Agent** | Head (or Orchestrator for executives) | Until laid off | Role spec, skills, tool grants, personal brain, score, budget |
+| 3 | **Agent** | Head (or Orchestrator for executives/chiefs) | Until laid off | Role spec, skills, tool grants, personal brain, score, budget |
 
 **Invariants**
 - A project always has exactly one **Orchestrator** agent (role `orchestrator`), created with
@@ -56,6 +56,24 @@ an event. New units appear when the work requires a capability the org does not 
                  └──────────────┘
 ```
 
+### The executive tier (functions)
+
+Between the orchestrator and the department heads sit optional **function chiefs**
+(ADR 0008): one C-role per *function* — a group of departments that share an executive
+concern.
+
+| Function | C-role | Departments (by category) |
+|----------|--------|---------------------------|
+| Technology | `cto` | engineering, data, security |
+| Market | `cmo` | research, business |
+| Product | `cpo` | design, content, media |
+| Operations | `coo` | org, meta |
+
+A chief is hired by the orchestrator when a function reaches **two active departments**;
+those departments' heads then report to the chief, and the chain reads
+`orchestrator → chief → head → lead → worker`. One chief per function at a time. The
+chief chairs the function's councils and arbitration; it does not do IC work.
+
 ### Authority matrix
 
 | Action | Orchestrator | Head | Lead | Worker | Decider |
@@ -80,6 +98,10 @@ text. Prompts express the *intent*; the policy engine expresses the *law*.
 | Role | Purpose | Typical grade | Model tier |
 |------|---------|---------------|-----------|
 | `orchestrator` | Executive: decompose goals, hire, arbitrate, settle rewards | Principal | reasoning |
+| `cto` | Executive: the technology function (engineering, data, security) | Chief | reasoning |
+| `cmo` | Executive: the market function (research, business) | Chief | reasoning |
+| `cpo` | Executive: the product function (design, content, media) | Chief | reasoning |
+| `coo` | Executive: the operations function (org, meta) | Chief | reasoning |
 | `head` | Department manager: staffing, planning within domain, quality bar | Senior | reasoning |
 | `lead` | Squad manager: sequencing, unblocking, integration | Senior | standard |
 | `worker` | Does the work with tools | Junior→Senior | fast/standard |

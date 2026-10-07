@@ -92,18 +92,21 @@ Tests: `src/sim/desk-screen.test.ts`. 213 frontend tests.
 
 ## Office findings still open (docs/15 plus this review)
 
-- O1 The arrival walk of a newly hired agent: the ARRIVAL is now proven, the WALK is not.
-  Observed live, page open throughout, with a `POST /api/dev/reset` and a 250ms sampler:
-  at t+6 the roster dropped to 6 seats and the agent vanished; at t+17 the same id
-  reappeared (7 seats, sprite count 61) as a genuine mid-session hire; at t+39 the Growth
-  department's room appeared on the canvas (8 seats, sprites 66) without disturbing any
-  other room. What the sampler could not show is movement, because of O9 below.
-- O9 A person who arrives in a live update never gets `data-depth` written. The same
-  character read 2216.5 when seated at page load and a flat `0` for the 22 seconds after
-  arriving mid-session, so their draw order is wrong from the moment they appear. The walk
-  loop writes that attribute per frame for walkers, and everything else about the arrival
-  works — so this is the thread to pull for O1: if the attribute is not written, the
-  position the walk animates from may not be either.
+- O1 The arrival walk: the ARRIVAL is proven, and the walk MECHANISM is real — a
+  position traced changing over ~30 s on the desk→bench route, written per frame by a
+  live tick. Re-verified today: a hired agent vanished at t+7.5 and reappeared at t+27.5
+  with a real transform and a real depth (2311.18). What is still not frame-traced is one
+  specific sequence — entrance → a brand-new desk — and that is the same machinery on a
+  different route, not a different machinery.
+- O9 RESOLVED as a measurement artifact. `data-depth` appeared frozen at 0 for a live
+  arrival, and "frozen" was true — of the measuring tab, not the product: that page was
+  running a stale module graph, with a dead walker loop (nothing moved, no trails, no
+  depths). In a healthy instance the same agent's depth at reappearance reads 2311.18.
+  The distinction now takes one look, because the tick keeps a dev probe —
+  `window.__office` with ticks/walkers/sprites — which separates "dead rAF", "empty
+  walker map" and "empty sprite map", three states that look identical from outside.
+  Ops note for the same reason: when the dev server's watcher misses a change, a hard
+  reload is what settles it; several "defects" this session were one.
 - O2 `.is-new` room animation still unverified, for a related reason: the marker is
   transient and by the time it was inspected it had expired (`class=""`, `animation-name:
   none`). It has to be observed in the same breath as the arrival.

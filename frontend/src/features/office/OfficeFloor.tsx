@@ -346,6 +346,17 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       // Clamp dt so a backgrounded tab does not teleport everyone on return.
       const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
       last = t;
+      // Dev probe: is this loop alive, and does it have anything to drive? Three
+      // stacked things can stop the office dead — a dead rAF, an empty walker map,
+      // a sprite map with no elements in it — and from outside they look identical.
+      if (import.meta.env.DEV) {
+        const w = window as unknown as { __office?: Record<string, number> };
+        w.__office = {
+          ticks: (w.__office?.ticks ?? 0) + 1,
+          walkers: walkers.current.size,
+          sprites: spriteEls.current.size,
+        };
+      }
       for (const [id, w] of walkers.current) {
         const next = w.moving ? step(w, dt) : w;
         if (next !== w) walkers.current.set(id, next);

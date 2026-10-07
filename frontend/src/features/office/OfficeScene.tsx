@@ -520,20 +520,32 @@ function Sprite({
         {agent.name}
       </text>
 
-      {speech ? (
-        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - 32).toFixed(0)})`}>
-          <Bubble kind={speech.kind} text={speech.text} />
-          {speech.to && (
-            <text y={4} fontSize={8.5} textAnchor="middle" fill="#93a1b8">
-              → {speech.to}
-            </text>
+      {/* ONE bubble group, deliberately. The speech case and the emoji case used to be
+          two separate <g className="sprite-speech"> elements at two different heights, so
+          React unmounted one and mounted the other every time an activity crossed
+          between them — and `.sprite-speech` carries `animation: speech-pop 200ms`, so
+          every swap replayed the pop from the beginning. That replay is the flicker: an
+          animation that means "this is new" firing on a bubble that is not new at all.
+          The group now persists and only its contents and offset change. */}
+      {(speech || activity.bubble) && (
+        <g
+          className="sprite-speech"
+          transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - (speech ? 32 : 28)).toFixed(0)})`}
+        >
+          {speech ? (
+            <>
+              <Bubble kind={speech.kind} text={speech.text} />
+              {speech.to && (
+                <text y={4} fontSize={8.5} textAnchor="middle" fill="#93a1b8">
+                  → {speech.to}
+                </text>
+              )}
+            </>
+          ) : (
+            <Bubble kind={emojiKind(activity)} text={activity.bubble ?? ''} maxWidth={60} />
           )}
         </g>
-      ) : activity.bubble ? (
-        <g className="sprite-speech" transform={`translate(0 ${(-FEET_Y * spriteScaleFactor() - 28).toFixed(0)})`}>
-          <Bubble kind={emojiKind(activity)} text={activity.bubble} maxWidth={60} />
-        </g>
-      ) : null}
+      )}
     </g>
   );
 }

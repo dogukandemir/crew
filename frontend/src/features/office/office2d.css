@@ -115,14 +115,15 @@
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.22));
 }
 
-/* Name tag: an outline keeps it legible over a desk or a wall. */
+/* Name tag: an outline keeps it legible over a desk or a wall. 11px was unreadable at
+   the fitted zoom — the tag is drawn in world units, so it shrinks with the floor. */
 .office-scene .sprite-tag {
-  fill: #dfe5f0;
-  font-size: 11px;
-  font-weight: 600;
+  fill: #eef2f8;
+  font-size: 16px;
+  font-weight: 700;
   paint-order: stroke;
-  stroke: rgba(6, 9, 14, 0.9);
-  stroke-width: 3px;
+  stroke: rgba(6, 9, 14, 0.92);
+  stroke-width: 3.5px;
   stroke-linejoin: round;
   pointer-events: none;
 }

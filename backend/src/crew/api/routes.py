@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
-from crew.control import org
+from crew.control import company, org
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
@@ -73,6 +73,20 @@ class ProjectCreate(BaseModel):
     description: str = ""
     budget_usd: float | None = None
     settings: dict | None = None
+
+
+class CompanyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    mission: str = ""
+    budget_usd: float | None = None
+
+
+class CompanyProjectBody(BaseModel):
+    project_id: str
+
+
+class CompanyChiefBody(BaseModel):
+    function: str
 
 
 class ProjectPatch(BaseModel):
@@ -339,6 +353,53 @@ async def post_project(body: ProjectCreate, user: dict = Depends(require_user)) 
     return await org.create_project(name=body.name, goal=body.goal, description=body.description,
                                     budget_usd=body.budget_usd, owner_id=user["id"],
                                     settings_patch=body.settings)
+
+
+@api.get("/companies")
+async def get_companies() -> dict:
+    return {"items": await company.list_companies()}
+
+
+@api.post("/companies", status_code=201)
+async def post_company(body: CompanyCreate, user: dict = Depends(require_user)) -> dict:
+    return await company.create_company(name=body.name, mission=body.mission,
+                                        budget_usd=body.budget_usd, owner_id=user["id"])
+
+
+@api.get("/companies/{company_id}")
+async def get_company(company_id: str) -> dict:
+    try:
+        return await company.get_company(company_id)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
+@api.post("/companies/{company_id}/projects", status_code=201)
+async def post_company_project(company_id: str, body: CompanyProjectBody,
+                               user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.attach_project(company_id=company_id, project_id=body.project_id)
+    except KeyError as e:
+        raise _problem(404, "company or project not found", str(e)) from e
+
+
+@api.post("/companies/{company_id}/chiefs", status_code=201)
+async def post_company_chief(company_id: str, body: CompanyChiefBody,
+                             user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.hire_chief(company_id=company_id, function=body.function)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+    except ValueError as e:
+        raise _problem(409, "cannot hire", str(e)) from e
+
+
+@api.post("/companies/{company_id}/review")
+async def post_company_review(company_id: str, user: dict = Depends(require_user)) -> dict:
+    try:
+        return await company.review(company_id=company_id, actor=f"user:{user['id']}")
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
 
 
 @api.get("/projects/{project_id}")

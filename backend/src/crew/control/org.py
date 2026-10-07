@@ -72,7 +72,7 @@ COMMON_CAPS = [Capability.BRAIN_READ, Capability.BRAIN_WRITE, Capability.COMMS_A
 ROLE_ASSIGNMENT_PENALTY: dict[str, float] = {
     "worker": 0.0, "specialist": 0.0, "analyst": 0.0, "critic": 0.05,
     "evaluator": 0.10, "architect": 0.10, "lead": 0.30, "librarian": 0.30,
-    "head": 0.60, "decider": 0.60, "orchestrator": 1.0,
+    "head": 0.60, "decider": 0.60, "orchestrator": 1.0, "ceo": 1.0,
     # the executive tier manages a function; it takes IC work last (ADR 0008)
     "cto": 0.80, "cmo": 0.80, "cpo": 0.80, "coo": 0.80,
 }
@@ -97,10 +97,11 @@ FUNCTION_TITLE: dict[str, str] = {
 # ── project ─────────────────────────────────────────────────────────────────────────
 async def create_project(*, name: str, goal: str = "", budget_usd: float | None = None,
                          description: str = "", owner_id: str | None = None,
-                         settings_patch: dict | None = None) -> dict:
+                         settings_patch: dict | None = None, kind: str = "project") -> dict:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "project"
     cap_usd = min(budget_usd or settings.default_project_budget_usd, settings.hard_budget_usd)
     p = Project(name=name, slug=slug, goal=goal, description=description, owner_id=owner_id,
+                kind=kind,
                 settings={**DEFAULT_PROJECT_SETTINGS, **(settings_patch or {})},
                 budget_cap_micros=usd_to_micros(cap_usd))
     async with session_scope() as s:
@@ -114,6 +115,21 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
         s.add(row)
     settings.workspace_dir(pid).mkdir(parents=True, exist_ok=True)
     settings.artifacts_dir(pid).mkdir(parents=True, exist_ok=True)
+    if kind == "company":
+        # a company is a headquarters project whose executive is the CEO, not an
+        # orchestrator: ordinary runs never touch it (ADR 0009).
+        ceo = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CEO),
+                               rationale="company bootstrap: the portfolio chair")
+        async with session_scope() as s:
+            row = await s.get(Project, pid)
+            row.settings = {**row.settings, "ceo_id": ceo["id"]}
+            s.add(row)
+        await ev.emit("company.created", project_id=pid, severity="notice",
+                      title=f"company created: {name}",
+                      payload={"name": name, "ceo_id": ceo["id"]}, actor="user")
+        await audit(actor_kind="user", actor_id=owner_id or "local", action="company.created",
+                    resource_kind="company", resource_id=pid, reason=f"budget=${cap_usd}")
+        return await get_project(pid)
     # every project has exactly one orchestrator (docs/02 §1 invariant)
     orch = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.ORCHESTRATOR),
                             rationale="project bootstrap: executive owner of the goal")
@@ -139,7 +155,7 @@ async def get_project(project_id: str) -> dict:
 def serialize_project(p: Project) -> dict:
     return {
         "id": p.id, "name": p.name, "slug": p.slug, "goal": p.goal, "status": p.status,
-        "stage": p.stage, "description": p.description,
+        "stage": p.stage, "description": p.description, "kind": p.kind, "company_id": p.company_id,
         "budget_usd": p.budget_usd, "spend_usd": p.spend_usd,
         "spend_ratio": round(p.spend_micros / p.budget_cap_micros, 4) if p.budget_cap_micros else 0.0,
         "reserved_usd": round(p.reserved_micros / 1e6, 6),
@@ -150,7 +166,8 @@ def serialize_project(p: Project) -> dict:
 
 async def list_projects() -> list[dict]:
     async with session_scope() as s:
-        rows = (await s.scalars(select(Project).order_by(desc(Project.created_at)))).all()
+        rows = (await s.scalars(select(Project).where(Project.kind == "project")
+                                .order_by(desc(Project.created_at)))).all()
     out = []
     for p in rows:
         d = serialize_project(p)
@@ -842,7 +859,7 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
             needed = {r["skill"]: float(r.get("weight", 1.0)) for r in (t.required_skills or [])}
             best, best_score, best_coverage = None, 0.0, 0.0
             for a in agents:
-                if a.role in (Role.ORCHESTRATOR.value, Role.HEAD.value,
+                if a.role in (Role.ORCHESTRATOR.value, Role.CEO.value, Role.HEAD.value,
                               Role.CTO.value, Role.CMO.value, Role.CPO.value, Role.COO.value) \
                         or a.state in ("busy", "archived", "suspended"):
                     continue

@@ -22,6 +22,8 @@ class Grade(IntEnum):
 
 class Role(StrEnum):
     ORCHESTRATOR = "orchestrator"
+    # The company layer (ADR 0009): the portfolio chair, living in the company project.
+    CEO = "ceo"
     # The executive tier (ADR 0008): one chief per function, between orchestrator and heads.
     CTO = "cto"
     CMO = "cmo"

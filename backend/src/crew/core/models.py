@@ -49,6 +49,10 @@ class Project(Base):
     goal: Mapped[str] = mapped_column(Text, default="")
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    # "project" | "company" — a company is a headquarters project whose agents run the
+    # portfolio (ADR 0009); kind keeps companies out of the ordinary project lists.
+    kind: Mapped[str] = mapped_column(String(16), default="project", index=True)
+    company_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     stage: Mapped[str] = mapped_column(String(20), default="IDLE")
     owner_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Project settings live as a JSON document (see docs/10 §2 note): defaults in DEFAULT_SETTINGS.

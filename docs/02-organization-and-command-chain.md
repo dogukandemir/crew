@@ -7,6 +7,7 @@ an event. New units appear when the work requires a capability the org does not 
 
 | Level | Unit | Created by | Lifetime | Owns |
 |-------|------|-----------|----------|------|
+| −1 | **Company** | User (API) | Until archived | Portfolio: member projects, company budget, CEO + function chiefs (ADR 0009) |
 | 0 | **Project** | User | Until archived | Goal, budget, policies, project brain, org tree |
 | 1 | **Department** | Orchestrator (hire event) | Persistent while its capability recurs | Domain mission, roster, dept brain, budget envelope, tool grants |
 | 2 | **Squad** | Department Head (or Orchestrator) | One workstream; dissolved at completion | Backlog slice, squad lead, working memory, artifacts |
@@ -74,6 +75,15 @@ those departments' heads then report to the chief, and the chain reads
 `orchestrator → chief → head → lead → worker`. One chief per function at a time. The
 chief chairs the function's councils and arbitration; it does not do IC work.
 
+### The company layer (ADR 0009)
+
+Above projects sits the optional **company**: a project with `kind='company'` whose
+agents are the **CEO** (hired at bootstrap) and, on demand, the same function chiefs one
+scope up (`cto`/`cmo`/`cpo`/`coo`). A member project's orchestrator reports to the CEO;
+`company.review()` reads every member's books and writes one grounded directive into
+each member's event stream, and orchestrators read directives into their task prompts
+as binding work — "COMPANY DIRECTIVES (from the board)".
+
 ### Authority matrix
 
 | Action | Orchestrator | Head | Lead | Worker | Decider |
@@ -98,6 +108,7 @@ text. Prompts express the *intent*; the policy engine expresses the *law*.
 | Role | Purpose | Typical grade | Model tier |
 |------|---------|---------------|-----------|
 | `orchestrator` | Executive: decompose goals, hire, arbitrate, settle rewards | Principal | reasoning |
+| `ceo` | Executive: the portfolio — which projects run, at what budget, what stops | Chief | reasoning |
 | `cto` | Executive: the technology function (engineering, data, security) | Chief | reasoning |
 | `cmo` | Executive: the market function (research, business) | Chief | reasoning |
 | `cpo` | Executive: the product function (design, content, media) | Chief | reasoning |

@@ -101,6 +101,7 @@ def build_task_prompt(
     decision_constraints: list[str] | None = None,
     steer: list[str] | None = None,
     colleague_messages: list[str] | None = None,
+    company_directives: list[str] | None = None,
 ) -> str:
     parts = [f"TASK: {title}", "", description.strip()]
     if deliverable:
@@ -116,6 +117,9 @@ def build_task_prompt(
     if colleague_messages:
         parts += ["", "MESSAGES FROM COLLEAGUES (answer questions addressed to you with reply_colleague):"]
         parts += [f"  - {m}" for m in colleague_messages]
+    if company_directives:
+        parts += ["", "COMPANY DIRECTIVES (from the board; binding for this work):"]
+        parts += [f"  - {d}" for d in company_directives]
     if steer:
         parts += ["", "OPERATOR STEERING (highest priority):"] + [f"  - {s}" for s in steer]
     if output_contract:

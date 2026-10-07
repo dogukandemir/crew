@@ -363,6 +363,7 @@ class Orchestrator:
             context_pack = render_context_pack(hits)
             steer = await self._steering(project.id, task_id, snapshot.id)
             colleague_messages = await self._inbox_notes(project.id, snapshot.id)
+            company_directives = await self._company_directives(project.id)
             decisions = await council.decision_constraints(project_id=project.id)
 
             bundle = build_system_prompt(
@@ -377,6 +378,7 @@ class Orchestrator:
                 acceptance_criteria=task_spec.acceptance_criteria, output_contract=task_spec.output_contract,
                 effort=task_spec.effort, decision_constraints=decisions[:5], steer=steer,
                 colleague_messages=colleague_messages,
+                company_directives=company_directives,
             )
             bundle.user = user_prompt
 
@@ -698,6 +700,22 @@ class Orchestrator:
             if p.get("task_id") in (None, task_id) or p.get("agent_id") in (None, agent_id):
                 out.append(str(p.get("text", ""))[:400])
         return [t for t in out if t][:3]
+
+    async def _company_directives(self, project_id: str) -> list[str]:
+        """The board's lines for this project (ADR 0009): a directive is binding work,
+        read into every task prompt, not a dashboard nobody opens."""
+        async with session_scope() as s:
+            rows = (await s.scalars(select(Event).where(Event.project_id == project_id,
+                                                        Event.type == "company.directive")
+                                    .order_by(desc(Event.seq)).limit(10))).all()
+        seen: set[str] = set()
+        out: list[str] = []
+        for r in rows:
+            text = str((r.payload or {}).get("directive", "")).strip()
+            if text and text not in seen:
+                seen.add(text)
+                out.append(text[:400])
+        return out[:3]
 
     async def _learn(self, run: Run, project: Project) -> RunStage:
         async with session_scope() as s:

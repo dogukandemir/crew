@@ -77,6 +77,29 @@ async def init_db(create_all: bool | None = None) -> None:
         return
     async with engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
+
+
+def _add_missing_columns(sync_conn) -> None:
+    """SQLite dev DBs predate columns the models grew (ADR 0004: dev schema is disposable —
+    but a running dev database should not have to be). ADD COLUMN is the one ALTER SQLite
+    does cheaply, and the columns below are exactly the nullable-defaulted safe kind.
+    """
+    from sqlalchemy import inspect
+
+    wanted = {
+        "projects": {"kind": "VARCHAR(16) DEFAULT 'project'",
+                     "company_id": "VARCHAR(32)"},
+    }
+    insp = inspect(sync_conn)
+    tables = set(insp.get_table_names())
+    for table, columns in wanted.items():
+        if table not in tables:
+            continue
+        have = {c["name"] for c in insp.get_columns(table)}
+        for name, ddl in columns.items():
+            if name not in have:
+                sync_conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
 async def drop_db() -> None:

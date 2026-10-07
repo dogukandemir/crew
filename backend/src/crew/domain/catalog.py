@@ -54,6 +54,7 @@ ALWAYS_APPROVAL: set[Capability] = {Capability.NET_POST, Capability.FS_DELETE, C
 # Roles that must never be run on a cheap model (docs/04 §2).
 MIN_TIER_FOR_ROLE: dict[Role, ModelTier] = {
     Role.ORCHESTRATOR: ModelTier.REASONING,
+    Role.CEO: ModelTier.REASONING,
     Role.CTO: ModelTier.REASONING,
     Role.CMO: ModelTier.REASONING,
     Role.CPO: ModelTier.REASONING,
@@ -100,6 +101,16 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         "gaps. Never do IC work yourself; delegate. Escalate to the user for one-way-door decisions.",
         _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capability.COUNCIL_CONVENE,
                   Capability.COMMS_REQUEST_DECISION, Capability.BUDGET_REQUEST, Capability.BRAIN_READ),
+    ),
+    Role.CEO: _t(
+        Role.CEO, "Chief Executive Officer",
+        "Own the portfolio: which projects run, at what budget, and what stops — and be the one "
+        "name behind the call.",
+        Grade.CHIEF, ("strategic-planning", "resource-allocation", "decision-making"),
+        "Read the books before you speak: every directive cites the numbers it came from. Set the "
+        "portfolio's course, hold project executives to their spend and their failures, and record "
+        "the reasoning so the next review can disagree with it.",
+        _FUNCTION_CHIEF_CAPS,
     ),
     Role.CTO: _t(
         Role.CTO, "Chief Technology Officer",

@@ -1,0 +1,90 @@
+# 16 · System review — production readiness
+
+Reviewed 2026-10-07. Scope: the whole repository — frontend, backend, tooling, docs, and
+the office's live behaviour. Every finding carries the evidence that found it. This is the
+punch list: fixes land as commits and are struck out here with their hash.
+
+## How this review was done
+
+- Inventoried the repo: 17 specs (00–15 + adr), 97 frontend files (~17k lines), 28 backend
+  modules with a test package, plus the separate spriteforge atlas repo.
+- Ran both test suites; ran the app against the dev mock in a real browser and measured the
+  live DOM rather than reading the code and hoping.
+- Scanned for the operational gaps a stranger hits first: CI, deploy, error handling,
+  secrets, self-host instructions, first-run experience.
+
+## P1 · Backend suite — GREEN, and a reporting trap
+
+**Not a defect.** `pytest` runs 54 tests green (exit 0). The confusion was mine: the
+project sets `addopts = "-q"`, and adding another `-q` on the command line makes pytest
+print the dots and *no summary line at all*, so a grep for "passed" found nothing and the
+suite looked broken. Worth knowing: run `pytest` without the extra `-q`, or read the exit
+code, which is the signal that cannot lie.
+
+## P2 · No CI — HIGH
+
+No `.github/`. Both suites are hand-run on one machine, so nothing stops a regression from
+being merged and nothing proves the suites are green to anyone else.
+
+Action: one workflow, two jobs — frontend (tsc, vitest, build) and backend (pytest).
+
+## P3 · No error boundary in the frontend — HIGH
+
+No `ErrorBoundary` anywhere. Any render error blanks the entire app to white, including
+the toolbar you would need to get out of it.
+
+Action: a boundary around the app shell with a recoverable error state.
+
+## P4 · Nobody else can run it — HIGH
+
+No Dockerfile, no compose, no service file. The README covers project layout and reading
+order but not "clone → run → see the office". The dev mock that makes the office work with
+no provider keys lives outside the repository, on one machine.
+
+Action: a real quick start, `.env.example`, and the mock shipped under `dev/mock/` so the
+office is inspectable with zero keys and zero spend.
+
+## P5 · First run without keys is a dead end — MEDIUM
+
+With no provider keys the backend cannot plan or hire, so the office is empty and nothing
+explains why.
+
+Action: covered by P4's mock for the demo path, plus a first-run message that names the
+missing setting.
+
+## Office findings still open (docs/15 plus this review)
+
+- O1 The arrival walk of a newly hired agent has never been measured to their own desk.
+  The handle exists now: `data-sprite={agent.id}` on the person group.
+- O2 `.is-new` room animation unverified.
+- O3 A department whose roster is entirely archived keeps its room standing.
+- O4 The `belt` category is drawn as a rail, not a sprite (may be by design; undecided).
+- O5 Dead `@keyframes speech-pop` left in office2d.css.
+- O6 The side-view character cells carry hair across the face — a documented trap.
+- O7 The wall clock sprite exists in the atlas and nothing places it.
+- O8 Three sprites seen once outside the building, never reproduced.
+
+## Fixed while doing this review
+
+- **Ctrl+wheel zoomed the browser page instead of the floor.** The wheel guard compared
+  against a frame captured at mount, which was still null; every wheel was rejected and the
+  browser took the gesture. Found by making the handler report itself
+  (`window.__officeWheel`), not by another guess. `c818e64`
+- **Bubbles flickered.** A keyframe pop replayed whenever the depth layer re-appended a
+  person, and re-inserting an element restarts its descendants' animations. Measured:
+  computed opacity hit 0 on every character; a re-append produced a new animation object at
+  currentTime 0. Now a content-driven transition that cannot snap back to invisible.
+  `f466957`
+- **Tags and bubbles blinked at the far-zoom threshold.** Hysteresis instead of a single
+  cut-off. `5abefe6`
+- **The lab bench was stretched, not tiled.** `scaleForWidth` scales both axes, so a 2 m
+  bench asked to span 4 m was drawn 1.7 m tall — the pale slab on the floor. `c57a450`
+
+## Confirmed good, so the list is not a rumour
+
+- `frontend/src/api/client.ts` has real error handling: typed `ApiError`, network status 0,
+  problem+json codes, retry classification.
+- Backend settings are a single validated object with auth modes, vault key, provider keys,
+  budget caps, sandbox and egress controls — not scattered `os.environ` reads.
+- No `TODO`/`FIXME`/`HACK` markers anywhere in either source tree.
+- Frontend: 206 tests, tsc clean, build clean.

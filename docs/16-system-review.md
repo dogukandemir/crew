@@ -60,9 +60,18 @@ backend at all.
 
 ## Office findings still open (docs/15 plus this review)
 
-- O1 The arrival walk of a newly hired agent has never been measured to their own desk.
-  The handle exists now: `data-sprite={agent.id}` on the person group.
-- O2 `.is-new` room animation unverified.
+- O1 The arrival walk of a newly hired agent has not been measured to their own desk yet.
+  The handle is known now: the character's own transform plus its `data-depth` (a world
+  coordinate — an existing character read 2216.5), NOT the static `sprite-body` wrapper
+  that an earlier probe kept reading. Two attempts still missed the transition: a fresh
+  page load seats everyone at once without walking (correct: `rosterReady` gate), and a
+  `POST /api/dev/reset` issued while the page was open did not reach the page inside the
+  sampling window (the org is re-read on a 10s interval). Next method, written down so it
+  is not re-derived: reset while the page is open, then poll for the id to *vanish* for
+  thirty seconds or more, and start tracing the moment it reappears.
+- O2 `.is-new` room animation still unverified, for a related reason: the marker is
+  transient and by the time it was inspected it had expired (`class=""`, `animation-name:
+  none`). It has to be observed in the same breath as the arrival.
 - O3 A department whose roster is entirely archived keeps its room standing.
 - O4 The `belt` category is drawn as a rail, not a sprite (may be by design; undecided).
 - O5 Dead `@keyframes speech-pop` left in office2d.css.

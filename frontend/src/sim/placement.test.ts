@@ -46,18 +46,26 @@ describe('placeRooms', () => {
     }
   });
 
-  it('opens a shelf instead of sliding the last room along', () => {
-    const wide = (id: string) => sized(id, MAX_ROW_WIDTH - 20);
-    const first = placeRooms([wide('a'), wide('b')]);
-    expect(first.slots.a.row).toBe(0);
-    // 700 units + the column gap no longer fits in a 720-unit shelf.
-    expect(first.slots.b.row).toBe(1);
-    expect(first.slots.b.y).toBeGreaterThan(first.slots.a.y);
+  it('fills the block in reading order, and grows the SQUARE when it is full', () => {
+    // Nine rooms make a three-by-three. The ninth completes it; the tenth starts a
+    // four-by-four, and the nine that were already there do not move — which is what
+    // "the new office completes the square" means as arithmetic.
+    const nine = Array.from({ length: 9 }, (_, i) => sized(`r${i}`, 300, 200));
+    const full = placeRooms(nine);
+    expect(full.rows).toBe(3);
+    const at = (i: number) => ({ col: i % 3, row: Math.floor(i / 3) });
+    nine.forEach((room, i) => {
+      expect({ col: full.slots[room.id].col, row: full.slots[room.id].row }).toEqual(at(i));
+    });
 
-    const next = placeRooms([wide('a'), wide('b'), wide('c')], first.slots);
-    expect(next.slots.a).toEqual(first.slots.a);
-    expect(next.slots.b).toEqual(first.slots.b);
-    expect(next.slots.c.row).toBe(2);
+    const ten = [...nine, sized('r9', 300, 200)];
+    const bigger = placeRooms(ten, full.slots);
+    expect(bigger.rows).toBe(4);
+    for (const room of nine) {
+      expect(bigger.slots[room.id], room.id).toEqual(full.slots[room.id]);
+    }
+    expect(bigger.slots.r9.row).toBe(0);
+    expect(bigger.slots.r9.col).toBe(3);
   });
 
   it('keeps everything clear of the vertical spine and inside the canvas', () => {

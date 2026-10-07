@@ -733,6 +733,22 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
             <kbd>Esc</kbd> deselect
           </div>
 
+          {/* TEMPORARY — restart the mock backend's hiring clock and reload, so the
+              growth can be watched from t=0. The clock lives in the mock; this button
+              goes away with the demo schedule. */}
+          <button
+            type="button"
+            style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 5, pointerEvents: 'auto', cursor: 'pointer' }}
+            className="office-hint"
+            title="Restart the mock's hiring clock and reload (temporary dev control)"
+            onClick={() => {
+              const base = (import.meta.env as Record<string, string | undefined>).VITE_API_BASE ?? 'http://127.0.0.1:8787';
+              void fetch(`${base}/api/dev/reset`, { method: 'POST' }).then(() => window.location.reload());
+            }}
+          >
+            ⟲ reset clock
+          </button>
+
           {empty && (
             <div className="office-overlay">
               <EmptyState

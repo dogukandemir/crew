@@ -59,14 +59,19 @@ describe('the office grows', () => {
     const first = officeAt(10);
     const last = officeAt(45, placementOf(first));
     const was = new Map(first.rooms.map((r) => [r.id, r]));
+    // Carried rooms keep their cell, so the square can grow a ring without disturbing
+    // anything standing in it.
     const moved: string[] = [];
     for (const room of last.rooms) {
       const before = was.get(room.id);
       if (!before) continue;
-      // A room that grew is allowed to move — it is the one whose content changed.
-      if (before.w === room.w && before.h === room.h && (before.x !== room.x || before.y !== room.y)) {
-        moved.push(`${room.id} ${before.x},${before.y} -> ${room.x},${room.y}`);
-      }
+      if (before.x !== room.x || before.y !== room.y) moved.push(`${room.id} ${before.x},${before.y} -> ${room.x},${room.y}`);
+    }
+    // Growing a department grows its BAY and may grow the whole block's cell pitch if a
+    // roster outgrows the cell — the one honest case where a standing room moves. Every
+    // other room in every other row must be exactly where it was.
+    if (moved.length > 0) {
+      for (const line of moved) expect(line).toContain('__');
     }
     expect(moved).toEqual([]);
   });

@@ -68,7 +68,25 @@ export interface RoomSlot {
    */
   bayW: number;
   bayH: number;
+  /** Which cell of the block the room sits in. Position is a pure function of this. */
+  col: number;
 }
+
+/**
+ * The cell a room is given in the block: room for a five-desk department, which is the
+ * largest a 24-agent project spread over six departments can field, plus its bay.
+ *
+ * A FIXED cell is what makes a square block possible at all. Because every room's
+ * position is its cell times the same two numbers, the square can grow by a ring —
+ * three-by-three to four-by-four — and nothing inside it moves: the ninth room fills
+ * the ninth cell, the tenth starts the next ring. Size a cell to whatever rooms happen
+ * to be in it and the block reshuffles itself on every hire, which is the sliding
+ * building this placement exists to stop.
+ */
+const CELL = {
+  w: ROOM_PAD * 2 + 5 * DESK_W + 4 * DESK_GAP_X,
+  h: ROOM_PAD * 2 + ROOM_HEADER + 3 * DESK_H + 2 * DESK_GAP_Y + DESK_H + DESK_GAP_Y,
+};
 
 /**
  * The slack a fresh bay gets: one more desk, each way.
@@ -93,90 +111,103 @@ export interface Placement {
 /**
  * Where every room sits — and, the part that matters, that it stays there.
  *
- * A room is placed ONCE. A hire re-grids the desks inside a department's slot; it does
- * not move the slot. What this replaced packed every room from scratch on every
- * update, so one new agent widened a department, slid every room after it along the
- * shelf, and could push a whole row onto the next one. In a live office that reads as
- * the building jumping every time somebody is hired — and it makes a room impossible
- * to point at ("engineering is bottom left" stops being true).
+ * The floor is a SQUARE BLOCK of cells. Rooms fill it in reading order, and a hire that
+ * opens a department takes the next free cell, so the new office completes the square
+ * rather than being tacked onto the end of a corridor. When the square is full the next
+ * ring begins — three-by-three becomes four-by-four — and nothing already standing
+ * moves, because a room's position is its cell times the same two constants.
  *
- * `prev` is the placement from the last update. A room that already has a slot keeps
- * it, verbatim, including its row and its y. Only rooms without one are allocated:
- * into the first shelf with room, else onto a new shelf. A room whose slot grew taller
- * than it was allocated for does reflow the shelves below it, which is physics — and
- * it is the one case where a room that did not grow can move.
+ * A room is placed ONCE. A hire re-grids the desks inside a department's slot; it does
+ * not move the slot. What this replaced packed every room from scratch on every update,
+ * so one new agent widened a department and slid every room after it along the shelf,
+ * and the building read as a corridor with rooms hung off it rather than a floor.
+ *
+ * `prev` is the placement from the last update. A room that already has a slot keeps it
+ * verbatim, including its x and y. Only rooms without one are allocated.
  */
 export function placeRooms(sizes: { id: string; w: number; h: number }[], prev: Placement['slots'] = {}): Placement {
   const slots: Record<string, RoomSlot> = {};
-  const rowCursor: number[] = [];
-  const rowTallest: number[] = [];
+  const taken = new Set<string>();
+  let maxCol = -1;
+  let maxRow = -1;
 
-  // 1. Rooms that already have a slot claim their space back, exactly as it was.
-  // `prev` is a Placement's slots, so its x already carries the spine shift from pass
-  // 3 — take it back out here, or every update shifts the whole floor by SPINE_W
-  // again. (This is what the placement test caught, and only the test could: on a
-  // single render there is nothing to compare against.)
+  // 1. Rooms that already exist keep the cell they were given, and their exact x and y
+  // — never recomputed from the cell, because a carried position is a promise and a
+  // recomputed one is arithmetic that can drift.
   for (const room of sizes) {
     const was = prev[room.id];
     if (!was) continue;
-    // The bay is carried, not recomputed: `max(stored, actual)` means the FIRST hire
-    // fits inside the slack and moves nothing, while a second hire into the same room
-    // does grow the bay — which is honest, because the room genuinely got bigger.
+    const col = was.col ?? Math.max(0, Math.round((was.x - SPINE_W) / (CELL.w + ROOM_COL_GAP)));
     const bayW = Math.max(was.bayW ?? room.w + BAY_SLACK.w, room.w);
     const bayH = Math.max(was.bayH ?? room.h + BAY_SLACK.h, room.h);
-    slots[room.id] = { ...was, x: was.x - SPINE_W, w: room.w, h: room.h, bayW, bayH };
-    rowCursor[was.row] = Math.max(rowCursor[was.row] ?? 0, was.x - SPINE_W + bayW + ROOM_COL_GAP);
-    rowTallest[was.row] = Math.max(rowTallest[was.row] ?? 0, bayH);
+    slots[room.id] = { ...was, col, w: room.w, h: room.h, bayW, bayH };
+    taken.add(`${col},${was.row}`);
+    maxCol = Math.max(maxCol, col);
+    maxRow = Math.max(maxRow, was.row);
   }
 
-  // 2. New rooms go into the first shelf that can still hold them, else a new shelf.
+  // 2. The block is a SQUARE: the smallest one that holds everything, and never smaller
+  // than what is already standing — a department emptying must not fold the building in.
+  const side = Math.max(Math.ceil(Math.sqrt(sizes.length)), maxCol + 1, maxRow + 1);
+
+  // 3. New rooms take the first free cell, in reading order: the new office completes
+  // the square instead of being tacked onto the end of a corridor.
+  let scan = 0;
   for (const room of sizes) {
     if (slots[room.id]) continue;
+    let col = -1;
     let row = -1;
-    const bayW = room.w + BAY_SLACK.w;
-    for (let r = 0; r < rowCursor.length; r += 1) {
-      // An empty shelf always accepts, so a room wider than MAX_ROW_WIDTH takes the
-      // row it is on rather than leaving an empty one behind it.
-      if ((rowCursor[r] ?? 0) === 0 || (rowCursor[r] ?? 0) + bayW <= MAX_ROW_WIDTH) {
+    while (scan < side * side) {
+      const c = scan % side;
+      const r = Math.floor(scan / side);
+      scan += 1;
+      if (!taken.has(`${c},${r}`)) {
+        col = c;
         row = r;
         break;
       }
     }
-    if (row === -1) {
-      row = rowCursor.length;
-      rowCursor[row] = 0;
-      rowTallest[row] = 0;
+    if (col === -1) {
+      // The square is full and they are still hiring: a new ring.
+      col = scan % side;
+      row = Math.floor(scan / side);
+      scan += 1;
     }
+    taken.add(`${col},${row}`);
+    const bayW = room.w + BAY_SLACK.w;
     const bayH = room.h + BAY_SLACK.h;
-    slots[room.id] = { row, x: rowCursor[row] ?? 0, y: 0, w: room.w, h: room.h, bayW, bayH };
-    rowCursor[row] = (rowCursor[row] ?? 0) + bayW + ROOM_COL_GAP;
-    rowTallest[row] = Math.max(rowTallest[row] ?? 0, bayH);
+    slots[room.id] = {
+      row,
+      col,
+      x: SPINE_W + col * (CELL.w + ROOM_COL_GAP),
+      y: row * (CELL.h + ROW_GAP),
+      w: room.w,
+      h: room.h,
+      bayW,
+      bayH,
+    };
   }
 
-  // 3. The shelves stack: each shelf's y follows the tallest room above it. A slot's y
-  // is recomputed only when a shelf above actually changed height, so the common case
-  // — a new room on the same shelf, or a new shelf at the bottom — moves nothing.
-  const rowY: number[] = [];
-  let y = 0;
-  for (let r = 0; r < rowTallest.length; r += 1) {
-    rowY[r] = y;
-    y += (rowTallest[r] ?? 0) + ROW_GAP;
-  }
-  for (const room of sizes) {
-    const slot = slots[room.id];
-    slot.x += SPINE_W;
-    slot.y = rowY[slot.row] ?? 0;
+  // 4. Shelves for the corridors: a ring's y is its row times the same two numbers, so
+  // a room's corridor spur follows it for free.
+  const rowTops: number[] = [];
+  const rowHeights: number[] = [];
+  for (let r = 0; r < side; r += 1) {
+    rowTops[r] = r * (CELL.h + ROW_GAP);
+    rowHeights[r] = CELL.h;
   }
 
-  const contentWidth = Math.max(0, ...sizes.map((r) => slots[r.id].x - SPINE_W + r.w));
-  const contentHeight = Math.max(0, ...sizes.map((r) => slots[r.id].y + r.h));
+  const gapsW = Math.max(0, side - 1) * ROOM_COL_GAP;
+  const gapsH = Math.max(0, side - 1) * ROW_GAP;
+  const contentWidth = side * CELL.w + gapsW;
+  const contentHeight = side * CELL.h + gapsH;
   return {
     slots,
-    rows: rowTallest.length,
+    rows: side,
     width: SPINE_W + contentWidth + 40,
     height: contentHeight + ROW_GAP * 0.55,
-    rowTops: rowY,
-    rowHeights: rowTallest,
+    rowTops,
+    rowHeights,
   };
 }
 

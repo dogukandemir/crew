@@ -102,14 +102,73 @@ function emojiKind(activity: Activity): 'talk' | 'report' | 'escalation' {
 
 /* ── Signage ──────────────────────────────────────────────────────────────── */
 
+export interface SignRow {
+  text: string;
+  fill: string;
+}
+
+export interface SignLayout {
+  name: string;
+  rows: SignRow[];
+  w: number;
+  h: number;
+}
+
+/** Status lines are not mission statements: they are clamped to fit the board. */
+const ROW_CHARS = 32;
+/** 9 px font, plus the board's padding. */
+const ROW_W = (t: string) => t.length * 5 + 26;
+/** 16 px bold, plus the board's padding. */
+const NAME_W = (t: string) => t.length * 7.4 + 32;
+
+const clampText = (t: string, max = ROW_CHARS) => (t.length > max ? `${t.slice(0, max - 1)}…` : t);
+
+/**
+ * The board's own layout: one stack of lines, one plate measured around them.
+ *
+ * The status lines used to be drawn AT the plate's bottom edge with no width of
+ * their own — "3 seats · 2 working · 1 stuck" ran wider than the board it belonged
+ * to, so it hung out over both sides and through the edge, and a department's
+ * mission collided with it from above. A line is a row now: the plate's width is
+ * the widest row's, its height is the stack's, and no row can leave the plate
+ * because every row is clamped before it is measured.
+ */
+export function signLayout(
+  room: { name: string; subtitle?: string },
+  pulse?: FloorPulse['rooms'][string],
+): SignLayout {
+  const name = room.name.length > 20 ? `${room.name.slice(0, 19)}…` : room.name;
+  const rows: SignRow[] = [];
+  if (room.subtitle) rows.push({ text: clampText(room.subtitle), fill: '#8b98ad' });
+  if (pulse && (pulse.shipped > 0 || pulse.seats > 0)) {
+    rows.push({
+      text: clampText(
+        `${pulse.seats} seats${pulse.working > 0 ? ` · ${pulse.working} working` : ''}${
+          pulse.blocked > 0 ? ` · ${pulse.blocked} stuck` : ''
+        }`,
+      ),
+      fill: pulse.blocked ? '#e2a0a0' : '#7d8ba1',
+    });
+  }
+  if (pulse?.shipped) {
+    rows.push({
+      text: clampText(
+        `✓ ${pulse.shipped} shipped${pulse.lastOutput ? ` · ${pulse.lastOutput.title}` : ''}`,
+      ),
+      fill: '#8ed7ac',
+    });
+  }
+  const w = Math.max(96, NAME_W(name), ...rows.map((r) => ROW_W(r.text)));
+  const h = 30 + rows.length * 11;
+  return { name, rows, w, h };
+}
+
 function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['rooms'][string]; stagger?: number }) {
   // Boards on the same shelf row are lifted in turn, so neighbours never cover
   // each other's name.
   const p = project(room.x + room.w / 2, room.y, WALL_H + 30 + stagger * 34);
   const busy = (pulse?.producing ?? 0) > 0;
-  const name = room.name.length > 20 ? `${room.name.slice(0, 19)}…` : room.name;
-  const w = Math.max(88, name.length * 7.4 + 30);
-  const h = 30;
+  const { name, w, h, rows } = signLayout(room, pulse);
 
   return (
     <g>
@@ -126,12 +185,14 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
         stroke={mix('#101725', room.accent, 0.5)}
         strokeWidth={1}
       />
-      <text x={p.x} y={p.y - h + 15} fontSize={16} fontWeight={700} fill="#eef2f8" textAnchor="middle" stroke="#0b0e14" strokeWidth={3.2} paintOrder="stroke">
+      <text x={p.x} y={p.y - h + 17} fontSize={16} fontWeight={700} fill="#eef2f8" textAnchor="middle" stroke="#0b0e14" strokeWidth={3.2} paintOrder="stroke">
         {name}
       </text>
-      <text x={p.x} y={p.y - h + 27} fontSize={9} fill="#8b98ad" textAnchor="middle">
-        {room.subtitle ?? ''}
-      </text>
+      {rows.map((row, i) => (
+        <text key={row.text} x={p.x} y={p.y - h + 28 + i * 11} fontSize={9} fill={row.fill} textAnchor="middle">
+          {row.text}
+        </text>
+      ))}
 
       {/* The production marker: this department is making something right now. */}
       {busy && (
@@ -154,24 +215,8 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
         </g>
       )}
 
-      {/* What the room has shipped: the count, and the newest thing by name. */}
-      {pulse && (pulse.shipped > 0 || pulse.seats > 0) && (
-        <g transform={`translate(${p.x} ${p.y + 3})`}>
-          <text fontSize={9} textAnchor="middle" fill={pulse?.blocked ? '#e2a0a0' : '#7d8ba1'}>
-            {pulse.seats} seats
-            {pulse.working > 0 ? ` · ${pulse.working} working` : ''}
-            {pulse.blocked > 0 ? ` · ${pulse.blocked} stuck` : ''}
-          </text>
-        </g>
-      )}
-      {pulse?.shipped ? (
-        <g transform={`translate(${p.x} ${p.y + 15})`}>
-          <text fontSize={9} textAnchor="middle" fill="#8ed7ac">
-            ✓ {pulse.shipped} shipped
-            {pulse.lastOutput ? ` · ${pulse.lastOutput.title.slice(0, 26)}` : ''}
-          </text>
-        </g>
-      ) : null}
+      {/* The seats / shipped lines live INSIDE the board now, laid out with the name
+          by `signLayout` — drawn at the plate's edge they overhung it. */}
     </g>
   );
 }

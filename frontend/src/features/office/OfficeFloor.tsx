@@ -455,11 +455,17 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
 
   // ── Camera interaction ─────────────────────────────────────────────────────
   useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
+    // NOTHING here may depend on the canvas ref being populated when this runs. The
+    // effect has an empty dependency list, so it runs exactly once; if `canvasRef.current`
+    // is still null at that moment the listener was never attached at all — no
+    // preventDefault, so the browser took every Ctrl+wheel as its own page zoom, in
+    // Chrome and Firefox alike. The frame is looked up from the document instead, which
+    // is true whenever the office is on screen.
+    const frame = (canvasRef.current?.closest('[aria-label^="Office floor"]') ??
+      document.querySelector('[aria-label^="Office floor"]')) as HTMLElement | null;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
+      const rect = (frame ?? document.body).getBoundingClientRect();
       // Ctrl (or ⌘) is the zoom modifier, the same one the browser itself uses. A plain
       // wheel scrolls the floor instead of zooming it: without the modifier, a trackpad
       // two-finger scroll flung the zoom about while the reader was only trying to look
@@ -489,8 +495,6 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     // and a dropped wheel is not a no-op: the browser then reads it and zooms the PAGE.
     // That is why this failed in Chrome as well as Firefox, and why the one measurement
     // that "worked" was a dispatch straight onto the svg.
-    const frame = (el.closest('[aria-label^="Office floor"]') ??
-      document.querySelector('[aria-label^="Office floor"]')) as HTMLElement | null;
     const captureWheel = (e: WheelEvent) => {
       const target = e.target;
       if (!frame || !(target instanceof Node) || !frame.contains(target)) return;

@@ -48,7 +48,7 @@ const agent = (id, name, role, grade, state, score, dept, spend, manager = null,
 // walks back to work. The clock starts at the FIRST org request, not at boot: the
 // app opens its tab seconds after this process starts, and a clock that began at
 // boot would have finished hiring before anyone looked.
-const BEAT = { hire: 12, dept: 30, second: 48, third: 64, council: 40, decide: 90 };
+const BEAT = { hire: 12, dept: 30, second: 48, third: 64, council: 40, chief: 78, decide: 90 };
 let T0 = null;
 const elapsed = () => {
   if (T0 === null) T0 = Date.now();
@@ -67,6 +67,9 @@ const A = {
   a7: agent('a7', 'Zoe', 'Growth Lead', 3, 'idle', 0.6, 'd4', 40_000, 'a0'),
   a8: agent('a8', 'Nils', 'Content Strategist', 2, 'idle', 0.5, 'd4', 30_000, 'a7'),
   a9: agent('a9', 'Rae', 'SEO Analyst', 2, 'idle', 0.5, 'd4', 30_000, 'a7'),
+  // The executive tier (ADR 0008): the Market function reaches two departments
+  // (Research + Growth) and earns its chief.
+  a10: agent('a10', 'Nadia', 'CMO', 5, 'idle', 0.7, 'd4', 20_000, 'a0'),
 };
 
 const DEPT_NAMES = { d1: 'Research', d2: 'Engineering', d3: 'Support', d4: 'Growth' };
@@ -99,6 +102,8 @@ const orgNow = () => {
     if (t >= BEAT.third) growth.push(A.a9);
     children.push(deptNode('d4', growth));
   }
+  // t+78: the Market function now spans Research + Growth — its CMO joins the org.
+  if (t >= BEAT.chief) children.push(A.a10);
   return {
     root: {
       id: 'p1', kind: 'project', name: PROJECT.name, state: 'active', spend_micros: 3_800_000,
@@ -182,6 +187,7 @@ const buildEvents = () => {
   if (t >= BEAT.dept) hires.push(['a7', 'agent.thought', 'first day: mapping the growth backlog', 3]);
   if (t >= BEAT.second) hires.push(['a8', 'agent.tool.call', 'tool: write_file("content-plan.md")', 1.5]);
   if (t >= BEAT.third) hires.push(['a9', 'agent.tool.call', 'tool: web.search("keyword gaps")', 1]);
+  if (t >= BEAT.chief) hires.push(['a10', 'agent.thought', 'taking the market chair: research and growth report up through me now', 2]);
 
   // The office's whisper network: same worry, three mouths, each grounded in what the
   // story already shows. Zoe heard the envelope talk (her council position says so),

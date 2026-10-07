@@ -8,7 +8,7 @@
  */
 
 const ROLE_AVATARS: Array<{ match: RegExp; variants: string[] }> = [
-  { match: /orchestrator|chief|director|vp\b/i, variants: ['🧑‍💼', '👩‍💼'] },
+  { match: /orchestrator|chief|director|vp\b|\bc(to|mo|po|oo)\b/i, variants: ['🧑‍💼', '👩‍💼'] },
   { match: /manager|head|lead|principal/i, variants: ['🧑‍💼', '👨‍💼'] },
   { match: /research|analyst|investigat|scientist|market/i, variants: ['🕵️', '🔬'] },
   { match: /design|ux|ui\b|writer|copy|content|brand/i, variants: ['🎨', '✍️'] },

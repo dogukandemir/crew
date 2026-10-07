@@ -33,6 +33,10 @@ npm run dev                       # http://localhost:5173
   at. Every whisper carries its `basis` — the rumours only say what the story's own events
   already show — and the floor walks the speaker over to the listener with a coffee-coloured
   bubble. The real backend emits the same contract, mined from live state.
+- **The executive tier appears.** At t+78 the Market function (Research + Growth) reaches
+  two departments and earns its chief: **Nadia (CMO)** joins with the executive avatar,
+  and the story marks the chain the backend builds (ADR 0008): orchestrator → chief →
+  head → lead → worker.
 - `POST /api/dev/reset` restarts that clock (the temporary reset-clock button on the
   office floor calls it).
 - Notices when you have been staring at it: the events it serves are re-timestamped per

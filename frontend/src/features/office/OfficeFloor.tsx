@@ -464,7 +464,13 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       // wheel scrolls the floor instead of zooming it: without the modifier, a trackpad
       // two-finger scroll flung the zoom about while the reader was only trying to look
       // around, which is not what that gesture means anywhere else.
-      if (e.ctrlKey || e.metaKey) {
+      // Alt is a first-class zoom modifier here, not a fallback. Firefox handles its
+      // own Ctrl+wheel page zoom INSIDE the browser, and no preventDefault — in any
+      // phase, from any element — cancels it. A Ctrl-only binding therefore still zooms
+      // the page in Firefox however early we listen, which is exactly what was
+      // reported. Alt+wheel is unclaimed by Firefox, Chrome and Edge alike, so it means
+      // the floor in all three; Ctrl+wheel keeps working where the browser allows it.
+      if (e.ctrlKey || e.metaKey || e.altKey) {
         const factor = Math.exp(-e.deltaY * 0.0015);
         setCam((c) => zoomAt(c, factor, e.clientX - rect.left, e.clientY - rect.top));
         return;
@@ -750,8 +756,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           )}
 
           <div className="office-hint">
-            drag to pan · <kbd>Ctrl</kbd>+scroll to zoom · scroll to pan · click a character for thinking &amp; output ·{' '}
-            <kbd>F</kbd> fit ·{' '}
+            drag to pan · <kbd>Alt</kbd>+scroll to zoom · scroll to pan · click a character for thinking &amp; output · <kbd>F</kbd> fit ·{' '}
             <kbd>Esc</kbd> deselect
           </div>
 

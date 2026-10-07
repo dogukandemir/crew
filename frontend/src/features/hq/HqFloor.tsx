@@ -34,12 +34,14 @@ interface Walker {
   moving: boolean;
   facing: 1 | -1;
   motion: SpriteMotionRef;
+  /** First-placement done? Until then the walker sits wherever the record puts it. */
+  placed: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
 const newWalker = (person: HqPerson): Walker => ({
-  pos: { ...person.home }, path: [], idx: 0, moving: false, facing: 1,
+  pos: { ...person.home }, path: [], idx: 0, moving: false, facing: 1, placed: false,
   motion: { current: { facing: 1, moving: false, speed: WALK_SPEED, x: person.home.x, y: person.home.y } },
 });
 
@@ -111,14 +113,37 @@ export function HqFloor({ hq }: { hq: Hq }) {
     for (const key of [...walkers.keys()]) if (!known.has(key)) walkers.delete(key);
     for (const person of world.people) {
       const w = getWalker(person);
-      if (w.moving) continue; // finish the current walk; re-route at the next poll
       const stage = staged.get(person.id);
       const target = stage ? stage.at : person.home;
+      if (!w.placed) {
+        // First appearance shows the CURRENT state in place — a board that is sitting
+        // is found seated, not watched shuffling in. Walking is for transitions seen
+        // live (and it is also the only honest thing to do when the tab cannot paint:
+        // see the hidden-tab note below). The lazy creation in render means map
+        // membership cannot tell "new" — that is what `placed` is for.
+        w.placed = true;
+        w.pos = { ...target };
+        w.motion.current.x = target.x;
+        w.motion.current.y = target.y;
+        w.moving = false;
+        continue;
+      }
+      if (w.moving) continue; // finish the current walk; re-route at the next poll
       if (w.pos.x !== target.x || w.pos.y !== target.y) {
         w.path = stage ? stage.path : [person.home];
         w.idx = 0;
         w.moving = true;
       }
+    }
+    // Paint the staged positions now: the rAF loop repaints every frame, but a tab
+    // that never produces frames (headless, backgrounded) must still show the state
+    // the record describes — initial layout is React's, not the loop's, business.
+    for (const person of world.people) {
+      const w = walkers.get(person.id);
+      const el = gRefs.current.get(person.id);
+      if (!w || !el) continue;
+      const p = project(w.pos.x, w.pos.y);
+      el.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
     }
   }, [world]);
 
@@ -170,6 +195,25 @@ export function HqFloor({ hq }: { hq: Hq }) {
 
   const stagedNow = useMemo(() => new Set(world.stages.map((s) => s.personId)), [world]);
   const stageOf = useMemo(() => new Map(world.stages.map((s) => [s.personId, s])), [world]);
+
+  // Dev probe, same contract as the office's __office: what did the walkers see?
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__hq = {
+        world,
+        pos: () =>
+          Object.fromEntries(
+            [...walkersRef.current.entries()].map(([id, w]) => [
+              id,
+              { x: Math.round(w.pos.x), y: Math.round(w.pos.y), moving: w.moving, path: w.path.length, idx: w.idx },
+            ]),
+          ),
+      };
+    }
+    return () => {
+      if (import.meta.env.DEV) delete (window as unknown as Record<string, unknown>).__hq;
+    };
+  }, [world]);
 
   // Labels hold their screen size: world-scaled text at the fitted zoom of a whole
   // headquarters is 3 px tall — a name tag nobody can read is a name tag nobody has.

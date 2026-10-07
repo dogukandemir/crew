@@ -104,15 +104,29 @@ export const BOARD_TABLE = (() => {
   };
 })();
 
-/** The corridor band walkers use between wings. */
-const CORRIDOR_Y = 6.2 * M;
+/** The corridor bands walkers use between wings. */
+const CORRIDOR_N = 6.2 * M;
+const CORRIDOR_S = 11.9 * M;
 
-function doorIn(room: { x: number; y: number; w: number; d: number }): HqPoint {
-  return { x: room.x + room.w / 2, y: room.y + room.d + 14 };
+function doorOf(room: { x: number; y: number; w: number; d: number }, side: 'n' | 's'): HqPoint {
+  return { x: room.x + room.w / 2, y: side === 'n' ? room.y - 12 : room.y + room.d + 12 };
 }
 
-function route(from: HqPoint, homeDoor: HqPoint, to: HqPoint, toDoor: HqPoint): HqPoint[] {
-  return [homeDoor, { x: homeDoor.x, y: CORRIDOR_Y }, { x: toDoor.x, y: CORRIDOR_Y }, toDoor, to];
+/**
+ * A route that leaves and enters through the side that FACES the corridor. The doors
+ * used to be one per room (always south), which sent an executive out of the south
+ * door only to walk back north past their own office — two corridors exist so nobody
+ * crosses a room they are not visiting.
+ */
+function routeBetween(
+  from: { x: number; y: number; w: number; d: number },
+  to: { x: number; y: number; w: number; d: number },
+): HqPoint[] {
+  const bothNorth = from.y + from.d / 2 < 11.2 * M && to.y + to.d / 2 < 11.2 * M;
+  const corr = bothNorth ? CORRIDOR_N : CORRIDOR_S;
+  const fDoor = doorOf(from, corr < from.y + from.d / 2 ? 'n' : 's');
+  const tDoor = doorOf(to, corr < to.y + to.d / 2 ? 'n' : 's');
+  return [fDoor, { x: fDoor.x, y: corr }, { x: tDoor.x, y: corr }, tDoor];
 }
 
 function ageSeconds(at: string, now: number): number {
@@ -224,18 +238,23 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
     if (ceo) {
       const seat = BOARD_TABLE.seats[BOARD_TABLE.seats.length - 1];
       const homeRoom = rooms.find((r) => r.id === ceo.room);
-      stages.push({
-        personId: ceo.id, at: seat, note: `reporting to the board — ${topic}`,
-        path: route(ceo.home, homeRoom ? doorIn(homeRoom) : ceo.home, seat, seat),
-      });
+      const boardRoom = rooms.find((r) => r.id === 'board');
+      if (homeRoom && boardRoom) {
+        stages.push({
+          personId: ceo.id, at: seat, note: `reporting to the board — ${topic}`,
+          path: [...routeBetween(homeRoom, boardRoom), seat],
+        });
+      }
     }
   } else if (inAllocation) {
     banner = 'The portfolio is allocated — the C-suite is in the board room';
+    const boardRoom = rooms.find((r) => r.id === 'board');
     for (const p of people.filter((x) => x.kind === 'exec' && x.role !== 'ceo')) {
       const homeRoom = rooms.find((r) => r.id === p.room);
+      if (!boardRoom || !homeRoom) continue;
       const corner = { x: BOARD_ROOM.x + 1.1 * M, y: BOARD_ROOM.y + 0.9 * M + 44 * Number(p.id.length % 3) };
       stages.push({ personId: p.id, at: corner, note: 'allocation decided — standing with the numbers',
-                    path: route(p.home, homeRoom ? doorIn(homeRoom) : p.home, corner, corner) });
+                    path: [...routeBetween(homeRoom, boardRoom), corner] });
     }
   }
 
@@ -248,13 +267,13 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
     const lead = people.find((x) => x.id === `lead-${p.id}`);
     const homeRoom = rooms.find((r) => r.id === lead?.room);
     if (!lead || !homeRoom || !ceoRoom) continue;
-    const door = doorIn(ceoRoom);
+    const door = doorOf(ceoRoom, 's');
     const spot = { x: door.x, y: door.y + 26 };
     banner = banner ?? `${p.name} is ${p.verdict.replace('_', ' ')} — its lead is with the CEO`;
     stages.push({
       personId: lead.id, at: spot,
       note: String((dir.payload?.directive as string) ?? p.directive ?? 'called up'),
-      path: route(lead.home, doorIn(homeRoom), spot, door),
+      path: [...routeBetween(homeRoom, ceoRoom), spot],
     });
   }
 

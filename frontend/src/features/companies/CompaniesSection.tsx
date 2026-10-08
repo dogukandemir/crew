@@ -112,6 +112,24 @@ export function CompaniesSection() {
                 </ul>
               )}
 
+              {c.projects.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-slate-500">Projects</span>
+                  {c.projects.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => openProjectTab(p.id, 'main', 'office')}
+                      title={`Open ${p.name}`}
+                      className="rounded-full border border-slate-700/60 bg-slate-800/50 px-2 py-0.5 text-[11px] text-slate-300 hover:border-emerald-500/50 hover:text-emerald-200"
+                    >
+                      {p.name.split('—')[0].trim()}
+                      <span className="ml-1 text-[10px] text-slate-500">{p.status}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-2 flex items-center gap-2">
                 <Button size="xs" disabled={review.isPending} onClick={() => review.mutate(c.id)}>
                   Review now

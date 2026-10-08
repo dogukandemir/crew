@@ -10,9 +10,11 @@ import { ProgressBar } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { cn } from '../../lib/cn';
 import { budgetFraction, formatMicros, formatPercent } from '../../lib/format';
-import { useProject } from '../../app/hooks';
+import { useCompanies, useProject, useProjects } from '../../app/hooks';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
+import { Menu } from '../../components/ui/Menu';
+import { switchTargets } from './projectSwitch';
 
 function StageStepper({ stage }: { stage: Stage }) {
   const current = STAGES.indexOf(stage);
@@ -118,6 +120,8 @@ function LifecycleControls({ project }: { project: Project }) {
 
 export function ProjectHeader({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
+  const companies = useCompanies();
+  const allProjects = useProjects();
   const openTab = useTabs((s) => s.openTab);
   const rename = useTabs((s) => s.rename);
   const activeTabId = useTabs((s) => s.activeTabId);
@@ -150,6 +154,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
   }
 
   const p = project.data;
+  const targets = switchTargets(p, companies.data?.items, allProjects.data?.items);
 
   return (
     <div className="border-b border-slate-800/70 px-3 py-2">
@@ -172,6 +177,35 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
             <span className="text-slate-600"> / {formatMicros(p.budget_cap_micros)}</span> ·{' '}
             {formatPercent(fraction)}
           </span>
+          {targets.length > 0 && (
+            <Menu
+              label="⇄ switch"
+              title="Switch between this company's projects"
+              items={[
+                ...targets.map((t) => ({
+                  key: t.id,
+                  current: t.current,
+                  label: (
+                    <>
+                      <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                      {t.status && <span className="text-[10px] text-slate-500">{t.status}</span>}
+                      {t.current && <span className="text-[10px] text-emerald-400">current</span>}
+                    </>
+                  ),
+                  onSelect: () => openTab(t.id, 'main', 'office'),
+                })),
+                ...(p.company_id
+                  ? [
+                      {
+                        key: '__hq',
+                        label: <span className="text-slate-300">🏢 Open HQ floor</span>,
+                        onSelect: () => openTab(p.company_id as string, 'main', 'hq'),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )}
           <LifecycleControls project={p} />
           <Button
             size="xs"

@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useCompanyHq } from '../../app/hooks';
+import { useTabs } from '../../stores/tabs';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { SkeletonRows } from '../../components/ui/EmptyState';
@@ -24,11 +25,12 @@ const VERDICT_TONE: Record<CompanyVerdictName, 'success' | 'warning' | 'muted' |
 export function HqTab({ companyId }: { companyId: string }) {
   const hq = useCompanyHq(companyId);
   const qc = useQueryClient();
-  const [topic, setTopic] = useState('Winter slate review');
+  const [topic, setTopic] = useState('Launch readiness review');
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['company-hq', companyId] });
   const review = useMutation({ mutationFn: () => api.reviewCompany(companyId), onSuccess: invalidate });
   const allocate = useMutation({ mutationFn: () => api.allocateCompany(companyId), onSuccess: invalidate });
+  const openTab = useTabs((s) => s.openTab);
   const session = useMutation({
     mutationFn: () => api.conveneBoard(companyId, { topic: topic.trim() }),
     onSuccess: invalidate,
@@ -56,9 +58,16 @@ export function HqTab({ companyId }: { companyId: string }) {
         </span>
         <div className="flex flex-wrap items-center gap-1">
           {d.projects.map((p) => (
-            <Badge key={p.id} tone={VERDICT_TONE[p.verdict]}>
-              {p.name.split('—')[0].trim()} · {p.verdict.replace('_', ' ')}
-            </Badge>
+            <button
+              key={p.id}
+              type="button"
+              title={`Open ${p.name}`}
+              onClick={() => openTab(p.id, 'main', 'office')}
+            >
+              <Badge tone={VERDICT_TONE[p.verdict]}>
+                {p.name.split('—')[0].trim()} · {p.verdict.replace('_', ' ')}
+              </Badge>
+            </button>
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1.5">

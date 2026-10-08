@@ -571,6 +571,39 @@ class Orchestrator:
                 a.state = "idle"
                 s.add(a)
 
+    async def recover_interrupted(self) -> list[tuple[str, str]]:
+        """Boot-time honesty: a process restart cannot keep a run in flight. Every
+        RUNNING run's in-flight tasks are settled as interrupted on the record, then
+        the runs are handed back to be re-driven — the stage machine resumes where it
+        stopped, and the retry ladder takes the interrupted tasks from there."""
+        async with session_scope() as s:
+            runs = (await s.scalars(select(Run).where(
+                Run.status == RunStatus.RUNNING.value))).all()
+            runinfo = [(r.id, r.project_id) for r in runs]
+        resumed: list[tuple[str, str]] = []
+        for run_id, project_id in runinfo:
+            async with session_scope() as s:
+                stuck = (await s.scalars(select(Task).where(
+                    Task.run_id == run_id, Task.state == TaskState.RUNNING.value))).all()
+                tids = [t.id for t in stuck]
+                for t in stuck:
+                    t.state = TaskState.FAILED.value
+                    t.escalation_reason = "interrupted: the server restarted mid-task"
+                    s.add(t)
+            for tid in tids:
+                await ev.emit("task.failed", project_id=project_id, task_id=tid,
+                              severity="warning",
+                              title="task interrupted by a server restart",
+                              payload={"task_id": tid, "reason": "server restarted"},
+                              actor="system:orchestrator")
+            await ev.emit("run.recovered", project_id=project_id, run_id=run_id,
+                          severity="notice",
+                          title="run resumed after a server restart",
+                          payload={"run_id": run_id, "interrupted_tasks": len(tids)},
+                          actor="system:orchestrator")
+            resumed.append((run_id, project_id))
+        return resumed
+
     async def _reap_occupancy(self, project_id: str) -> None:
         """The safety net: any agent marked busy with no task RUNNING is freed.
 

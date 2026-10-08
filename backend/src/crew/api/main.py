@@ -59,7 +59,19 @@ async def lifespan(app: FastAPI):
     log.info("data dir: %s", settings.data_path)
     log.info("model tiers: reasoning=%s standard=%s fast=%s", settings.tier_reasoning,
              settings.tier_standard, settings.tier_fast)
+    from crew.api.routes import _drive
+    from crew.control import onboarding
+    from crew.control.orchestrator import orchestrator
     from crew.execution.tools import invoker  # noqa: F401  (ensure tool registry imported)
+
+    loaded = await onboarding.load_vault_provider_keys()
+    if loaded:
+        log.info("provider keys restored from the vault: %s", ", ".join(loaded))
+    recovered = await orchestrator.recover_interrupted()
+    for run_id, project_id in recovered:
+        asyncio.create_task(_drive(project_id, run_id))
+    if recovered:
+        log.info("recovered %d interrupted run(s) after a restart", len(recovered))
     yield
     log.info("crew shutting down")
 

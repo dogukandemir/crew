@@ -247,3 +247,46 @@ async def test_command_desk_roundtrip(client):
     # an empty message never reaches the desk
     r = await client.post(f"/api/projects/{p['id']}/commands", json={})
     assert r.status_code == 422
+
+
+async def test_onboarding_key_roundtrip(client, monkeypatch):
+    """ADR 0013: the key path — state, a rejected key, a stored key, the vault."""
+    import os
+
+    from crew.control import onboarding
+    from crew.core.security import vault
+    from crew.core.settings import settings
+
+    r = await client.get("/api/onboarding/state")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) >= {"needed", "provider", "model", "offline_llm", "vault"}
+    assert body["offline_llm"] is True, "the test env runs offline; needed stays false"
+
+    r = await client.post("/api/onboarding/key",
+                          json={"provider": "nope", "key": "sk-1234567890"})
+    assert r.status_code == 400
+
+    async def reject(provider: str, key: str) -> tuple[bool, str]:
+        return False, "the provider rejected this key"
+
+    monkeypatch.setattr(onboarding, "verify", reject)
+    r = await client.post("/api/onboarding/key",
+                          json={"provider": "deepseek", "key": "sk-bad-12345678"})
+    assert r.status_code == 400 and "rejected" in r.text
+
+    async def accept(provider: str, key: str) -> tuple[bool, str]:
+        return True, "key verified against the provider"
+
+    monkeypatch.setattr(onboarding, "verify", accept)
+    try:
+        r = await client.post("/api/onboarding/key",
+                              json={"provider": "deepseek", "key": "sk-test-12345678"})
+        assert r.status_code == 201 and r.json()["verified"] is True
+        handles = await vault.list_handles()
+        assert any(h["name"] == "provider:deepseek" for h in handles)
+        assert os.environ.get("DEEPSEEK_API_KEY") == "sk-test-12345678"
+    finally:
+        # make the in-process side of the save invisible to the rest of the suite
+        os.environ.pop("DEEPSEEK_API_KEY", None)
+        settings.deepseek_api_key = ""

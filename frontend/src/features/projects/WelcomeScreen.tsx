@@ -1,5 +1,13 @@
-import { useProjects } from '../../app/hooks';
+import { useState } from 'react';
+import { useOnboardingState, useProjects } from '../../app/hooks';
 import { CompaniesSection } from '../companies/CompaniesSection';
+import { OnboardingCard } from '../onboarding/OnboardingCard';
+import {
+  clearOnboardingDismissal,
+  dismissOnboarding,
+  onboardingDismissed,
+  shouldShowOnboarding,
+} from '../onboarding/onboarding';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
 import { Button } from '../../components/ui/Button';
@@ -20,6 +28,11 @@ export function WelcomeScreen() {
   const projects = useProjects();
   const openTab = useTabs((s) => s.openTab);
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
+  const setToast = useUi((s) => s.setToast);
+  const onboarding = useOnboardingState();
+  const [dismissed, setDismissed] = useState(() => onboardingDismissed());
+  const [hideCard, setHideCard] = useState(false);
+  const showCard = !hideCard && shouldShowOnboarding(onboarding.data, dismissed);
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -28,6 +41,20 @@ export function WelcomeScreen() {
         Open a project tab to watch its org form itself, execute, verify and pay out rewards. Each tab keeps
         its own route, filters and scroll position.
       </p>
+
+      {onboarding.data?.needed && dismissed && (
+        <button
+          type="button"
+          onClick={() => {
+            clearOnboardingDismissal();
+            setDismissed(false);
+            setHideCard(false);
+          }}
+          className="mt-3 rounded-full border border-amber-500/40 bg-amber-950/30 px-3 py-1 text-[11px] text-amber-200 hover:border-amber-400/60"
+        >
+          ⚠ No provider key yet — add one to run real agents
+        </button>
+      )}
 
       <CompaniesSection />
 
@@ -82,6 +109,21 @@ export function WelcomeScreen() {
           </ul>
         )}
       </div>
+
+      {showCard && onboarding.data && (
+        <OnboardingCard
+          state={onboarding.data}
+          onDone={(detail) => {
+            setHideCard(true);
+            setToast({ kind: 'success', message: `Key saved — ${detail}.` });
+            void onboarding.refetch();
+          }}
+          onSkip={() => {
+            dismissOnboarding();
+            setDismissed(true);
+          }}
+        />
+      )}
     </div>
   );
 }

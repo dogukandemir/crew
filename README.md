@@ -71,6 +71,8 @@ root to switch to live providers (see **Model providers** below).
 
 ### Local development (uv + npm)
 
+Requires [uv](https://docs.astral.sh/uv/) and Node 22+.
+
 ```bash
 # 1. backend  (API + orchestrator; serves the REST contract and the event socket)
 cd backend
@@ -91,8 +93,10 @@ CREW_OFFLINE_LLM=true uv run python -m crew serve
 
 The model tiers default to **DeepSeek** (`deepseek/deepseek-chat` for standard/fast,
 `deepseek/deepseek-reasoner` for reasoning), so **`DEEPSEEK_API_KEY` is the single key that
-works out of the box**. Using OpenAI, Anthropic or a local model instead? Point the tiers at
-it in `.env`:
+works out of the box** — pasted once into the onboarding card on first launch (verified
+against the provider, stored encrypted in the local vault, effective immediately: no `.env`
+edit, no restart) or set in `.env` like any other variable. Using OpenAI, Anthropic or a
+local model instead? Point the tiers at it in `.env`:
 
 ```bash
 CREW_TIER_STANDARD=openai/gpt-4o-mini
@@ -103,6 +107,16 @@ CREW_TIER_REASONING=anthropic/claude-sonnet-4-5
 Embeddings default to `openai/text-embedding-3-small`; without that key the brain's semantic
 recall is skipped — everything else keeps working. `uv run python -m crew status` prints
 which tiers have a key present.
+
+### Exposing it beyond localhost
+
+Loopback + `CREW_AUTH_MODE=local` is the shipped default, and the settings refuse to bind a
+public address in that mode. Before anything is reachable by others: set
+`CREW_AUTH_MODE=token`, a real `CREW_JWT_SECRET`, and create a user:
+
+```bash
+uv run python -m crew auth create-user --email you@example.com --password … --role admin
+```
 
 ### Fastest possible look: the mock, no backend and no keys
 

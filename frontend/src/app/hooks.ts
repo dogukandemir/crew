@@ -34,6 +34,17 @@ export function useHealth(): UseQueryResult<Health> {
   });
 }
 
+export function useOnboardingState() {
+  // First-run state for the welcome card (ADR 0013). Safe everywhere: against a backend
+  // without the onboarding surface (the mock) the query fails and the card stays away.
+  return useQuery({
+    queryKey: ['onboarding'],
+    queryFn: api.onboardingState,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useProjects() {
   return useQuery({ queryKey: ['projects'], queryFn: api.listProjects });
 }

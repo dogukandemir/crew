@@ -124,6 +124,16 @@ Events: `command.message` (`text`, `mode`, `intent`, `mentions`), `command.reply
 prompts. `executed` is the honesty gate at the prompt boundary: only messages whose reply
 says they landed are read back into task prompts (`orchestrator._captain_notes`).
 
+### Onboarding (ADR 0013)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/onboarding/state` | first-run state: `needed`, `provider`/`model` of the standard tier, `offline_llm`, `vault` |
+| POST | `/api/onboarding/key` | `{provider, key}` — verified against the provider's models endpoint (401/403 refuses the save; network trouble saves unverified), stored in the vault as `provider:<name>`, effective in-process, never returned |
+
+Audited (`secret.created`); no domain events. Boot restores vault keys into the process
+(`onboarding.load_vault_provider_keys`), and `run.recovered` (`run_id`,
+`interrupted_tasks`) marks a run resumed after a server restart.
+
 ### Council & decisions
 | Method | Path | Purpose |
 |--------|------|---------|

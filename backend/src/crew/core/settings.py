@@ -146,8 +146,15 @@ def get_settings() -> Settings:
     s = Settings()
     s.ensure_dirs()
     if not s.vault_key:
-        # Dev convenience: generate a session key so the vault works out of the box.
-        s.vault_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+        # No master key configured: generate one ONCE and keep it beside the data it
+        # protects. A session-only key would silently orphan every stored secret on
+        # restart — and the first thing the vault stores is a provider key.
+        key_file = s.data_path / "vault.key"
+        if key_file.exists():
+            s.vault_key = key_file.read_text(encoding="utf-8").strip()
+        else:
+            s.vault_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+            key_file.write_text(s.vault_key, encoding="utf-8")
     return s
 
 

@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
-from crew.control import backlog, commands, company, org
+from crew.control import backlog, commands, company, onboarding, org
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
@@ -116,6 +116,11 @@ class BoardSeatBody(BaseModel):
 
 class CommandBody(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class OnboardingKeyBody(BaseModel):
+    provider: str = "deepseek"
+    key: str = Field(min_length=8, max_length=400)
 
 
 class ProjectPatch(BaseModel):
@@ -320,6 +325,24 @@ async def health() -> dict:
     return {"status": "ok" if await ping() else "degraded", "version": __version__,
             "contract": CONTRACT_VERSION, "env": settings.env, "auth_mode": settings.auth_mode,
             "server_time": datetime.now(UTC).isoformat()}
+
+
+# ── first-run onboarding (ADR 0013): paste a provider key once ─────────────────────
+@api.get("/onboarding/state")
+async def get_onboarding_state() -> dict:
+    return onboarding.state()
+
+
+@api.post("/onboarding/key", status_code=201)
+async def post_onboarding_key(body: OnboardingKeyBody,
+                              user: dict = Depends(require_user)) -> dict:
+    try:
+        return await onboarding.save_provider_key(provider=body.provider, key=body.key,
+                                                  actor=f"user:{user['id']}")
+    except ValueError as e:
+        raise _problem(400, str(e)) from e
+    except PermissionError as e:
+        raise _problem(400, str(e)) from e
 
 
 @api.get("/system/status")

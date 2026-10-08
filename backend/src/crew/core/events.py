@@ -164,6 +164,7 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "project.created": ("project_id", "name"),
     "run.started": ("run_id", "goal"),
     "run.stage.changed": ("run_id", "stage"),
+    "run.recovered": ("run_id", "interrupted_tasks"),
     "org.department.created": ("department_id", "name"),
     "org.squad.created": ("squad_id", "name"),
     "org.agent.hired": ("agent_id", "role", "grade"),

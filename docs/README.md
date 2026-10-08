@@ -56,6 +56,7 @@ Decisions that were expensive to make and would be expensive to reverse:
 - [0010 — The board: work items above tasks, and joint work that finishes together](adr/0010-board-and-work-items.md)
 - [0011 — The board of directors, the portfolio call, and the HQ floor](adr/0011-board-of-directors-and-portfolio.md)
 - [0012 — The command desk: the Captain speaks, the orchestrator answers](adr/0012-command-desk.md)
+- [0013 — First-run onboarding: one key, stored in the vault](adr/0013-first-run-onboarding.md)
 
 ## Conventions
 

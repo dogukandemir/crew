@@ -73,6 +73,23 @@ export interface Health {
   contract: number;
 }
 
+// ─── First-run onboarding (ADR 0013) ─────────────────────────────────────────
+
+export interface OnboardingState {
+  needed: boolean;
+  /** The provider of the standard tier, when the key path can accept it. */
+  provider: string | null;
+  model: string;
+  offline_llm: boolean;
+  vault: string;
+}
+
+export interface OnboardingKeyResult {
+  provider: string;
+  verified: boolean;
+  detail: string;
+}
+
 export interface CurrentUser {
   id: string;
   email: string;

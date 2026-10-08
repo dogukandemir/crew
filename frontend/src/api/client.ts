@@ -32,6 +32,8 @@ import type {
   Health,
   Hq,
   LeaderboardEntry,
+  OnboardingKeyResult,
+  OnboardingState,
   Paged,
   Problem,
   Project,
@@ -156,12 +158,20 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       parsed && typeof parsed === 'object' && 'title' in (parsed as object)
         ? (parsed as Problem)
         : null;
+    // FastAPI's plain HTTPException body is `{"detail": "…"}` — the reason is right there;
+    // a transport line ("POST … failed with 400") is the last resort, not the default.
+    const detailText =
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { detail?: unknown }).detail === 'string'
+        ? (parsed as { detail: string }).detail
+        : null;
     const code = problemCode(problem) || `http_${res.status}`;
     throw new ApiError({
       status: res.status,
       problem,
       code: problem ? code : `http_${res.status}`,
-      message: problem?.title ?? `${method} ${path} failed with ${res.status}`,
+      message: problem?.title ?? detailText ?? `${method} ${path} failed with ${res.status}`,
     });
   }
 
@@ -206,6 +216,9 @@ export const api = {
 
   // ── System & auth ──────────────────────────────────────────────────────────
   health: () => request<Health>('/api/health'),
+  onboardingState: () => request<OnboardingState>('/api/onboarding/state'),
+  saveProviderKey: (provider: string, key: string) =>
+    request<OnboardingKeyResult>('/api/onboarding/key', { method: 'POST', body: { provider, key } }),
   killAll: (confirm: boolean) =>
     request<CommandAck>('/api/system/kill', { method: 'POST', body: { confirm } }),
   login: (email: string, password: string) =>

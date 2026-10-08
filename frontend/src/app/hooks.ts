@@ -251,3 +251,16 @@ export function useAgentList(id: string | null | undefined) {
     retry: false,
   });
 }
+
+export function useCommands(projectId: string | null | undefined, enabled = true) {
+  // The desk's transcript is the record itself; while the drawer is open it polls,
+  // because the orchestrator answers on its own time and the reply must arrive
+  // without a reload.
+  return useQuery({
+    queryKey: ['commands', projectId],
+    queryFn: () => api.getCommands(projectId as string),
+    enabled: !!projectId && enabled,
+    refetchInterval: enabled ? 5_000 : false,
+    retry: false,
+  });
+}

@@ -18,6 +18,8 @@ import type {
   BrainSearchHit,
   CommandAck,
   CommandBody,
+  CommandMessage,
+  CommandPostResult,
   Company,
   CompanyReview,
   CouncilSession,
@@ -248,6 +250,15 @@ export const api = {
     request<{ headroom_micros: number }>(`/api/companies/${companyId}/allocate`, { method: 'POST' }),
   conveneBoard: (companyId: string, input: { topic: string }) =>
     request<{ session_id: string }>(`/api/companies/${companyId}/board-session`, { method: 'POST', body: input }),
+
+  // ── The command desk (ADR 0012) ───────────────────────────────────────────
+  getCommands: (projectId: string, limit = 60) =>
+    request<{ messages: CommandMessage[] }>(`/api/projects/${projectId}/commands?limit=${limit}`),
+  postCommand: (projectId: string, text: string) =>
+    request<CommandPostResult>(`/api/projects/${projectId}/commands`, {
+      method: 'POST',
+      body: { text },
+    }),
 
   // ── Projects ───────────────────────────────────────────────────────────────
   listProjects: () => request<Paged<Project>>('/api/projects'),

@@ -110,6 +110,18 @@ Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `
 Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 `company.allocation.decided` (`company_id`, `allocations`, `headroom_micros`, `method`).
 
+### The command desk (ADR 0012)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/projects/{id}/commands` | the Captain writes `{text}` — parsed (TR/EN lexicon; model fallback only when unsure and configured), executed against the real services, answered with citations |
+| GET | `/api/projects/{id}/commands` | the desk transcript, straight from the record (`?limit=`) |
+
+Events: `command.message` (`text`, `mode`, `intent`, `mentions`), `command.reply` (`text`,
+`ok`, `actions[]`), `task.reassigned` (`task_id`, `to_agent_id`, `from_agent_id`),
+`agent.break.started` (`agent_id`, `until`). Attribution: message `actor=user:{id}`, reply
+`system:orchestrator`. Modes: `order` binds the floor (prompt block `CAPTAIN DIRECTIVES`),
+`idea` is weighed, `question` is answered and never reaches task prompts.
+
 ### Council & decisions
 | Method | Path | Purpose |
 |--------|------|---------|

@@ -204,6 +204,10 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "budget.exceeded": ("scope_kind", "scope_id"),
     "security.injection.detected": ("where",),
     "user.steering": ("target_kind", "text"),
+    "command.message": ("text", "mode"),
+    "command.reply": ("text", "ok"),
+    "task.reassigned": ("task_id", "to_agent_id"),
+    "agent.break.started": ("agent_id", "until"),
 }
 
 

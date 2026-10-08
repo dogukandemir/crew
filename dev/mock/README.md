@@ -54,6 +54,12 @@ npm run dev                       # http://localhost:5173
   (`board.convened` 38 s ago), so the directors take their chairs and the CEO walks in
   with the topic in hand. `POST …/allocate` and `POST …/board-session` answer; the HQ
   buttons (Review / Allocate / Convene board) call them.
+- **The command desk is live (ADR 0012).** `GET /api/projects/p1/commands` serves a
+  transcript to start from (a status question, an assignment to Ada with its chips);
+  `POST` runs the same lexicon the backend speaks — mentions resolve against the live
+  roster, "herkese … mola" answers with the break line, a bare "@Ada, …" comes back as
+  an assignment with `task.created`/`task.assigned` chips. Deterministic: same words in,
+  same actions out, no model needed.
 - `POST /api/dev/reset` restarts that clock (the temporary reset-clock button on the
   office floor calls it).
 - Notices when you have been staring at it: the events it serves are re-timestamped per

@@ -120,6 +120,8 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
   const openTab = useTabs((s) => s.openTab);
   const rename = useTabs((s) => s.rename);
+  const activeTabId = useTabs((s) => s.activeTabId);
+  const openDrawer = useUi((s) => s.openDrawer);
 
   useEffect(() => {
     if (project.data) rename(projectId, project.data.name);
@@ -171,6 +173,16 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
             {formatPercent(fraction)}
           </span>
           <LifecycleControls project={p} />
+          <Button
+            size="xs"
+            variant="secondary"
+            title="The Captain's desk — give orders, float ideas, ask questions"
+            onClick={() => {
+              if (activeTabId) openDrawer(activeTabId, { kind: 'command', id: 'command' });
+            }}
+          >
+            ❯ Command
+          </Button>
           <Button
             size="xs"
             variant="ghost"

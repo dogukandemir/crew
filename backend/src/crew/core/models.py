@@ -127,6 +127,9 @@ class Agent(Base):
     role: Mapped[str] = mapped_column(String(30), index=True)
     grade: Mapped[int] = mapped_column(Integer, default=1)
     state: Mapped[str] = mapped_column(String(20), default="idle", index=True)
+    # The Captain's break (ADR 0012): set by the command desk; assignment skips the
+    # agent until it passes — a break never interrupts a task already in their hands.
+    break_until: Mapped[datetime | None] = mapped_column(nullable=True)
     mission: Mapped[str] = mapped_column(Text, default="")
     responsibilities: Mapped[list] = mapped_column(JSON, default=list)
     decision_style: Mapped[str] = mapped_column(String(40), default="analytical")

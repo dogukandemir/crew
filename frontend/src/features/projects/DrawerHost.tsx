@@ -1,5 +1,6 @@
 import { useUi } from '../../stores/ui';
 import { AgentDrawer } from '../agents/AgentDrawer';
+import { CommandDrawer } from '../commands/CommandDrawer';
 import { TaskDrawer } from '../tasks/TaskDrawer';
 
 /**
@@ -23,6 +24,9 @@ export function DrawerHost({ projectId, tabId }: { projectId: string; tabId: str
   }
   if (drawer.kind === 'task') {
     return <TaskDrawer taskId={drawer.id} projectId={projectId} onClose={() => closeDrawer(tabId)} />;
+  }
+  if (drawer.kind === 'command') {
+    return <CommandDrawer projectId={projectId} onClose={() => closeDrawer(tabId)} />;
   }
   return null;
 }

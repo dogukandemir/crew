@@ -53,7 +53,8 @@ workstream, brain_scope_tags(json)`
 
 ### agents
 `id, project_id, department_id, squad_id, manager_id, name, role, grade(int 0..5),
-state(idle|busy|probation|suspended|archived), mission, responsibilities(json),
+state(idle|busy|probation|suspended|archived), break_until(datetime — the Captain's break,
+ADR 0012; matching skips the agent until it passes), mission, responsibilities(json),
 decision_style, autonomy(supervised|bounded|autonomous), model_tier, model_id,
 token_cap_per_step, spend_cap_per_run_micros, spend_cap_per_day_micros, spend_today_micros,
 score(float), score_confidence(float), evidence_count, success_rate, tasks_done, tasks_failed,

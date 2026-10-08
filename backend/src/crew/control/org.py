@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, select
 
@@ -885,6 +886,11 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
                               Role.CTO.value, Role.CMO.value, Role.CPO.value, Role.COO.value) \
                         or a.state in ("busy", "archived", "suspended"):
                     continue
+                if a.break_until is not None:
+                    bu = a.break_until.replace(tzinfo=UTC) if a.break_until.tzinfo is None \
+                        else a.break_until
+                    if bu > datetime.now(UTC):
+                        continue  # on a break (ADR 0012) — the Captain's call, until it passes
                 prof = skills_by_agent.get(a.id, {})
                 coverage = sum(w * prof.get(sid, 0.0) for sid, w in needed.items())
                 # Grade is not coverage: without this check an agent holding NONE of the

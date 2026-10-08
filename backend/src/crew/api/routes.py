@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
-from crew.control import backlog, company, org
+from crew.control import backlog, commands, company, org
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
@@ -112,6 +112,10 @@ class BoardSessionBody(BaseModel):
 
 class BoardSeatBody(BaseModel):
     role: str = "board_member"
+
+
+class CommandBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class ProjectPatch(BaseModel):
@@ -507,6 +511,23 @@ async def patch_board_item(item_id: str, body: BoardItemPatch,
         raise _problem(404, "item not found", item_id) from e
     except ValueError as e:
         raise _problem(409, "cannot move", str(e)) from e
+
+
+# ── the command desk (ADR 0012): the Captain writes, the orchestrator answers ──────
+@api.post("/projects/{project_id}/commands", status_code=201)
+async def post_command(project_id: str, body: CommandBody,
+                       user: dict = Depends(require_user)) -> dict:
+    project = await _project_or_404(project_id)
+    try:
+        return await commands.handle_command(project_id=project.id, text=body.text,
+                                             actor=f"user:{user['id']}")
+    except KeyError as e:
+        raise _problem(404, "project not found", project_id) from e
+
+
+@api.get("/projects/{project_id}/commands")
+async def get_commands(project_id: str, limit: int = 60) -> dict:
+    return await commands.transcript(project_id=project_id, limit=limit)
 
 
 @api.get("/projects/{project_id}")

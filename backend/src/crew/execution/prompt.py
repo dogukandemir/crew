@@ -102,6 +102,7 @@ def build_task_prompt(
     steer: list[str] | None = None,
     colleague_messages: list[str] | None = None,
     company_directives: list[str] | None = None,
+    captain_directives: list[str] | None = None,
 ) -> str:
     parts = [f"TASK: {title}", "", description.strip()]
     if deliverable:
@@ -120,6 +121,11 @@ def build_task_prompt(
     if company_directives:
         parts += ["", "COMPANY DIRECTIVES (from the board; binding for this work):"]
         parts += [f"  - {d}" for d in company_directives]
+    if captain_directives:
+        # The command desk's lines (ADR 0012): the Captain is the deployment's owner;
+        # orders bind, ideas are weighed, and both are attributed — never a whisper.
+        parts += ["", "CAPTAIN DIRECTIVES (from the Captain — this company's owner):"]
+        parts += [f"  - {d}" for d in captain_directives]
     if steer:
         parts += ["", "OPERATOR STEERING (highest priority):"] + [f"  - {s}" for s in steer]
     if output_contract:

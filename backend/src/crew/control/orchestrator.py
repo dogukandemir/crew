@@ -398,6 +398,7 @@ class Orchestrator:
             steer = await self._steering(project.id, task_id, snapshot.id)
             colleague_messages = await self._inbox_notes(project.id, snapshot.id)
             company_directives = await self._company_directives(project.id)
+            captain_directives = await self._captain_notes(project.id, snapshot.id)
             decisions = await council.decision_constraints(project_id=project.id)
 
             bundle = build_system_prompt(
@@ -413,6 +414,7 @@ class Orchestrator:
                 effort=task_spec.effort, decision_constraints=decisions[:5], steer=steer,
                 colleague_messages=colleague_messages,
                 company_directives=company_directives,
+                captain_directives=captain_directives,
             )
             bundle.user = user_prompt
 
@@ -724,6 +726,35 @@ class Orchestrator:
                 row.state = TaskState.ABORTED.value
                 row.escalation_reason = f"council: {outcome.chosen_option}"
             s.add(row)
+
+    async def _captain_notes(self, project_id: str, agent_id: str) -> list[str]:
+        """The command desk's lines for this agent (ADR 0012): the Captain is the
+        deployment's owner. Orders bind, ideas are weighed, questions stay for humans —
+        and every line is attributed, never dressed as a whisper."""
+        from datetime import UTC, datetime, timedelta
+
+        async with session_scope() as s:
+            rows = (await s.scalars(select(Event).where(Event.project_id == project_id,
+                                                        Event.type == "command.message")
+                                    .order_by(desc(Event.seq)).limit(8))).all()
+        out: list[str] = []
+        now = datetime.now(UTC)
+        for r in rows:
+            p = r.payload or {}
+            ts = r.ts.replace(tzinfo=UTC) if r.ts is not None and r.ts.tzinfo is None else r.ts
+            if ts is not None and (now - ts) > timedelta(hours=6):
+                continue
+            mentions = p.get("mentions") or []
+            if mentions and agent_id not in mentions:
+                continue
+            mode = str(p.get("mode", "order"))
+            if mode == "question":
+                continue
+            label = "binding" if mode == "order" else "an idea to weigh"
+            out.append(f"({label}) {str(p.get('text', ''))[:300]}")
+            if len(out) >= 3:
+                break
+        return out
 
     async def _steering(self, project_id: str, task_id: str, agent_id: str) -> list[str]:
         async with session_scope() as s:

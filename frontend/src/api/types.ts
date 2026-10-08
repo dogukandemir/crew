@@ -930,3 +930,36 @@ export interface EventQuery {
   task_id?: string;
   since?: string;
 }
+
+// ─── The command desk (ADR 0012) ─────────────────────────────────────────────
+
+export interface CommandAction {
+  kind: string;
+  event_id?: string | null;
+  ref?: string | null;
+}
+
+/** One turn in the desk's transcript, straight from the record. */
+export interface CommandMessage {
+  id: string;
+  role: 'captain' | 'orchestrator';
+  text: string;
+  mode?: string | null;
+  ok?: boolean | null;
+  actions: CommandAction[];
+  mentions: string[];
+  at?: string | null;
+}
+
+export interface CommandReply {
+  text: string;
+  ok: boolean;
+  mode: string;
+  actions: CommandAction[];
+}
+
+export interface CommandPostResult {
+  message_id?: string | null;
+  reply_event_id?: string | null;
+  reply: CommandReply;
+}

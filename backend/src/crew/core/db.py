@@ -91,6 +91,7 @@ def _add_missing_columns(sync_conn) -> None:
         "projects": {"kind": "VARCHAR(16) DEFAULT 'project'",
                      "company_id": "VARCHAR(32)"},
         "tasks": {"helpers": "JSON DEFAULT '[]'"},
+        "agents": {"break_until": "DATETIME"},
     }
     insp = inspect(sync_conn)
     tables = set(insp.get_table_names())

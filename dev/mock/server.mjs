@@ -467,6 +467,74 @@ const routes = [
   [/^\/api\/secrets$/, () => paged([])],
 ];
 
+// ── The command desk demo (ADR 0012): a conversation to start from ──────────────
+const COMMANDS = [
+  { id: 'cm-1', role: 'captain', text: 'durum ne?', mode: 'question', ok: null,
+    actions: [], mentions: [], at: ago(340) },
+  { id: 'cr-1', role: 'orchestrator',
+    text: 'Company status: 14 agents — 3 busy, 0 on a break · tasks: 4 open, 9 done, 1 failed · latest on the record: task.completed',
+    mode: 'question', ok: true, actions: [], mentions: [], at: ago(339) },
+  { id: 'cm-2', role: 'captain', text: '@Ada, rakip analizini derinleştir', mode: 'order',
+    ok: null, actions: [], mentions: ['a1'], at: ago(120) },
+  { id: 'cr-2', role: 'orchestrator',
+    text: 'On it: “rakip analizini derinleştir” is assigned to @Ada. It runs with the next wave.',
+    mode: 'order', ok: true, mentions: [],
+    actions: [
+      { kind: 'task.created', event_id: null, ref: 't-9f21' },
+      { kind: 'task.assigned', event_id: null, ref: 'a1' },
+    ],
+    at: ago(119) },
+];
+
+function COMMAND_MODE(text) {
+  const t = text.trim();
+  let m = 'order';
+  const q = t.indexOf('?');
+  if (q >= 0 && q < 60) m = 'question';
+  if (/(fikrim|fikir|öneri|oneri|belki|idea|maybe)/i.test(t)) m = 'idea';
+  return m;
+}
+
+function COMMAND_REPLY(norm, text, ids, names) {
+  if (/gorevden al|kov|işten çıkar|isten cikar/.test(norm)) {
+    return { text: `Done: @${names[0] || '—'} is archived (reason: “the Captain's call”).`, actions: [] };
+  }
+  if (/mola/.test(norm)) {
+    return {
+      text: norm.includes('herkes')
+        ? 'Everyone on a break for 15 minutes (no new assignments until then; work already in their hands finishes first).'
+        : `@${names[0] || '—'} on a break for 10 minutes (no new assignments until then; work already in their hands finishes first).`,
+      actions: [{ kind: 'agent.break.started', event_id: null, ref: ids[0] || null }],
+    };
+  }
+  if (/hedef|goal/.test(norm)) {
+    return {
+      text: `Run started: “${text.replace(/^[^:]*:\s*/, '').slice(0, 90)}”. Planning begins on the next tick.`,
+      actions: [{ kind: 'run.started', event_id: null, ref: 'r-demo' }],
+    };
+  }
+  if (/\?|durum|ne yap/.test(norm)) {
+    return {
+      text: 'Company status: 14 agents — 3 busy, 0 on a break · tasks: 4 open, 9 done, 1 failed · latest on the record: task.completed',
+      actions: [],
+    };
+  }
+  if (names.length > 0) {
+    const title = text.replace(/@[^\s,;:!?]+/g, '').replace(/^[\s,;:—-]+/, '').slice(0, 80);
+    return {
+      text: `On it: “${title || 'the assignment'}” is assigned to @${names[0]}. It runs with the next wave.`,
+      actions: [
+        { kind: 'task.created', event_id: null, ref: 't-demo' },
+        { kind: 'task.assigned', event_id: null, ref: ids[0] || null },
+      ],
+    };
+  }
+  return {
+    text: 'I can carry these out: status (“durum ne?”) · assign (“@Ada, …”) · reassign · fire · break · goal · budget · hire. A plain sentence is an order; “bir fikrim var: …” floats an idea to be weighed; a question mark asks.',
+    actions: [],
+  };
+}
+
 // The board demo (ADR 0010): a live task behind one story, a bug waiting for the wave,
 // a helper pair, and a done story — one card per column state.
 const BOARD_ITEMS = [
@@ -589,6 +657,39 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify(item || { id, state: b.state || null }));
     });
     return;
+  }
+  // The command desk (ADR 0012): the same lexicon the backend speaks, deterministic.
+  if (/^\/api\/projects\/[^/]+\/commands$/.test(url.pathname) && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* empty body is fine in the demo */ }
+      const text = String(b.text || '').trim();
+      const norm = text.toLocaleLowerCase('tr');
+      const tokens = [...text.matchAll(/@([^\s,;:!?]+)/g)].map((mm) => mm[1].split("'")[0]);
+      const roster = Object.values(agentsNow());
+      const hit = tokens.map((tok) => roster.find((a) => a.name.split(' ')[0].toLowerCase() === tok.toLowerCase()));
+      const names = tokens.filter((_, i) => hit[i]);
+      const ids = hit.filter(Boolean).map((a) => a.id);
+      const mode = COMMAND_MODE(text);
+      const reply = COMMAND_REPLY(norm, text, ids, names);
+      const mid = `cm-${COMMANDS.length + 1}`;
+      const rid = `cr-${COMMANDS.length + 1}`;
+      const at = new Date().toISOString();
+      COMMANDS.push({ id: mid, role: 'captain', text, mode, ok: null, actions: [],
+                      mentions: ids, at });
+      COMMANDS.push({ id: rid, role: 'orchestrator', text: reply.text, mode, ok: true,
+                      actions: reply.actions, mentions: [], at });
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify({ message_id: mid, reply_event_id: rid,
+                               reply: { text: reply.text, ok: true, mode, actions: reply.actions } }));
+    });
+    return;
+  }
+  if (/^\/api\/projects\/[^/]+\/commands$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ messages: COMMANDS }));
   }
   if (/^\/api\/projects\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });

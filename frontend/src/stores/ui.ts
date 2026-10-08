@@ -1,7 +1,7 @@
 /** UI-only state: drawers, dialogs, the notification tray, backend banner. */
 import { create } from 'zustand';
 
-export type DrawerKind = 'unit' | 'task' | 'agent';
+export type DrawerKind = 'unit' | 'task' | 'agent' | 'command';
 
 export interface DrawerTarget {
   kind: DrawerKind;

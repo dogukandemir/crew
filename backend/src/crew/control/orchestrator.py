@@ -727,20 +727,35 @@ class Orchestrator:
                 row.escalation_reason = f"council: {outcome.chosen_option}"
             s.add(row)
 
+    # The desk intents that become directives in task prompts (ADR 0012). Everything
+    # else — status, help, an unparsed sentence — is conversation, not an order.
+    _DIRECTIVE_INTENTS = ("assign", "reassign", "fire", "break", "goal", "budget", "hire")
+
     async def _captain_notes(self, project_id: str, agent_id: str) -> list[str]:
-        """The command desk's lines for this agent (ADR 0012): the Captain is the
-        deployment's owner. Orders bind, ideas are weighed, questions stay for humans —
-        and every line is attributed, never dressed as a whisper."""
+        """The command desk's lines for this agent (ADR 0012) — but only the words that
+        actually landed. A message the desk could not carry out (an unparsed sentence, a
+        refusal, a question already answered) stays in the record and must NOT come back
+        to the floor dressed as a binding directive. Attribution: always the Captain."""
         from datetime import UTC, datetime, timedelta
 
         async with session_scope() as s:
             rows = (await s.scalars(select(Event).where(Event.project_id == project_id,
                                                         Event.type == "command.message")
-                                    .order_by(desc(Event.seq)).limit(8))).all()
+                                    .order_by(desc(Event.seq)).limit(16))).all()
+            replies = (await s.scalars(select(Event).where(
+                Event.project_id == project_id, Event.type == "command.reply")
+                .order_by(desc(Event.seq)).limit(16))).all()
+        outcome = {str((r.payload or {}).get("in_reply_to")): (r.payload or {})
+                   for r in replies if (r.payload or {}).get("in_reply_to")}
         out: list[str] = []
         now = datetime.now(UTC)
         for r in rows:
             p = r.payload or {}
+            if str(p.get("intent", "")) not in self._DIRECTIVE_INTENTS:
+                continue
+            rep = outcome.get(r.id)
+            if rep is not None and (rep.get("ok") is False or rep.get("executed") is False):
+                continue  # the desk said it didn't land — it must not bind the floor
             ts = r.ts.replace(tzinfo=UTC) if r.ts is not None and r.ts.tzinfo is None else r.ts
             if ts is not None and (now - ts) > timedelta(hours=6):
                 continue

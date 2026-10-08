@@ -80,6 +80,10 @@ so).
   live mode preview, action chips citing the events), mock routes, tests
   (backend 15, frontend 10).
 - The transcript is honest by construction: a refused or failed action replies
-  "I couldn't carry that out: …" and is recorded as such (`ok=false`).
+  "I couldn't carry that out: …" and is recorded as such (`ok=false`). `command.reply`
+  also carries `executed` + `in_reply_to`: the prompt boundary can tell words that landed
+  from words that only echoed — only landed orders bind the floor (`_captain_notes` joins
+  message and reply; an unparsed sentence, a refused dismissal or an answered question
+  never comes back as a directive).
 - Deferred deliberately: the agents' "inner voice" strip; streamed (SSE) replies —
   the drawer polls at 5s while open.

@@ -222,3 +222,28 @@ async def test_unauthenticated_mode_is_explicit(client):
     body = r.json()
     assert body["runner"] in ("FakeCrewRunner", "CrewAICrewRunner")
     assert body["vault"] in ("configured", "missing")
+
+
+async def test_command_desk_roundtrip(client):
+    """ADR 0012 at the contract boundary: the desk answers and the record keeps it."""
+    p = await _create_project(client, "Desk API")
+
+    r = await client.post(f"/api/projects/{p['id']}/commands", json={"text": "durum ne?"})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["message_id"] and body["reply_event_id"]
+    assert body["reply"]["ok"] is True and body["reply"]["mode"] == "question"
+
+    r = await client.get(f"/api/projects/{p['id']}/commands")
+    assert r.status_code == 200
+    msgs = r.json()["messages"]
+    assert [m["role"] for m in msgs] == ["captain", "orchestrator"]
+    assert msgs[0]["text"] == "durum ne?" and msgs[1]["ok"] is True
+    assert msgs[0]["id"] == body["message_id"]
+
+    r = await client.post("/api/projects/does-not-exist/commands", json={"text": "durum ne?"})
+    assert r.status_code == 404
+
+    # an empty message never reaches the desk
+    r = await client.post(f"/api/projects/{p['id']}/commands", json={})
+    assert r.status_code == 422

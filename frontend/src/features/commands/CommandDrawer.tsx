@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import type { CommandMessage } from '../../api/types';
+import type { CommandMessage, CommandReply } from '../../api/types';
 import { Drawer } from '../../components/ui/Drawer';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -53,6 +53,9 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
   const [draft, setDraft] = useState('');
   const [caret, setCaret] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // The optimistic tail: our message and the reply the POST returned. It renders the
+  // instant the desk answers and steps aside once the record contains it.
+  const [tail, setTail] = useState<{ text: string; reply: CommandReply | null } | null>(null);
 
   const roster = useMemo<RosterAgent[]>(() => {
     const seen = new Map<string, RosterAgent>();
@@ -66,26 +69,38 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
 
   const send = useMutation({
     mutationFn: (text: string) => api.postCommand(projectId, text),
-    onSuccess: () => {
+    onSuccess: (data, text) => {
+      // The reply arrives on the POST itself — show it now; the refetch below quietly
+      // takes over when the record catches up (one source of truth, no blank in between).
       setDraft('');
       setCaret(0);
+      setTail({ text, reply: data.reply });
       void qc.invalidateQueries({ queryKey: ['commands', projectId] });
     },
-    onError: (err) =>
+    onError: (err) => {
+      setTail(null);
       setToast({
         kind: 'error',
         message: `The desk didn't take that: ${err instanceof Error ? err.message : err}`,
-      }),
+      });
+    },
   });
 
   const messages: CommandMessage[] = commands.data?.messages ?? [];
+
+  const tailLanded =
+    tail?.reply != null &&
+    messages.some((m) => m.role === 'orchestrator' && m.text === tail.reply?.text);
+  useEffect(() => {
+    if (tailLanded) setTail(null);
+  }, [tailLanded]);
 
   // Keep the newest line in view whenever the record grows (or a send is in flight).
   // The sentinel scrolls the drawer's transcript region only — the composer sits in
   // the footer, outside that region, and never moves.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length, send.isPending]);
+  }, [messages.length, send.isPending, tail]);
 
   const applyMention = (agent: RosterAgent) => {
     if (!mention) return;
@@ -102,6 +117,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
       applyMention(mention.matches[0]);
       return;
     }
+    setTail({ text, reply: null });
     send.mutate(text);
   };
 
@@ -136,7 +152,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
               The record is unreachable — the desk is blind until it returns.
             </p>
           )}
-          {messages.length === 0 && !commands.isLoading && !send.isPending && (
+          {messages.length === 0 && !commands.isLoading && !send.isPending && !tail && (
             <div className="rounded-lg border border-dashed border-slate-700/70 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400">
               <p className="font-medium text-slate-300">Nothing yet — the record is empty.</p>
               <p className="mt-1 text-slate-300">
@@ -153,13 +169,31 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
           {messages.map((m) => (
             <Bubble key={m.id} m={m} />
           ))}
-          {send.isPending && send.variables && (
-            <div className="flex justify-end">
-              <div className="max-w-[85%] rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100">
-                <div className="whitespace-pre-wrap">{send.variables}</div>
-                <div className="mt-1 text-[10px] text-emerald-300/70">the desk is reading…</div>
+          {tail && !tailLanded && (
+            <>
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-100">
+                  <div className="whitespace-pre-wrap">{tail.text}</div>
+                  {!tail.reply && (
+                    <div className="mt-1 text-[10px] text-emerald-300/70">the desk is reading…</div>
+                  )}
+                </div>
               </div>
-            </div>
+              {tail.reply && (
+                <Bubble
+                  m={{
+                    id: 'desk-tail',
+                    role: 'orchestrator',
+                    text: tail.reply.text,
+                    mode: tail.reply.mode,
+                    ok: tail.reply.ok,
+                    actions: tail.reply.actions,
+                    mentions: [],
+                    at: null,
+                  }}
+                />
+              )}
+            </>
           )}
         <div ref={bottomRef} aria-hidden="true" className="h-px shrink-0" />
       </div>

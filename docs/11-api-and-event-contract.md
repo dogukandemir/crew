@@ -117,10 +117,12 @@ Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 | GET | `/api/projects/{id}/commands` | the desk transcript, straight from the record (`?limit=`) |
 
 Events: `command.message` (`text`, `mode`, `intent`, `mentions`), `command.reply` (`text`,
-`ok`, `actions[]`), `task.reassigned` (`task_id`, `to_agent_id`, `from_agent_id`),
-`agent.break.started` (`agent_id`, `until`). Attribution: message `actor=user:{id}`, reply
-`system:orchestrator`. Modes: `order` binds the floor (prompt block `CAPTAIN DIRECTIVES`),
-`idea` is weighed, `question` is answered and never reaches task prompts.
+`ok`, `executed`, `in_reply_to`, `actions[]`), `task.reassigned` (`task_id`, `to_agent_id`,
+`from_agent_id`), `agent.break.started` (`agent_id`, `until`). Attribution: message
+`actor=user:{id}`, reply `system:orchestrator`. Modes: `order` binds the floor (prompt block
+`CAPTAIN DIRECTIVES`), `idea` is weighed, `question` is answered and never reaches task
+prompts. `executed` is the honesty gate at the prompt boundary: only messages whose reply
+says they landed are read back into task prompts (`orchestrator._captain_notes`).
 
 ### Council & decisions
 | Method | Path | Purpose |

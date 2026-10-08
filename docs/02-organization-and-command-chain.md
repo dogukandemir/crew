@@ -28,9 +28,10 @@ an event. New units appear when the work requires a capability the org does not 
 
 ```
                     ┌──────────────────────────┐
-                    │  USER (owner of record)   │  ← approvals, budget, kill switch
+                    │  THE CAPTAIN (the owner)  │  ← the human who owns this deployment;
+                    │  command desk (ADR 0012)  │    orders · ideas · questions, plain words
                     └────────────┬─────────────┘
-                                 │ goals, steering, approvals
+                                 │ directives, goals, steering, approvals
                     ┌────────────▼─────────────┐
                     │  ORCHESTRATOR (executive) │  ← plan, hire/fire, allocate budget,
                     │  role: orchestrator       │    arbitrate, settle rewards
@@ -56,6 +57,13 @@ an event. New units appear when the work requires a capability the org does not 
                  │ role: decider│
                  └──────────────┘
 ```
+
+**The Captain** is the one seat above the org: the human who owns this deployment. The
+Captain speaks through the **command desk** (ADR 0012) — natural language in, real actions
+out, every turn an event on the record. What lands reaches the floor through the
+orchestrator as attributed `CAPTAIN DIRECTIVES` (binding); ideas are weighed; questions are
+answered and never reach task prompts. Engine seats — the orchestrator, the CEO, the chair
+and the board — cannot be dismissed from the desk; that call belongs to the board.
 
 ### The executive tier (functions)
 

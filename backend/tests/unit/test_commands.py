@@ -199,8 +199,33 @@ async def test_an_order_reaches_the_prompt_of_the_tagged_agent(bound_loop, proje
         other = await _agent(s, project["id"], "Silas")
         ada_id, other_id = ada.id, other.id
     await commands.handle_command(project_id=project["id"],
-                                  text="@Ada, sayıları iki kez kontrol et", actor="user:t")
+                                  text="@Ada, özet tablosunu hazırla", actor="user:t")
     mine = await orchestrator._captain_notes(project["id"], ada_id)
     theirs = await orchestrator._captain_notes(project["id"], other_id)
-    assert any("binding" in m and "iki kez" in m for m in mine)
+    assert any("binding" in m and "özet tablosunu" in m for m in mine)
     assert theirs == [], "an addressed order does not leak to the whole floor"
+
+
+@pytest.mark.asyncio
+async def test_only_landed_words_bind_the_floor(bound_loop, project):
+    """ADR 0012 honesty at the prompt boundary: the record keeps every turn, but only
+    the Captain's words whose desk answer says they landed become directives."""
+    from crew.control.orchestrator import orchestrator
+
+    async with session_scope() as s:
+        ada = await _agent(s, project["id"], "Ada")
+        eng = await _agent(s, project["id"], "Onyx", role="orchestrator")
+        ada_id, eng_id = ada.id, eng.id
+    # an unparsed sentence, a refused dismissal, an answered question — all recorded:
+    await commands.handle_command(project_id=project["id"], text="bugün hava çok güzel",
+                                  actor="user:t")
+    await commands.handle_command(project_id=project["id"], text="@Onyx'i görevden al",
+                                  actor="user:t")
+    await commands.handle_command(project_id=project["id"], text="durum ne?", actor="user:t")
+    assert await orchestrator._captain_notes(project["id"], ada_id) == []
+    assert await orchestrator._captain_notes(project["id"], eng_id) == []
+    # a landed order binds its addressee
+    await commands.handle_command(project_id=project["id"],
+                                  text="@Ada, satış özetini hazırla", actor="user:t")
+    mine = await orchestrator._captain_notes(project["id"], ada_id)
+    assert any("binding" in m and "satış özetini" in m for m in mine)

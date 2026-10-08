@@ -10,7 +10,9 @@ resulting organization executes the work, debates the hard decisions, picks a so
 through a designated senior decider, verifies the result, and **pays out rewards** that
 determine each agent's reputation, budget and autonomy for the next round. You watch all of
 it live — by project, by department, by individual agent — and you can interrupt, steer,
-approve or kill anything at any time.
+approve or kill anything at any time. You are **the Captain** — the deployment's owner —
+and your word travels the chain through the command desk (ADR 0012) as attributed orders,
+ideas and questions.
 
 ## 2. The five things that make this different
 

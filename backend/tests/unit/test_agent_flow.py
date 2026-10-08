@@ -14,7 +14,6 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 
 from crew.control import org
 from crew.control.orchestrator import orchestrator

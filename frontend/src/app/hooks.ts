@@ -34,15 +34,6 @@ export function useHealth(): UseQueryResult<Health> {
   });
 }
 
-export function useSystemStatus() {
-  return useQuery({
-    queryKey: ['system', 'status'],
-    queryFn: api.systemStatus,
-    refetchInterval: 15_000,
-    retry: 1,
-  });
-}
-
 export function useProjects() {
   return useQuery({ queryKey: ['projects'], queryFn: api.listProjects });
 }

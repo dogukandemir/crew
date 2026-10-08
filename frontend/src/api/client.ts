@@ -41,7 +41,6 @@ import type {
   RewardTransition,
   Run,
   Squad,
-  SystemStatus,
   Task,
   ToolCatalogueEntry,
   UnitRef,
@@ -207,7 +206,6 @@ export const api = {
 
   // ── System & auth ──────────────────────────────────────────────────────────
   health: () => request<Health>('/api/health'),
-  systemStatus: () => request<SystemStatus>('/api/system/status'),
   killAll: (confirm: boolean) =>
     request<CommandAck>('/api/system/kill', { method: 'POST', body: { confirm } }),
   login: (email: string, password: string) =>

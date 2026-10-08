@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy import select
 
 from crew.control import commands, org
-from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import Agent, Event, Project, Run, Task
 from crew.domain.enums import TaskState

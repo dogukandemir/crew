@@ -2,6 +2,7 @@
   "name": "crew-frontend",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "description": "Crew control room — React tabbed frontend for the autonomous agent organization platform.",
   "scripts": {

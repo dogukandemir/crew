@@ -9,7 +9,7 @@ Tailwind + Radix primitives (shadcn-style), React Flow (org chart, DAG), Rechart
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │ Crew            [＋ New project]                     ● connected   ⏸ Kill all │
 ├───────────────────────────────────────────────────────────────────────────────┤
-│ ‹ tab ›  ChannelFactory-marketing │ tab ›  Research-agent-bench │ tab › +     │
+│ ‹ tab ›  Market-brief │ tab ›  Research-agent-bench │ tab › +     │
 ├───────────────────────────────────────────────────────────────────────────────┤
 │                                                                               │
 │                         PROJECT WORKSPACE (per tab)                           │

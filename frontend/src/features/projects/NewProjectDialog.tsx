@@ -63,7 +63,7 @@ export function NewProjectDialog() {
     >
       <div className="space-y-3">
         <Field label="Name">
-          <Input value={name} onChange={(e) => setLocalName(e.target.value)} placeholder="ChannelFactory-marketing" autoFocus />
+          <Input value={name} onChange={(e) => setLocalName(e.target.value)} placeholder="q3-launch" autoFocus />
         </Field>
         <Field label="Goal" hint="What should the org achieve? The Orchestrator interprets this and forms the org.">
           <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Build a launch plan for the Q3 campaign." />

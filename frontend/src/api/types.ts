@@ -73,20 +73,6 @@ export interface Health {
   contract: number;
 }
 
-export interface SystemStatus {
-  db?: ComponentHealth;
-  bus?: ComponentHealth;
-  scheduler?: ComponentHealth;
-  vault?: ComponentHealth;
-  providers?: ComponentHealth;
-}
-
-export interface ComponentHealth {
-  ok: boolean;
-  detail?: string;
-  [key: string]: unknown;
-}
-
 export interface CurrentUser {
   id: string;
   email: string;

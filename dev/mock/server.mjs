@@ -10,7 +10,7 @@ const CORS = {
 
 const PROJECT = {
   id: 'p1',
-  name: 'ChannelFactory-marketing',
+  name: 'Market Brief',
   goal: 'Build a launch plan for the Q3 campaign.',
   status: 'active',
   stage: 'EXECUTING',

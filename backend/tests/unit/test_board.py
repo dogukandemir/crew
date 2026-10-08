@@ -9,7 +9,6 @@ from sqlalchemy import select
 
 from crew.control import backlog
 from crew.control.orchestrator import orchestrator
-from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import Agent, AgentSkill, Event, Run, Task, WorkItem
 from crew.domain.enums import Capability, TaskState

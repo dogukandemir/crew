@@ -10,9 +10,9 @@ import type { OrgNode } from '../api/types';
  * what this file exists to make testable — `orgAt(seconds)` is the org as it stood
  * `seconds` after the project opened.
  *
- * The mock backend reads the same schedule (`HIRES`, `DEPARTMENTS`) so the live app
- * grows on the same beats the tests do, instead of the tests describing an office that
- * nobody ever sees.
+ * The mock backend stages the same SHAPE of growth — a hire into an existing room, a
+ * hire that opens a new one — on its own accelerated beats (`BEAT` in `dev/mock`), so
+ * the tests and the demo describe the same transitions, not the same clock.
  */
 
 /** Seconds after the project opened, and who arrives. */
@@ -110,7 +110,7 @@ export function orgAt(seconds: number): OrgNode {
   return {
     id: 'p1',
     kind: 'project',
-    name: 'ChannelFactory-marketing',
+    name: 'Market Brief',
     state: 'active',
     children,
   };

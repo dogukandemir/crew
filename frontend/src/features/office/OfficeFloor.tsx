@@ -32,6 +32,15 @@ const NEW_ROOM_MS = 25_000;
 /** Room to leave above the floor for signage and speech bubbles when fitting. */
 const HEADROOM = 140;
 
+/**
+ * Where the API is, and whether it is the zero-key mock. The demo clock the reset
+ * control drives lives in `dev/mock` only — the control renders only when the mock is
+ * what's behind the API, so a real deployment never shows a button that does nothing.
+ */
+const API_BASE = (import.meta.env as Record<string, string | undefined>).VITE_API_BASE
+  ?? 'http://127.0.0.1:8787';
+const MOCK_BEHIND = API_BASE.includes('8788');
+
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -809,21 +818,22 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
             <kbd>Esc</kbd> deselect
           </div>
 
-          {/* TEMPORARY — restart the mock backend's hiring clock and reload, so the
-              growth can be watched from t=0. The clock lives in the mock; this button
-              goes away with the demo schedule. */}
-          <button
-            type="button"
-            style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 5, pointerEvents: 'auto', cursor: 'pointer' }}
-            className="office-hint"
-            title="Restart the mock's hiring clock and reload (temporary dev control)"
-            onClick={() => {
-              const base = (import.meta.env as Record<string, string | undefined>).VITE_API_BASE ?? 'http://127.0.0.1:8787';
-              void fetch(`${base}/api/dev/reset`, { method: 'POST' }).then(() => window.location.reload());
-            }}
-          >
-            ⟲ reset clock
-          </button>
+          {/* Restart the mock backend's hiring clock and reload, so the growth can be
+              watched from t=0. The clock lives in the mock (`dev/mock`) — this renders
+              only when the mock is behind the API, never against a real backend. */}
+          {MOCK_BEHIND && (
+            <button
+              type="button"
+              style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 5, pointerEvents: 'auto', cursor: 'pointer' }}
+              className="office-hint"
+              title="Restart the mock's hiring clock and reload"
+              onClick={() => {
+                void fetch(`${API_BASE}/api/dev/reset`, { method: 'POST' }).then(() => window.location.reload());
+              }}
+            >
+              ⟲ reset clock
+            </button>
+          )}
 
           {empty && (
             <div className="office-overlay">

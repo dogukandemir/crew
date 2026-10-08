@@ -82,6 +82,12 @@ export function AgentDrawer({
                 className="mt-2"
                 pairs={[
                   ['grade', `${agent.data.grade} · ${gradeLabel(agent.data.grade)}`],
+                  [
+                    'knowledge',
+                    agent.data.company_knowledge !== undefined
+                      ? `${formatPercent(agent.data.company_knowledge)} · ${agent.data.tenure_days ?? 0}d tenure`
+                      : '—',
+                  ],
                   ['success rate', agent.data.success_rate !== undefined ? formatPercent(agent.data.success_rate) : '—'],
                   ['tasks', `${agent.data.tasks_done ?? 0} done / ${agent.data.tasks_failed ?? 0} failed`],
                   ['evidence', agent.data.evidence_count ?? 0],

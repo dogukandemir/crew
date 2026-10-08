@@ -75,6 +75,12 @@ cheap model, preventing "gaming the decider" with an under-powered agent.
   agent forever).
 - `agent_skills.evidence_count` gates promotion: a grade requires *n* verified tasks in the
   skills it is being promoted for.
+- Growth is not only skills (ADR 0014). Verified work also accrues **company knowledge**
+  (`agents.company_knowledge`, 0..1): `0.05` on hire, `+0.02 × effort_weight` per verified
+  task, capped at `0.95`. Tenure is `now − created_at` (`tenure_days`). Both feed the
+  system prompt's `TENURE:` line, so a veteran reasons with more context than a first-day
+  hire — and every movement lands on the record as one `agent.grew` event, never inferred
+  from two snapshots.
 
 ## 4. Tools & capability grants
 

@@ -278,6 +278,16 @@ def task_dict(t: Task) -> dict:
     }
 
 
+def _tenure_days(created: datetime | None) -> int:
+    """Days since hire — SQLite hands back naive datetimes, and the math must not care
+    (ADR 0014)."""
+    if created is None:
+        return 0
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return max(0, (datetime.now(UTC) - created).days)
+
+
 async def agent_dict(a: Agent) -> dict:
     async with session_scope() as s:
         skills = (await s.execute(
@@ -295,6 +305,8 @@ async def agent_dict(a: Agent) -> dict:
         "score": a.score, "score_100": a.score_100, "score_confidence": a.score_confidence,
         "success_rate": a.success_rate, "tasks_done": a.tasks_done, "tasks_failed": a.tasks_failed,
         "evidence_count": a.evidence_count, "penalty_count": a.penalty_count,
+        "company_knowledge": round(float(a.company_knowledge or 0.0), 3),
+        "tenure_days": _tenure_days(a.created_at),
         "current_task_id": a.current_task_id, "hire_rationale": a.hire_rationale,
         "spend_today_usd": micros_to_usd(a.spend_today_micros),
         "spend_cap_per_run_usd": micros_to_usd(a.spend_cap_per_run_micros),

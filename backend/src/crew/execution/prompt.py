@@ -48,6 +48,8 @@ def build_system_prompt(
     tool_names: list[str] | None = None,
     context_pack: str = "",
     department: str | None = None,
+    knowledge: float | None = None,
+    tenure_days: int = 0,
 ) -> PromptBundle:
     role_enum = Role(role) if role in {r.value for r in Role} else Role.WORKER
     template = ROLE_TEMPLATES[role_enum]
@@ -58,6 +60,15 @@ def build_system_prompt(
         f"{f' in the {department} department' if department else ''}. "
         f"Grade: {grade_label}. Autonomy: {autonomy}.\nMISSION: {mission or template.mission}"
     )
+    if knowledge is not None:
+        # Growth (ADR 0014): the numbers come from verified work, so the prompt can
+        # afford to lean on them — with the re-verify caveat doing the honesty work.
+        band = "deep" if knowledge >= 0.6 else "working" if knowledge >= 0.25 else "new"
+        identity += (
+            f"\nTENURE: {tenure_days} day(s) with this company; company knowledge "
+            f"{knowledge:.2f}/1.00 ({band}). It grew from your verified work — lean on it, "
+            "but re-verify when the record is thin or the fact is old."
+        )
     chain = (
         f"You report to: {manager or 'the Orchestrator'}.\n"
         f"You oversee: {', '.join(reports) if reports else 'no direct reports'}.\n"

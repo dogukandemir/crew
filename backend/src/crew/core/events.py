@@ -209,6 +209,7 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "command.reply": ("text", "ok"),
     "task.reassigned": ("task_id", "to_agent_id"),
     "agent.break.started": ("agent_id", "until"),
+    "agent.grew": ("agent_id", "skills_grown", "company_knowledge"),
 }
 
 

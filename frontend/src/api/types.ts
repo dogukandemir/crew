@@ -442,6 +442,9 @@ export interface Agent {
   tasks_done?: number;
   tasks_failed?: number;
   penalty_count?: number;
+  /** Growth (ADR 0014): company-specific familiarity 0..1, and days since the hire. */
+  company_knowledge?: number;
+  tenure_days?: number;
   prompt_version?: string;
   brain_id?: string | null;
   tools?: string[];

@@ -164,6 +164,11 @@ Audited (`secret.created`); no domain events. Boot restores vault keys into the 
 | PUT | `/api/projects/{id}/reward-weights` | update weights (audited) |
 | POST | `/api/projects/{id}/reward-preview` | what-if on recent events |
 
+Events: `reward.settled` (`agent_id`, `task_id`, `reward`); growth is its own event —
+`agent.grew` (`agent_id`, `skills_grown[]`, `company_knowledge {before, after}`,
+`effort_weight`), one per verified task, so tenure actually learned is on the record
+(ADR 0014).
+
 ### Events & observability
 | Method | Path | Purpose |
 |--------|------|---------|

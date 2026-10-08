@@ -42,6 +42,13 @@ PROBATION_SCORE = -0.10
 DEMOTE_SCORE = -0.25
 SUCCESS_FLOOR = 0.70
 
+# Growth (ADR 0014): verified work compounds. Knowledge numbers are the day-one
+# baseline and the per-unit-of-effort accrual; the cap is deliberately < 1.0 —
+# familiarity is never certainty, and the prompt says to re-verify thin records.
+KNOWLEDGE_ON_HIRE = 0.05
+KNOWLEDGE_PER_EFFORT = 0.02
+KNOWLEDGE_CAP = 0.95
+
 ALLOWED_TRANSITIONS = {"idle": {"probation", "archived", "busy", "suspended"},
                        "probation": {"idle", "archived", "busy"},
                        "busy": {"idle", "probation"},
@@ -304,22 +311,46 @@ class RewardEngine:
             score = (1 - LAMBDA) * score + LAMBDA * r.reward
         return round(score, 4)
 
-    async def adjust_skills(self, *, agent_id: str, skill_ids: list[str], reward: float, alpha: float = 0.15) -> None:
-        """Evidence-based proficiency update (docs/04 §3)."""
-        if not skill_ids:
-            return
+    async def grow(self, *, agent_id: str, skill_ids: list[str], reward: float,
+                   effort_weight: float = 1.6, task_id: str | None = None,
+                   alpha: float = 0.15) -> dict | None:
+        """Verified success grows the agent (ADR 0014): evidence-based skill proficiency
+        (docs/04 §3) plus company knowledge that accrues with the work — never with
+        prompt words or wall-clock alone. One `agent.grew` event, so the growth is on
+        the record instead of inferred from two snapshots.
+        """
+        grown: list[dict] = []
         async with session_scope() as s:
-            for sid in skill_ids:
+            a = await s.get(Agent, agent_id)
+            if a is None:
+                return None
+            for sid in dict.fromkeys(sid for sid in skill_ids if sid):
                 row = await s.scalar(select(AgentSkill).where(AgentSkill.agent_id == agent_id,
                                                               AgentSkill.skill_id == sid))
                 if row is None:
                     row = AgentSkill(agent_id=agent_id, skill_id=sid, proficiency=0.5, evidence_count=0)
                     s.add(row)
-                expected = row.proficiency
-                row.proficiency = round(max(0.0, min(1.0, expected + alpha * (reward - (expected - 0.5)))), 4)
+                before = float(row.proficiency)
+                row.proficiency = round(max(0.0, min(1.0, before + alpha * (reward - (before - 0.5)))), 4)
                 row.evidence_count += 1
                 row.last_used_at = datetime.now(UTC)
                 s.add(row)
+                if abs(row.proficiency - before) >= 0.0005:
+                    grown.append({"skill_id": sid, "from": round(before, 4), "to": row.proficiency,
+                                  "evidence_count": int(row.evidence_count)})
+            k_before = float(a.company_knowledge or 0.0)
+            a.company_knowledge = round(min(KNOWLEDGE_CAP, k_before + KNOWLEDGE_PER_EFFORT * (effort_weight or 1.0)), 4)
+            s.add(a)
+            name, pid, k_after = a.name, a.project_id, a.company_knowledge
+        skills_part = ", ".join(f"{g['skill_id']} {g['from']:.2f}→{g['to']:.2f}" for g in grown) or "no skill move"
+        payload = {"agent_id": agent_id, "task_id": task_id, "skills_grown": grown,
+                   "company_knowledge": {"before": round(k_before, 4), "after": k_after},
+                   "effort_weight": effort_weight}
+        await ev.emit("agent.grew", project_id=pid, agent_id=agent_id, task_id=task_id,
+                      title=f"{name} grew: {skills_part}",
+                      summary=f"company knowledge {k_before:.2f} → {k_after:.2f}",
+                      payload=payload, actor="system:reward-engine")
+        return payload
 
 
 reward_engine = RewardEngine()
@@ -337,6 +368,7 @@ async def leaderboard(project_id: str, limit: int = 50) -> list[dict]:
         "score_100": a.score_100, "confidence": a.score_confidence,
         "success_rate": a.success_rate, "tasks_done": a.tasks_done, "tasks_failed": a.tasks_failed,
         "evidence_count": a.evidence_count, "model_tier": a.model_tier,
+        "company_knowledge": round(float(a.company_knowledge or 0.0), 3),
         "department_id": a.department_id,
     } for a in rows]
 

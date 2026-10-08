@@ -147,6 +147,10 @@ class Agent(Base):
     tasks_done: Mapped[int] = mapped_column(Integer, default=0)
     tasks_failed: Mapped[int] = mapped_column(Integer, default=0)
     penalty_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Growth (ADR 0014): company-specific familiarity 0..1. It grows with VERIFIED
+    # work — settlement raises it, nothing else does — and the prompt builder reads
+    # it, so an eight-week veteran does not reason like a first-day hire.
+    company_knowledge: Mapped[float] = mapped_column(Float, default=0.0)
     prompt_version: Mapped[int] = mapped_column(Integer, default=1)
     brain_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     tools: Mapped[list] = mapped_column(JSON, default=list)

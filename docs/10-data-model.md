@@ -58,7 +58,8 @@ ADR 0012; matching skips the agent until it passes), mission, responsibilities(j
 decision_style, autonomy(supervised|bounded|autonomous), model_tier, model_id,
 token_cap_per_step, spend_cap_per_run_micros, spend_cap_per_day_micros, spend_today_micros,
 score(float), score_confidence(float), evidence_count, success_rate, tasks_done, tasks_failed,
-penalty_count, prompt_version, brain_id, tools(json), approval_rules(json), created_at,
+penalty_count, company_knowledge(float 0..1 — ADR 0014: grows with verified work),
+prompt_version, brain_id, tools(json), approval_rules(json), created_at,
 archived_at, last_active_at`
 
 ### skills / agent_skills

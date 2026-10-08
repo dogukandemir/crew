@@ -23,7 +23,7 @@ from crew.core.models import (
     Task,
     usd_to_micros,
 )
-from crew.core.reward import RewardEngine
+from crew.core.reward import KNOWLEDGE_ON_HIRE, RewardEngine
 from crew.core.security import audit, budget
 from crew.core.settings import settings
 from crew.domain.catalog import ROLE_TEMPLATES, SKILLS_BY_ID, RoleSpec, skills_for_keywords
@@ -300,7 +300,7 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
             name=await _unique_name(s, project_id, spec.title, spec.role),
             role=spec.role.value, grade=int(grade), mission=spec.mission,
             responsibilities=spec.skills[:8], tools=sorted({c.value for c in spec.capabilities}),
-            hire_rationale=rationale, state="idle",
+            hire_rationale=rationale, state="idle", company_knowledge=KNOWLEDGE_ON_HIRE,
         )
         RewardEngine.apply_grade_limits_pure(a)
         s.add(a)

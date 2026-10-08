@@ -19,7 +19,7 @@ from crew.core.models import Agent, AgentSkill, Event, Project, Run, Task
 from crew.core.reward import reward_engine
 from crew.core.security import BudgetExceeded, audit, budget
 from crew.core.settings import settings
-from crew.domain.enums import Role, RunStage, RunStatus, TaskState
+from crew.domain.enums import Effort, Role, RunStage, RunStatus, TaskState
 from crew.execution.models import router
 from crew.execution.prompt import build_system_prompt, build_task_prompt
 from crew.execution.runner import (
@@ -401,12 +401,17 @@ class Orchestrator:
             captain_directives = await self._captain_notes(project.id, snapshot.id)
             decisions = await council.decision_constraints(project_id=project.id)
 
+            created = agent.created_at
+            if created is not None and created.tzinfo is None:  # SQLite hands back naive datetimes
+                created = created.replace(tzinfo=UTC)
             bundle = build_system_prompt(
                 name=snapshot.name, role=snapshot.role, grade=snapshot.grade, mission=snapshot.mission,
                 autonomy=snapshot.autonomy, manager=snapshot.manager_name,
                 capabilities=snapshot.tools, skills=snapshot.skills,
                 tool_names=tools_for_agent(snapshot),  # type: ignore[arg-type]
                 context_pack=context_pack, department=snapshot.department_name,
+                knowledge=float(agent.company_knowledge or 0.0),
+                tenure_days=max(0, (datetime.now(UTC) - created).days) if created else 0,
             )
             user_prompt = build_task_prompt(
                 title=task_spec.title, description=task_spec.description, deliverable=task_spec.deliverable,
@@ -696,12 +701,13 @@ class Orchestrator:
             tool_error_rate=result.tool_error_rate,
         )
         if producer is not None and outcome.passed:
-            skill_ids = [r.get("skill") for r in ([] if not result else [])] or []
             async with session_scope() as s:
                 t = await s.get(Task, task_id)
                 skill_ids = [r.get("skill") for r in (t.required_skills or []) if r.get("skill")]
-            await reward_engine.adjust_skills(agent_id=producer.id, skill_ids=skill_ids,
-                                              reward=_producer_reward(settled))
+            await reward_engine.grow(agent_id=producer.id, skill_ids=skill_ids,
+                                     reward=_producer_reward(settled),
+                                     effort_weight=Effort(task.effort).weight if task.effort else 1.6,
+                                     task_id=task_id)
 
         await ev.emit("task.completed" if outcome.passed else "task.failed",
                       project_id=project.id, run_id=run.id, task_id=task_id,

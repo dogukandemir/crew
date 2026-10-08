@@ -24,7 +24,7 @@ const VERDICT_TONE: Record<CompanyVerdictName, 'success' | 'warning' | 'muted' |
 export function HqTab({ companyId }: { companyId: string }) {
   const hq = useCompanyHq(companyId);
   const qc = useQueryClient();
-  const [topic, setTopic] = useState('Q3 portfolio allocation');
+  const [topic, setTopic] = useState('Winter slate review');
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['company-hq', companyId] });
   const review = useMutation({ mutationFn: () => api.reviewCompany(companyId), onSuccess: invalidate });

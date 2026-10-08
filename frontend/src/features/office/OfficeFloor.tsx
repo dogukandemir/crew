@@ -375,12 +375,21 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       // Dev probe: is this loop alive, and does it have anything to drive? Three
       // stacked things can stop the office dead — a dead rAF, an empty walker map,
       // a sprite map with no elements in it — and from outside they look identical.
+      // `targets` adds the one piece pixels cannot answer: WHERE each character is
+      // headed and why (a council that failed to seat its panel looks exactly like
+      // an empty meeting room).
       if (import.meta.env.DEV) {
-        const w = window as unknown as { __office?: Record<string, number> };
+        const w = window as unknown as { __office?: Record<string, unknown> };
         w.__office = {
-          ticks: (w.__office?.ticks ?? 0) + 1,
+          ticks: ((w.__office?.ticks as number) ?? 0) + 1,
           walkers: walkers.current.size,
           sprites: spriteEls.current.size,
+          targets: Object.fromEntries(
+            Object.entries(targetsRef.current).map(([id, tg]) => [
+              id,
+              `${tg.roomId}${tg.reason ? ' · ' + tg.reason.slice(0, 48) : ''}`,
+            ]),
+          ),
         };
       }
       for (const [id, w] of walkers.current) {

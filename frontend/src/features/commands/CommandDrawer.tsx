@@ -4,6 +4,11 @@
  * One channel, attributed end to end: what the Captain writes lands in the record,
  * the reply cites the actions it took, and a message the desk can't carry out says
  * so plainly. No whispers, no god-hands — the floor knows who spoke.
+ *
+ * Layout rule: the composer lives in the Drawer's footer, so it is pinned to the
+ * bottom of the pane by the layout itself — the transcript scrolls above it and the
+ * input is on screen at all times. A sent message scrolls the record, never the
+ * Captain's hands.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +28,7 @@ import {
   mentionContext,
   modeOf,
   type CommandMode,
+  type MentionContext,
   type RosterAgent,
 } from './commandsModel';
 
@@ -46,7 +52,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
   const setToast = useUi((s) => s.setToast);
   const [draft, setDraft] = useState('');
   const [caret, setCaret] = useState(0);
-  const paneRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const roster = useMemo<RosterAgent[]>(() => {
     const seen = new Map<string, RosterAgent>();
@@ -74,9 +80,11 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
 
   const messages: CommandMessage[] = commands.data?.messages ?? [];
 
+  // Keep the newest line in view whenever the record grows (or a send is in flight).
+  // The sentinel scrolls the drawer's transcript region only — the composer sits in
+  // the footer, outside that region, and never moves.
   useEffect(() => {
-    const el = paneRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length, send.isPending]);
 
   const applyMention = (agent: RosterAgent) => {
@@ -108,9 +116,20 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
         </span>
       }
       subtitle="Write to the company in plain words — orders, ideas, questions. The orchestrator reads it, the chain acts, the record keeps it."
+      footer={
+        <Composer
+          mention={mention}
+          draft={draft}
+          sending={send.isPending}
+          mode={mode}
+          onDraft={setDraft}
+          onCaret={setCaret}
+          onMention={applyMention}
+          onSubmit={submit}
+        />
+      }
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div ref={paneRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className="flex flex-col gap-3">
           {commands.isLoading && <p className="text-xs text-slate-500">opening the desk…</p>}
           {commands.isError && (
             <p className="text-xs text-rose-400">
@@ -142,65 +161,87 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
               </div>
             </div>
           )}
-        </div>
-        <div className="border-t border-slate-700/60 px-4 py-3">
-          {mention && mention.matches.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1">
-              {mention.matches.map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => applyMention(a)}
-                  className={cn(
-                    'rounded-full border px-2 py-0.5 text-[11px]',
-                    i === 0
-                      ? 'border-emerald-500/60 bg-emerald-950/50 text-emerald-200'
-                      : 'border-slate-600 text-slate-300 hover:border-slate-400',
-                  )}
-                  title="tag this agent"
-                >
-                  @{a.name}
-                  {a.role ? <span className="text-slate-500"> · {a.role}</span> : null}
-                </button>
-              ))}
-            </div>
-          )}
-          <textarea
-            value={draft}
-            rows={2}
-            placeholder="Write to the company… (Enter sends, Shift+Enter is a new line)"
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setCaret(e.target.selectionStart ?? e.target.value.length);
-            }}
-            onClick={(e) => setCaret(e.currentTarget.selectionStart ?? caret)}
-            onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? caret)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            className="w-full resize-none rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
-          />
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
-              <Badge tone={MODE_TONE[mode]}>{mode}</Badge>
-              <span>{MODE_HINT[mode]}</span>
-            </span>
-            <Button
-              size="xs"
-              variant="primary"
-              loading={send.isPending}
-              disabled={!draft.trim()}
-              onClick={submit}
-            >
-              Send
-            </Button>
-          </div>
-        </div>
+        <div ref={bottomRef} aria-hidden="true" className="h-px shrink-0" />
       </div>
     </Drawer>
+  );
+}
+
+/**
+ * The Captain's line — mention chips, the box, and the live mode preview. It lives in
+ * the Drawer's footer: pinned to the bottom of the pane, on screen at all times,
+ * whatever the transcript above does.
+ */
+function Composer({
+  mention,
+  draft,
+  sending,
+  mode,
+  onDraft,
+  onCaret,
+  onMention,
+  onSubmit,
+}: {
+  mention: MentionContext | null;
+  draft: string;
+  sending: boolean;
+  mode: CommandMode;
+  onDraft: (text: string) => void;
+  onCaret: (at: number) => void;
+  onMention: (agent: RosterAgent) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
+      {mention && mention.matches.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {mention.matches.map((a, i) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onMention(a)}
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[11px]',
+                i === 0
+                  ? 'border-emerald-500/60 bg-emerald-950/50 text-emerald-200'
+                  : 'border-slate-600 text-slate-300 hover:border-slate-400',
+              )}
+              title="tag this agent"
+            >
+              @{a.name}
+              {a.role ? <span className="text-slate-500"> · {a.role}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea
+        value={draft}
+        rows={2}
+        placeholder="Write to the company… (Enter sends, Shift+Enter is a new line)"
+        onChange={(e) => {
+          onDraft(e.target.value);
+          onCaret(e.target.selectionStart ?? e.target.value.length);
+        }}
+        onClick={(e) => onCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+        onSelect={(e) => onCaret(e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+        className="w-full resize-none rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-500/60 focus:outline-none"
+      />
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <Badge tone={MODE_TONE[mode]}>{mode}</Badge>
+          <span>{MODE_HINT[mode]}</span>
+        </span>
+        <Button size="xs" variant="primary" loading={sending} disabled={!draft.trim()} onClick={onSubmit}>
+          Send
+        </Button>
+      </div>
+    </>
   );
 }
 

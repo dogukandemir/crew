@@ -225,7 +225,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
               <Field key={tier} label={tier}>
                 <Input
                   value={tiers[tier] ?? ''}
-                  placeholder="deepseek/deepseek-chat"
+                  placeholder="deepseek/deepseek-flash"
                   onChange={(e) =>
                     setSettings((s) => ({
                       ...s,

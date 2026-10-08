@@ -11,7 +11,7 @@ import type { OnboardingState } from '../../api/types';
 const BASE: OnboardingState = {
   needed: true,
   provider: 'deepseek',
-  model: 'deepseek/deepseek-chat',
+  model: 'deepseek/deepseek-flash',
   offline_llm: false,
   vault: 'configured',
 };

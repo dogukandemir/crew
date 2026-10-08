@@ -231,7 +231,7 @@ class FakeCrewRunner:
             text="" if self.fail else text,
             error="simulated failure" if self.fail else "",
             tokens_in=tokens_in, tokens_out=tokens_out,
-            cost_micros=router.cost_micros("deepseek-chat", tokens_in, tokens_out),
+            cost_micros=router.cost_micros("deepseek-flash", tokens_in, tokens_out),
             model=model, steps=2, tool_calls=1, tool_errors=0,
         )
 

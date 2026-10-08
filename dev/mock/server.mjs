@@ -30,13 +30,13 @@ const PROJECT = {
     layoff_idle_days: 14,
     budget_warning_pct: 0.8,
     egress_allow: ['api.example.com'],
-    model_tiers: { reasoning: 'deepseek/deepseek-reasoner', standard: 'deepseek/deepseek-chat' },
+    model_tiers: { reasoning: 'deepseek/deepseek-v4-pro', standard: 'deepseek/deepseek-flash' },
   },
 };
 
 const agent = (id, name, role, grade, state, score, dept, spend, manager = null, squad = null) => ({
   id, kind: 'agent', project_id: 'p1', department_id: dept, squad_id: squad, manager_id: manager, name, role, grade, state,
-  mission: `${role} on the launch`, autonomy: 'bounded', model_tier: 'standard', model_id: 'deepseek-chat',
+  mission: `${role} on the launch`, autonomy: 'bounded', model_tier: 'standard', model_id: 'deepseek-flash',
   token_cap_per_step: 12000, spend_today_micros: 420_000, score, score_confidence: 0.8, evidence_count: 7,
   success_rate: 0.82, tasks_done: 5, tasks_failed: 1, penalty_count: 0, spend_micros: spend,
   skills: [{ skill_id: 's1', label: 'market-research', proficiency: 0.8 }],

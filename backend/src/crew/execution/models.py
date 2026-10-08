@@ -20,8 +20,11 @@ log = logging.getLogger("crew.models")
 
 # model-substring → (micro_usd_per_input_token, micro_usd_per_output_token)
 PRICES: dict[str, tuple[float, float]] = {
-    "deepseek-chat": (0.28, 0.42),
-    "deepseek-reasoner": (0.55, 2.19),
+    # DeepSeek V4 (Apr 2026; legacy deepseek-chat/-reasoner retired 2026-07-24). Priced at
+    # the provider's PEAK, cache-miss rate so the budget guard errs conservative.
+    "deepseek-flash": (0.30, 1.20),
+    "deepseek-v4-pro": (1.32, 3.96),
+    "deepseek": (0.30, 1.20),  # any other DeepSeek id (e.g. a retired alias) bills as Flash
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
     "gpt-4.1": (2.00, 8.00),
@@ -88,6 +91,10 @@ class ModelRouter:
             kwargs["api_key"] = choice.api_key
         if choice.base_url:
             kwargs["base_url"] = choice.base_url
+        if choice.model.startswith("deepseek"):
+            # DeepSeek V4: thinking is a request parameter, not a model. CrewAI's LLM
+            # forwards reasoning_effort to LiteLLM; non-DeepSeek providers never see it.
+            kwargs["reasoning_effort"] = settings.reasoning_effort
         return LLM(**kwargs)
 
     @staticmethod

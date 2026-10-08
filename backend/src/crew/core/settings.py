@@ -49,10 +49,16 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field("", validation_alias=_a("OPENROUTER_API_KEY", "openrouter_api_key"))
     ollama_base_url: str = Field("", validation_alias=_a("OLLAMA_BASE_URL", "ollama_base_url"))
 
-    tier_reasoning: str = Field("deepseek/deepseek-reasoner", validation_alias=_a("CREW_TIER_REASONING", "tier_reasoning"))
-    tier_standard: str = Field("deepseek/deepseek-chat", validation_alias=_a("CREW_TIER_STANDARD", "tier_standard"))
-    tier_fast: str = Field("deepseek/deepseek-chat", validation_alias=_a("CREW_TIER_FAST", "tier_fast"))
+    # Tier routing (docs/04). Defaults ride DeepSeek V4 (Apr 2026): `deepseek-flash`
+    # (V4.1-Flash) and `deepseek-v4-pro`. The legacy names `deepseek-chat` /
+    # `deepseek-reasoner` were retired by the provider on 2026-07-24 — never pin them.
+    tier_reasoning: str = Field("deepseek/deepseek-v4-pro", validation_alias=_a("CREW_TIER_REASONING", "tier_reasoning"))
+    tier_standard: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_STANDARD", "tier_standard"))
+    tier_fast: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_FAST", "tier_fast"))
     tier_embed: str = Field("openai/text-embedding-3-small", validation_alias=_a("CREW_TIER_EMBED", "tier_embed"))
+    # DeepSeek V4 made thinking a request parameter: reasoning_effort (low|high|max).
+    # Applied to DeepSeek models at LLM construction; other providers never see it.
+    reasoning_effort: str = Field("high", validation_alias=_a("CREW_REASONING_EFFORT", "reasoning_effort"))
 
     # ── safety rails ──────────────────────────────────────────────────────────
     max_concurrent_crews: int = Field(2, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
@@ -79,6 +85,13 @@ class Settings(BaseSettings):
     def _sandbox(cls, v: str) -> str:
         if v not in ("docker", "subprocess", "none"):
             raise ValueError("CREW_TOOL_SANDBOX must be one of docker|subprocess|none")
+        return v
+
+    @field_validator("reasoning_effort")
+    @classmethod
+    def _effort(cls, v: str) -> str:
+        if v not in ("low", "high", "max"):
+            raise ValueError("CREW_REASONING_EFFORT must be one of low|high|max")
         return v
 
     def model_post_init(self, __context) -> None:  # noqa: D105

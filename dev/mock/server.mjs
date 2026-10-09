@@ -799,10 +799,31 @@ const CONTEXT = (agentId) => {
 
 const ack = { accepted: true, event_seq: 4123, unit: { kind: 'project', id: 'p1', name: PROJECT.name } };
 
+// ── Onboarding (ADR 0013 revision): the picker's roster + a session-only save ───
+// The demo must show the card (that is the first-run experience), and the save flow
+// must complete — but the mock never checks a key and never stores one.
+const ONBOARDING_PROVIDERS = [
+  { id: 'deepseek', label: 'DeepSeek', kind: 'key', placeholder: 'sk-…', hint: 'The shipped default — cheap flagship tiers', console: 'https://platform.deepseek.com/api_keys' },
+  { id: 'openai', label: 'OpenAI', kind: 'key', placeholder: 'sk-…', hint: 'GPT models — also powers embeddings (semantic recall)', console: 'https://platform.openai.com/api-keys' },
+  { id: 'anthropic', label: 'Anthropic', kind: 'key', placeholder: 'sk-ant-…', hint: 'Claude models', console: 'https://console.anthropic.com/settings/keys' },
+  { id: 'openrouter', label: 'OpenRouter', kind: 'key', placeholder: 'sk-or-…', hint: 'One key, hundreds of models — incl. hosted Ollama cloud models', console: 'https://openrouter.ai/settings/keys' },
+  { id: 'ollama', label: 'Ollama', kind: 'local', placeholder: 'http://localhost:11434', hint: 'LOCAL only — runs on this machine; no key, zero spend', console: 'https://ollama.com' },
+];
+const ONBOARDING_CONFIGURED = {};
+const onboardingState = () => ({
+  needed: Object.keys(ONBOARDING_CONFIGURED).length === 0,
+  provider: 'deepseek',
+  model: PROJECT.settings.model_tiers.standard,
+  offline_llm: false,
+  vault: 'configured',
+  providers: ONBOARDING_PROVIDERS.map((p) => ({ ...p, configured: !!ONBOARDING_CONFIGURED[p.id] })),
+});
+
 const routes = [
   // TEMPORARY: restart the hiring clock, so the growth can be watched from t=0. The
   // clock starts again on the next org request. Delete with the demo schedule.
   [/^\/api\/dev\/reset$/, () => { T0 = null; return { ok: true, note: 'the clock restarts on the next org request' }; }],
+  [/^\/api\/onboarding\/state$/, () => onboardingState()],
   [/^\/api\/health$/, () => ({ status: 'ok', version: '0.1.0-mock', contract: 1 })],
   [/^\/api\/system\/status$/, () => ({ db: { ok: true }, bus: { ok: true } })],
   [/^\/api\/projects$/, () => paged([PROJECT, NIMBUS, FORGE])],
@@ -1125,6 +1146,29 @@ const server = http.createServer((req, res) => {
   if (/^\/api\/projects\/[^/]+$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
     return res.end(JSON.stringify(PROJECTS_BY_ID[url.pathname.split('/')[3]] ?? null));
+  }
+  // The first-run card's save (ADR 0013 revision): session-only, honestly unverified.
+  if (/^\/api\/onboarding\/key$/.test(url.pathname) && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* demo */ }
+      const pid = String(b.provider || '');
+      const meta = ONBOARDING_PROVIDERS.find((p) => p.id === pid);
+      if (!meta) {
+        res.writeHead(400, { 'Content-Type': 'application/problem+json', ...CORS });
+        return res.end(JSON.stringify({ type: 'https://crew/errors/bad_request',
+          title: 'Bad request', status: 400, detail: `unknown provider '${pid}'` }));
+      }
+      ONBOARDING_CONFIGURED[pid] = true;
+      const detail = meta.kind === 'local'
+        ? 'noted for this session — the demo mock does not reach your machine'
+        : 'saved for this session — the demo mock accepts any key without checking it';
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify({ provider: pid, verified: true, detail, tiers: {} }));
+    });
+    return;
   }
   if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });

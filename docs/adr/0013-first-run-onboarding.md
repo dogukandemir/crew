@@ -42,7 +42,29 @@ now that meant editing `.env` and restarting — and two quiet traps sat in the 
 - A stranger's happy path is: clone → run → paste a key → create a project. No `.env` edit,
   no restart, no plaintext key on disk outside the encrypted vault (and the local
   `data/vault.key`, which is gitignored with the rest of `data/`).
-- The mock backend has no onboarding surface → the card simply never appears there
-  (the query fails and stays silent).
+- The mock backend serves the picker too (below): the card is part of the first-run
+  demo, and its save flow completes against a session-only mock that checks nothing.
 - Loopback-only deployments keep working offline: `CREW_OFFLINE_LLM=true` short-circuits
   `needed` to false and the card stays away.
+
+## Revision — the card grew a provider picker (2026-10)
+
+The single-provider card quietly assumed DeepSeek's tiers. The picker makes the choice
+explicit and first-class:
+
+- `GET /api/onboarding/state` returns `providers[]`: key providers — **DeepSeek, OpenAI,
+  Anthropic, OpenRouter** — plus **local Ollama** (`kind: 'local'`; no key: its slot
+  carries the base URL and is verified by reaching `{base}/api/tags`). A loopback
+  refusal is deterministic, so Ollama refuses the save with "is `ollama serve` running?"
+  instead of the cloud path's "saved, couldn't verify".
+- **Local Ollama is its own tile, deliberately.** Ollama's *cloud* models are served
+  through OpenRouter's API and key (`openrouter.ai/provider/ollama`), so they ride
+  under the OpenRouter entry — no twin tiles that need a paragraph to tell apart.
+- Saving a provider **applies its tier presets** (`PROVIDER_PRESETS`) and persists the
+  choice to `data/provider.json`; boot re-applies it unless an explicit `CREW_TIER_*`
+  env var wins (env beats stored, as everywhere). A saved key the routing never reads
+  would be a dead end — saving IS switching.
+- Pricing: `ollama/` bills `(0, 0)` — local inference must not eat the budget it runs
+  on. OpenRouter ids substring-match the base provider's rates (plus its markup room).
+- The card itself stays one screen: a row of brand tiles (inline SVGs — no network
+  fetch, offline-safe) and one input that adapts to the tile (key vs base URL).

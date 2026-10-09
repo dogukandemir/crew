@@ -33,8 +33,9 @@ export function clearOnboardingDismissal(): void {
 
 /**
  * Show the card only when it can actually help: the backend is reachable, the runner
- * is live, a key is missing, the missing key is one this card can take, and the user
- * has not skipped it.
+ * is live, a provider is missing, the card can offer at least one way to fix that
+ * (the picker roster, or the legacy single-provider path), and the user has not
+ * skipped it.
  */
 export function shouldShowOnboarding(
   state: OnboardingState | undefined,
@@ -42,13 +43,15 @@ export function shouldShowOnboarding(
 ): boolean {
   if (!state) return false;
   if (!state.needed) return false;
-  if (state.provider === null) return false;
+  const canAccept = (state.providers?.length ?? 0) > 0 || state.provider !== null;
+  if (!canAccept) return false;
   return !dismissed;
 }
 
-/** DeepSeek keys start with `sk-`; anything blank is a mistake we can stop early. */
+/** DeepSeek keys start with `sk-`; Ollama's slot carries an address; blanks fail. */
 export function keyLooksSane(provider: string, key: string): boolean {
   const k = key.trim();
+  if (provider === 'ollama') return k === '' || /^https?:\/\/\S+$/.test(k);
   if (k.length < 8) return false;
   if (provider === 'deepseek' && !k.startsWith('sk-')) return false;
   return true;
@@ -58,6 +61,8 @@ const CONSOLES: Record<string, string> = {
   deepseek: 'https://platform.deepseek.com/api_keys',
   openai: 'https://platform.openai.com/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
+  openrouter: 'https://openrouter.ai/settings/keys',
+  ollama: 'https://ollama.com',
 };
 
 export function keyConsoleUrl(provider: string): string | null {
@@ -68,10 +73,18 @@ const LABELS: Record<string, string> = {
   deepseek: 'DeepSeek',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
+  openrouter: 'OpenRouter',
+  ollama: 'Ollama',
 };
 
 export function providerLabel(provider: string): string {
   return LABELS[provider] ?? provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+/** Which tile starts selected: the standard tier's provider, else the first tile. */
+export function defaultProvider(state: OnboardingState): string {
+  if (state.provider) return state.provider;
+  return state.providers?.[0]?.id ?? 'deepseek';
 }
 
 /**

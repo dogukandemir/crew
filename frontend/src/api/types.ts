@@ -75,6 +75,16 @@ export interface Health {
 
 // ─── First-run onboarding (ADR 0013) ─────────────────────────────────────────
 
+export interface OnboardingProvider {
+  id: string;
+  label: string;
+  kind: 'key' | 'local';
+  placeholder: string;
+  hint: string;
+  console: string;
+  configured: boolean;
+}
+
 export interface OnboardingState {
   needed: boolean;
   /** The provider of the standard tier, when the key path can accept it. */
@@ -82,12 +92,15 @@ export interface OnboardingState {
   model: string;
   offline_llm: boolean;
   vault: string;
+  /** The picker's roster (ADR 0013 revision): key providers + local Ollama. */
+  providers?: OnboardingProvider[];
 }
 
 export interface OnboardingKeyResult {
   provider: string;
   verified: boolean;
   detail: string;
+  tiers?: Record<string, string>;
 }
 
 export interface CurrentUser {

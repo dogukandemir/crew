@@ -127,8 +127,8 @@ says they landed are read back into task prompts (`orchestrator._captain_notes`)
 ### Onboarding (ADR 0013)
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/onboarding/state` | first-run state: `needed`, `provider`/`model` of the standard tier, `offline_llm`, `vault` |
-| POST | `/api/onboarding/key` | `{provider, key}` — verified against the provider's models endpoint (401/403 refuses the save; network trouble saves unverified), stored in the vault as `provider:<name>`, effective in-process, never returned |
+| GET | `/api/onboarding/state` | first-run state: `needed`, `provider`/`model` of the standard tier, `offline_llm`, `vault`, and `providers[]` — the picker roster (DeepSeek/OpenAI/Anthropic/OpenRouter + local Ollama, each with `kind` and a `configured` flag) |
+| POST | `/api/onboarding/key` | `{provider, key}` — verified against the provider's models endpoint (401/403 refuses the save; network trouble saves unverified; local Ollama is verified by reaching `{key}/api/tags` and refuses when nothing answers), stored in the vault as `provider:<name>`, **tiers re-pointed via the provider's presets** and persisted to `data/provider.json`, effective in-process, never returned |
 
 Audited (`secret.created`); no domain events. Boot restores vault keys into the process
 (`onboarding.load_vault_provider_keys`), and `run.recovered` (`run_id`,

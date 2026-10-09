@@ -74,9 +74,12 @@ npm install
 npm run dev                      # http://localhost:5173
 ```
 
-On first launch the control room offers a **one-key onboarding card**: paste a DeepSeek key
-once — it is verified against the provider, stored encrypted in the local vault, and becomes
-effective immediately. No `.env` edit, no restart.
+On first launch the control room offers a **provider picker** — DeepSeek, OpenAI,
+Anthropic, OpenRouter, or **local Ollama** (no key, zero spend). The key is verified
+against the provider, stored encrypted in the local vault, and the choice points every
+model tier at that provider immediately. No `.env` edit, no restart.
+
+![The provider picker](docs/assets/onboarding.png)
 
 ### Model providers — one key is enough, if it is the right one
 
@@ -97,6 +100,11 @@ CREW_TIER_STANDARD=openai/gpt-4o-mini
 CREW_TIER_FAST=openai/gpt-4o-mini
 CREW_TIER_REASONING=anthropic/claude-sonnet-4-5
 ```
+
+OpenRouter carries hundreds of models behind one key — including hosted Ollama cloud
+models (`openrouter/anthropic/claude-sonnet`, `openrouter/openai/gpt-4o-mini`). Local
+**Ollama** needs no key at all: point `OLLAMA_BASE_URL` at your server and set the tiers
+to `ollama/llama3.2` — local inference bills **$0** to the budget guard.
 
 Embeddings default to `openai/text-embedding-3-small`; without that key the brain's semantic
 recall is skipped — everything else keeps working. `uv run python -m crew status` prints

@@ -115,7 +115,7 @@ export function WelcomeScreen() {
           state={onboarding.data}
           onDone={(detail) => {
             setHideCard(true);
-            setToast({ kind: 'success', message: `Key saved — ${detail}.` });
+            setToast({ kind: 'success', message: `Provider active — ${detail}.` });
             void onboarding.refetch();
           }}
           onSkip={() => {

@@ -25,6 +25,8 @@ PRICES: dict[str, tuple[float, float]] = {
     "deepseek-flash": (0.30, 1.20),
     "deepseek-v4-pro": (1.32, 3.96),
     "deepseek": (0.30, 1.20),  # any other DeepSeek id (e.g. a retired alias) bills as Flash
+    # Local inference bills nothing — an Ollama tier must not eat the budget it runs on.
+    "ollama/": (0.0, 0.0),
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4o": (2.50, 10.00),
     "gpt-4.1": (2.00, 8.00),

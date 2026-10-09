@@ -7,7 +7,7 @@ punch list: fixes land as commits and are struck out here with their hash.
 ## How this review was done
 
 - Inventoried the repo: 17 specs (00–15 + adr), 97 frontend files (~17k lines), 28 backend
-  modules with a test package, plus the separate spriteforge atlas repo.
+  modules with a test package, plus the in-house atlas generator that produces the sprite art.
 - Ran both test suites; ran the app against the dev mock in a real browser and measured the
   live DOM rather than reading the code and hoping.
 - Scanned for the operational gaps a stranger hits first: CI, deploy, error handling,

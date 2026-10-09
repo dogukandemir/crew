@@ -1,5 +1,6 @@
 /**
- * GENERATED — do not edit. From spriteforge: npx tsx src/atlas.ts && npx tsx src/sync.ts
+ * GENERATED — do not edit. Produced by the project's in-house atlas generator
+ * (a deterministic pixel-art tool); regenerate with it rather than editing here.
  *
  * Every sprite this project can draw, with the cell it occupies in atlas.png and
  * the anchor — the pixel that touches the floor. A renderer needs the anchor to

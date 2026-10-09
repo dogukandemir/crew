@@ -47,7 +47,7 @@ costs `2 × unitsPerMetre` of world width, while 1 m of height is `M` px and cos
 `unitsPerMetre`. So `TW / M = 2`. With the character rig hand-drawn at `M = 24`, that
 fixes `TW = 48`, `TH = 24`.
 
-**Fix.** spriteforge's tile is 48×24, the manifest declares `pixelsPerMetre: 24` for
+**Fix.** The generator's tile is 48×24, the manifest declares `pixelsPerMetre: 24` for
 both axes, and `SPRITE_UNIT = UNITS_PER_METRE / ATLAS.world.pixelsPerMetre` — derived
 from the manifest instead of recomputed. The view scale is now a preference again:
 `compact ×0.75 / to scale ×1.00 (default) / large ×1.5`, with a new storage key,

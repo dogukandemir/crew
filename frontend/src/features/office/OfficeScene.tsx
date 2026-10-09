@@ -72,7 +72,7 @@ const PAD = 46;
 /**
  * The lab bench's worktop height, in world units.
  *
- * Stated here as well as in spriteforge — `props/lab.ts` draws the worktop at 0.92 m
+ * Stated here as well as in the atlas generator — `props/lab.ts` draws the worktop at 0.92 m
  * — because a thing standing ON the bench needs it, and the atlas does not carry a
  * height per entry. It is in the audit's open list: the honest fix is a `height`
  * field in the manifest, so the two cannot drift.

@@ -81,12 +81,12 @@ export function OnboardingCard({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 p-6"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/95 p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Set up a model provider"
     >
-      <div className="w-full max-w-lg rounded-xl border border-slate-700/70 bg-slate-900/80 p-6 shadow-2xl">
+      <div className="my-auto w-full max-w-lg rounded-xl border border-slate-700/70 bg-slate-900/80 p-6 shadow-2xl">
         <div className="flex items-center gap-2">
           <span className="text-emerald-400">◈</span>
           <h1 className="text-base font-semibold text-slate-100">Welcome to Crew</h1>

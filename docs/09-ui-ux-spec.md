@@ -43,9 +43,14 @@ level up, never a sibling:
 - The **breadcrumb** (`⌂ Company ›`) is the only way up; the strip groups members next to
   their company and prefixes them `⌂`.
 - **Company-first founding:** the welcome screen leads with *Found a company* — a wizard
-  (Quick: template + name; Detailed: mission, project, budgets, run mode) that calls
-  `POST /api/found` and lands on the company floor. *Standalone project* stays one click
-  away; the new-project dialog offers `Company ▾` (preselected) vs standalone.
+  (Quick: template + name; Detailed: mission, project, budgets, workspace root, run mode)
+  that calls `POST /api/found` and lands on the company floor. *Standalone project* stays
+  one click away; the new-project dialog offers `Company ▾` (preselected) vs standalone.
+- **Popups must scroll.** Every dialog pins its header/footer and scrolls its body
+  (`min-h-0 flex-1 overflow-y-auto`); the modal's scroller is a sibling above the backdrop
+  so a popup taller than the window can always be scrolled and closed. The onboarding gate
+  scrolls its own root (`items-start` + `my-auto` centering). Verify dialogs at a
+  ~380-px-tall window — an unscrollable popup is a bug (the founding wizard shipped one).
 - A four-step **getting-started checklist** reads the record (provider → company → project
   → first run); it hides when done and never marks a step from a dismissal.
 

@@ -48,6 +48,20 @@ ignore = [
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-gremlins>=1.11.3",
     "ruff>=0.16.10",
 ]
+
+[tool.pytest-gremlins]
+# Mutation testing (docs/13). Default scope: the security spine — the modules where a
+# wrong answer costs the most. CLI --gremlin-targets overrides this per run; keep the
+# pytest file selection tight (only the tests covering the target) so each mutant's
+# run stays fast. Note: the incremental cache keys on SOURCE, not tests — after
+# editing tests, re-run with --gremlin-clear-cache or you will read stale verdicts.
+paths = [
+    "src/crew/control/security_review.py",
+    "src/crew/control/workspaces.py",
+    "src/crew/core/security.py",
+]
+workers = 8
 

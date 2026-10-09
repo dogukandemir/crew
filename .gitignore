@@ -8,6 +8,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.coverage.*
+coverage/
+.gremlins_cache/
 htmlcov/
 
 # --- Node / frontend ---

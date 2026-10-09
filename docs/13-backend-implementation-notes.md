@@ -60,14 +60,68 @@ cd backend
 uv sync
 cp ../.env.example .env          # add a provider key for real runs
 uv run python -m crew serve      # or: uv run uvicorn crew.api.main:app --port 8787
-uv run pytest                    # 54 tests, no network
-uv run pytest -m live            # (not written yet) real provider runs
+uv run pytest                    # full suite, no network
+uv run pytest -m live            # real provider runs (needs a key, costs cents)
 uv run ruff check src tests      # clean
 ```
 
 `CREW_OFFLINE_LLM=true` swaps `CrewAICrewRunner` for `FakeCrewRunner`: the whole pipeline
 (planning, hiring, dispatch, verification, rewards, learning) still runs, deterministically and
 without spending money. That is how the test suite and any offline demo work.
+
+## Mutation testing (pytest-gremlins)
+
+Coverage proves a line ran; it never proves the test would notice the line being WRONG.
+Mutation testing closes that gap: the tool is **pytest-gremlins** (pytest-native, parallel,
+JSON/HTML report, Windows-safe). The default scope lives in `[tool.pytest-gremlins]`
+(pyproject): the security spine — the modules where a wrong answer costs the most.
+
+```bash
+cd backend && uv run python -m pytest <only the test files covering the target> \
+  --gremlins --gremlin-parallel --gremlin-workers 6 --gremlin-clear-cache \
+  --gremlin-targets=src/crew/<module>.py --gremlin-report=console,json
+# report → coverage/gremlins/gremlins.json (gitignored)
+```
+
+Verdicts from the first full pass and after the kill rounds:
+
+| module | mutants | first pass | now | notes |
+|---|---|---|---|---|
+| `control/security_review.py` | 74 | 46 (62%) | **74 (100%)** | |
+| `control/workspaces.py` | 29 | 17 (59%) | **29 (100%)** | |
+| `core/security.py` | 124 | 61 (49%) | **121 (98%)** | 3 survivors byte-equivalent (below) |
+| `execution/tools.py` | 240 | 47 (20%) | **122 (51%)** | survivors cluster in handler tails: social 33, shell/python_eval 29, brain/artifact 21 — add handler tests as you touch them |
+
+Rules that cost real time on this host:
+
+- **Pass only the covering test files.** Per-mutant cost IS the selected suite; the first
+  run passed the entire suite and one mutant idled for 33 minutes.
+- **`--gremlin-clear-cache` after ANY test edit** — the cache keys on source, not tests;
+  without it you re-read stale verdicts.
+- **Def-line mutants get mis-selected tests.** Coverage attributes the `def`/signature line
+  to whichever test imported the module first, so e.g. a flipped default argument
+  (`use: bool = False`) can be "checked" against a single unrelated test. Chase stragglers
+  with `--gremlin-no-coverage-filter` (runs the whole selection per mutant), and diagnose
+  with `--gremlin-explain=<gremlin_id>` (prints the covering set vs the selected set).
+- **The session DB is shared**: a tamper test must RESTORE the row it broke or every later
+  `verify_audit_chain` fails (this poisoned `tests/security` once), and budget tests must
+  build their ledger math with real `reserve/settle` calls — seeding `spend_micros` directly
+  makes `reconcile` honestly fail.
+- **A survivor can be equivalent** — 3 remain in `core/security.py` and are documented, not
+  chased: `scope_kind == "x" and scope_id` → `or` only changes paths whose `s.get()` finds
+  nothing, and `budget_cap_micros > ceiling` → `>=` rewrites the same value it compared.
+- Counting mutants per module: `collect_gremlins` mis-collects — use
+  `transform_source` + `get_default_registry` (the numbers above).
+
+### Bugs found by mutation testing
+
+| Bug | Cause | Guard test |
+|-----|-------|-----------|
+| Every real-provider run died before its first tool call (`NameError: description`) | `build_crewai_tools._make` defined class attributes `description`/`args_schema` that shadowed the closure parameters they read — LOAD_NAME (class scope) never sees the closure | `test_crewai_wrappers_roundtrip` |
+| Budget availability math, settle/release bookkeeping, dept/agent clamps: 63 mutants survived | the arithmetic, the strict `>` on reserve, the scope dispatch (`department_id if kind == … else None`) and the settle attribution had no exact-value tests | `test_budget_available_math_boundaries_and_breaker`, `test_budget_department_and_agent_clamps` |
+| A granted content-review for ONE url released a DIFFERENT url | `kind != "content_review" or url != url` → `and` in release_for_content/command binds the wrong approval | `test_releases_are_bound_to_the_reviewed_url_and_norm` |
+| Audit chain could hash order-dependently / lose the actor | `sort_keys=True` off → canonical form varies with key order; `agent_id or ""` → `and` drops the requester from the audit | `test_canonical_form_ignores_key_order`, `test_approval_request_audits_the_agent_as_actor` |
+| A plain secret reveal could mint a lease | `use: bool = False` has a default — only `use=True` may write a `SecretLease`; nothing asserted the negative | `test_vault_reveal_unknown_and_lease_only_on_use` |
 
 ## Bugs found and fixed during the first session (and the tests that now hold them)
 

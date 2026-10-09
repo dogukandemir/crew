@@ -788,11 +788,14 @@ def build_crewai_tools(ctx: ToolContext) -> list[Any]:
                   for prop, cfg in spec.schema.get("properties", {}).items()}
         args_model = create_model(f"{name}_args", **fields)
 
-        def _make(spec_name: str, args_schema: type, description: str, tool_name: str) -> Any:
+        def _make(spec_name: str, schema_cls: type, desc: str, tool_name: str) -> Any:
             class _Tool(BaseTool):  # type: ignore[misc]
+                # the class attributes must not shadow the closure names they read —
+                # `description: str = description` is a NameError raised at build time
+                # (found by mutation-testing the never-called build path)
                 name: str = tool_name
-                description: str = description
-                args_schema: type = args_schema
+                description: str = desc
+                args_schema: type = schema_cls
 
                 def _run(self, **kwargs: Any) -> str:
                     return json.dumps(invoker.invoke(ctx, spec_name, kwargs), default=str)

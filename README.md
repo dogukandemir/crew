@@ -221,11 +221,15 @@ renderer notes (14–17) are indexed in [docs/README.md](docs/README.md).
 
 ```bash
 # backend
-uv run pytest                    # 111 tests, no network required
+uv run pytest                    # 193 tests, no network required
 uv run pytest -m live -s         # real provider run (needs a key; costs a few cents)
 uv run ruff check .              # must stay clean
 uv run python -m crew status     # env, data dir, model tiers, key presence, sandbox mode
 uv run python -m crew audit verify
+
+# mutation testing (docs/13) — the security spine, pytest-gremlins
+uv run python -m pytest tests/security tests/unit/test_security_review.py tests/unit/test_workspaces.py \
+  --gremlins --gremlin-parallel --gremlin-workers 6 --gremlin-clear-cache --gremlin-report=console
 
 # frontend
 npx tsc --noEmit && npx vitest run && npm run build

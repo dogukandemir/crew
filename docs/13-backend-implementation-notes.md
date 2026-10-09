@@ -179,10 +179,15 @@ company — with the producing agent's name on every row (and the project name a
 scope). Backend: `GET /api/projects/{id}/artifacts` (`?agent_id`/`?department_id`),
 `GET /api/companies/{id}/artifacts` (`?project_id`/`?agent_id`), and
 `GET /api/artifacts/{id}/content` — a bounded (256 KB) text read that refuses any file
-outside the data directory, saying the reason out loud. UI: a **Deliverables** tab on every
-workspace (project and company forms of the same panel; filters + click-to-read), and a
-per-agent section in the agent drawer. The offline runner now writes a REAL deliverable
-file per simulated task — a demo whose deliverables surface is empty would lie.
+outside the data directory, saying the reason out loud. Every deliverable ALSO downloads:
+`/api/artifacts/{id}/download` (the full file, attachment) and zip packs at project and
+company scope (`/artifacts/download`, per-project folders, `_unavailable.txt` for files
+that could not ship). UI: a **Deliverables** tab on every workspace (project and company
+forms of the same panel; filters + click-to-read + per-row and "Download all" buttons), and
+a per-agent section in the agent drawer. The offline runner writes a REAL deliverable file
+per simulated task — **byte-exact** (`write_bytes`: text mode would rewrite `\n` to `\r\n`
+on Windows and the recorded sha256/bytes would describe a file that does not exist) — a
+demo whose deliverables surface is empty would lie.
 
 **Operating cadence.** The answer to "the run ended, now the company just sits there":
 `settings.cadence_enabled` + `settings.cadence_max_runs` (1–10, default 3). When a run

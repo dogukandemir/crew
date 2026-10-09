@@ -5,16 +5,21 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
+from starlette.background import BackgroundTask
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
@@ -1348,6 +1353,143 @@ async def artifact_content(artifact_id: str) -> dict:
         return out
 
     return await asyncio.to_thread(_read)
+
+
+def _safe_filename(name: str, fallback: str = "artifact") -> str:
+    keep = re.sub(r"[^\w.\- ()]+", "_", name).strip() or fallback
+    return keep[:120]
+
+
+def _artifact_file(a: Artifact) -> Path | None:
+    """The artifact's file when it exists AND lives under the data directory."""
+    root = settings.data_dir if settings.data_dir.is_absolute() else (Path.cwd() / settings.data_dir)
+    try:
+        rp = Path(a.path).resolve()
+        if rp.is_relative_to(root.resolve()) and rp.is_file():
+            return rp
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _zip_deliverables(rows: list[Artifact], project_slugs: dict[str, str],
+                      work_dir: Path, always_prefix: bool = False) -> tuple[Path, int, list[str]]:
+    """Synchronous zip build (call via to_thread). Files that cannot be served are
+    listed in `_unavailable.txt` inside the zip — an honest package says what it
+    could not include."""
+    zp = work_dir / "deliverables.zip"
+    included, skipped, seen = 0, [], set()
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
+        for a in rows:
+            rp = _artifact_file(a)
+            if rp is None:
+                skipped.append(_artifact_display_name(a))
+                continue
+            name = _safe_filename(_artifact_display_name(a))
+            slug = project_slugs.get(a.project_id)
+            prefix = slug and (always_prefix or len(project_slugs) > 1)
+            arc = f"{slug}/{name}" if prefix else name
+            final, n = arc, 1
+            while final.lower() in seen:
+                n += 1
+                stem, dot, ext = arc.rpartition(".")
+                final = f"{stem} ({n}).{ext}" if dot else f"{arc} ({n})"
+            seen.add(final.lower())
+            z.write(rp, arcname=final)
+            included += 1
+        if skipped:
+            z.writestr("_unavailable.txt",
+                       "These deliverables could not be included (missing file or outside "
+                       "the data directory):\n" + "\n".join(f"- {s}" for s in skipped))
+    return zp, included, skipped
+
+
+async def _deliverables_zip_response(rows: list[Artifact], project_slugs: dict[str, str],
+                                     filename: str, always_prefix: bool = False) -> FileResponse:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="crew-pack-"))
+    zp, included, _ = await asyncio.to_thread(_zip_deliverables, rows, project_slugs, tmp_dir,
+                                              always_prefix)
+    if included == 0:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise _problem(410, "no downloadable files",
+                       "every matching deliverable is missing or outside the data directory")
+    return FileResponse(zp, filename=_safe_filename(filename),
+                        media_type="application/zip",
+                        background=BackgroundTask(lambda: shutil.rmtree(tmp_dir, ignore_errors=True)))
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", text).strip("-").lower() or "project"
+
+
+@api.get("/artifacts/{artifact_id}/download")
+async def artifact_download(artifact_id: str) -> FileResponse:
+    """The deliverable as a file download — the full content, not the 256 KB preview."""
+    async with session_scope() as s:
+        a = await s.get(Artifact, artifact_id)
+    if a is None:
+        raise _problem(404, "artifact not found", artifact_id)
+    rp = await asyncio.to_thread(_artifact_file, a)
+    if rp is None:
+        raise _problem(410, "artifact file is not available",
+                       "the file is missing or outside the server's data directory")
+    return FileResponse(rp, filename=_safe_filename(_artifact_display_name(a)),
+                        media_type=a.mime or "application/octet-stream")
+
+
+@api.get("/projects/{project_id}/artifacts/download")
+async def project_artifacts_download(project_id: str, agent_id: str | None = None,
+                                     department_id: str | None = None,
+                                     limit: int = Query(default=1000, ge=1, le=5000)) -> FileResponse:
+    """Every matching deliverable of the project, as one zip."""
+    async with session_scope() as s:
+        project = await s.get(Project, project_id)
+        if project is None:
+            raise _problem(404, "project not found", project_id)
+        q = select(Artifact).where(Artifact.project_id == project_id)
+        if agent_id:
+            q = q.where(Artifact.agent_id == agent_id)
+        arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+        agents, depts, tasks, projects = await _artifact_context(s, [project_id], arts)
+        slugs = {project_id: _slug(project.name)}
+    if department_id:
+        rows = [_artifact_row(a, agents, depts, tasks, projects) for a in arts]
+        keep = {r["id"] for r in rows if r["department_id"] == department_id}
+        arts = [a for a in arts if a.id in keep]
+    if not arts:
+        raise _problem(404, "no deliverables", project_id)
+    return await _deliverables_zip_response(arts, slugs, f"{_slug(project.name)}-deliverables.zip")
+
+
+@api.get("/companies/{company_id}/artifacts/download")
+async def company_artifacts_download(company_id: str, project_id: str | None = None,
+                                     agent_id: str | None = None,
+                                     limit: int = Query(default=1000, ge=1, le=5000)) -> FileResponse:
+    """Every matching deliverable across the company's member projects, as one zip,
+    filed per project."""
+    async with session_scope() as s:
+        comp = await s.get(Project, company_id)
+        if comp is None or comp.kind != "company":
+            raise _problem(404, "company not found", company_id)
+        member_ids = list(await s.scalars(select(Project.id).where(Project.company_id == company_id)))
+        if project_id:
+            if project_id not in member_ids:
+                raise _problem(404, "project is not a member of this company", project_id)
+            member_ids = [project_id]
+        if not member_ids:
+            raise _problem(404, "no deliverables", company_id)
+        q = select(Artifact).where(Artifact.project_id.in_(member_ids))
+        if agent_id:
+            q = q.where(Artifact.agent_id == agent_id)
+        arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+        projects = {x.id: x for x in (await s.scalars(
+            select(Project).where(Project.id.in_(member_ids)))).all()}
+        slugs = {pid: _slug(p.name) for pid, p in projects.items()}
+        comp_name = comp.name
+    if not arts:
+        raise _problem(404, "no deliverables", company_id)
+    return await _deliverables_zip_response(arts, slugs, f"{_slug(comp_name)}-deliverables.zip",
+                                            always_prefix=True)
 
 
 async def _task_control(task_id: str, action: str, user: dict, body: dict | None = None) -> dict:

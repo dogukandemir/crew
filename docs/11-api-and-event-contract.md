@@ -115,6 +115,9 @@ additively for pre-tree readers; `nodes` is the flat index of `root`.
 | GET | `/api/projects/{id}/artifacts` | project deliverables; `?agent_id=`/`?department_id=` narrow the scope; every row resolves the producing **agent name** + department |
 | GET | `/api/companies/{id}/artifacts` | company rollup across member projects; `?project_id=`/`?agent_id=` narrow; rows name agent **and** project |
 | GET | `/api/artifacts/{id}/content` | bounded text read (256 KB) of one deliverable — only files under the data directory; anything else answers `available:false` with the reason |
+| GET | `/api/artifacts/{id}/download` | the deliverable as a file (attachment, full bytes); a file that is gone or outside the data directory answers 410 with the reason |
+| GET | `/api/projects/{id}/artifacts/download` | every matching deliverable as one zip (`?agent_id=`/`?department_id=`); unservable files are listed in `_unavailable.txt` |
+| GET | `/api/companies/{id}/artifacts/download` | company-scope zip, filed per project (`?project_id=`/`?agent_id=`) |
 
 ### Boards (ADR 0010)
 | Method | Path | Purpose |

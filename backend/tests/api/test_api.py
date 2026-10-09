@@ -507,3 +507,57 @@ async def test_convening_a_council_ends_in_a_decision(client):
 
     items = (await client.get(f"/api/decisions?project_id={p['id']}")).json()["items"]
     assert items and items[0]["id"] == session["decision_id"], "the decision is on the record"
+
+
+async def test_deliverable_downloads_single_and_packs(client):
+    """Every deliverable downloads as a file; 'download all' packs the scope into one
+    zip (per-project folders at company scope) and a refused file is said out loud."""
+    import io
+    import zipfile
+
+    r = await client.post("/api/found", json={
+        "name": "Download Co", "mission": "ship", "budget_usd": 4.0,
+        "project_name": "Bundle", "project_goal": "ship the bundle",
+        "project_budget_usd": 3.0, "start_run": False})
+    body = r.json()
+    company, project = body["company"], body["project"]
+    status = await _await_run(client, project["id"])
+    assert status in ("completed", "failed"), status
+
+    items = (await client.get(f"/api/projects/{project['id']}/artifacts")).json()["items"]
+    assert items
+    a = items[0]
+
+    # single file: attachment with the deliverable's own name, real bytes
+    d = await client.get(f"/api/artifacts/{a['id']}/download")
+    assert d.status_code == 200, d.text
+    disp = d.headers.get("content-disposition", "")
+    assert "attachment" in disp and a["name"] in disp
+    assert len(d.content) == a["bytes"]
+
+    # project pack: a zip that contains the same file
+    z = await client.get(f"/api/projects/{project['id']}/artifacts/download")
+    assert z.status_code == 200, z.text
+    assert z.headers["content-type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
+    assert a["name"] in names, names
+
+    # company pack: same file, filed under the member project's slug
+    cz = await client.get(f"/api/companies/{company['id']}/artifacts/download")
+    assert cz.status_code == 200, cz.text
+    cnames = zipfile.ZipFile(io.BytesIO(cz.content)).namelist()
+    assert any(n == f"bundle/{a['name']}" for n in cnames), cnames
+
+    # a file outside the data directory refuses with 410, not a broken download
+    from crew.core.db import session_scope
+    from crew.core.models import Artifact
+    async with session_scope() as s:
+        s.add(Artifact(project_id=project["id"], task_id=None, agent_id=a["agent_id"],
+                       kind="file", path=OUTSIDE_FILE, bytes=1,
+                       sha256="outside", meta={"name": "outside.txt"}))
+    listed = (await client.get(
+        f"/api/projects/{project['id']}/artifacts?agent_id={a['agent_id']}")).json()["items"]
+    rogue = next(x for x in listed if x["name"] == "outside.txt")
+    refused = await client.get(f"/api/artifacts/{rogue['id']}/download")
+    assert refused.status_code == 410, refused.text
+    assert (await client.get("/api/artifacts/nope/download")).status_code == 404

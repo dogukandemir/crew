@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../api/client';
+import { API_BASE, api } from '../../api/client';
 import type { DeliverableRow, RewardEvent } from '../../api/types';
 import { Drawer } from '../../components/ui/Drawer';
 import { Badge, severityTone } from '../../components/ui/Badge';
@@ -324,10 +324,17 @@ function DeliverablesSection({ projectId, agentId }: { projectId: string; agentI
         <ul className="max-h-40 overflow-y-auto rounded-md border border-slate-700/60">
           {items.map((r) => (
             <li key={r.id}>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setPreview(r)}
-                className="flex w-full items-center gap-2 border-b border-slate-800/60 px-2 py-1 text-left text-[11px] last:border-0 hover:bg-slate-900/60"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setPreview(r);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 border-b border-slate-800/60 px-2 py-1 text-left text-[11px] last:border-0 hover:bg-slate-900/60"
                 title={r.task_title ? `From the task: ${r.task_title}` : r.path}
               >
                 <span className="min-w-0 flex-1 truncate text-slate-300">{r.name}</span>
@@ -340,7 +347,16 @@ function DeliverablesSection({ projectId, agentId }: { projectId: string; agentI
                 >
                   {formatRelativeTime(r.created_at)}
                 </span>
-              </button>
+                <a
+                  href={`${API_BASE}/api/artifacts/${r.id}/download`}
+                  download
+                  onClick={(e) => e.stopPropagation()}
+                  className="shrink-0 rounded px-1 text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
+                  title="Download this file"
+                >
+                  ↓
+                </a>
+              </div>
             </li>
           ))}
         </ul>

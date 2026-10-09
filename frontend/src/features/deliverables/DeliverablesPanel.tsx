@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DeliverableRow } from '../../api/types';
+import { API_BASE } from '../../api/client';
 import { Chip } from '../../components/ui/Chip';
 import { Input, Select } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Drawer';
@@ -39,6 +40,24 @@ function typeTag(name: string, mime: string): string {
   if (mime.startsWith('image/')) return 'IMG';
   if (mime.startsWith('text/')) return 'TXT';
   return 'FILE';
+}
+
+function fileDownloadUrl(artifactId: string): string {
+  return `${API_BASE}/api/artifacts/${artifactId}/download`;
+}
+
+function packDownloadUrl(
+  scope: 'project' | 'company',
+  id: string,
+  params: Record<string, string | undefined>,
+): string {
+  const entries = Object.entries(params).filter(([, v]) => !!v) as [string, string][];
+  const qs = new URLSearchParams(entries).toString();
+  const base =
+    scope === 'company'
+      ? `/api/companies/${id}/artifacts/download`
+      : `/api/projects/${id}/artifacts/download`;
+  return `${API_BASE}${base}${qs ? `?${qs}` : ''}`;
 }
 
 export function DeliverablesPanel({
@@ -137,6 +156,21 @@ export function DeliverablesPanel({
               </option>
             ))}
           </Select>
+        )}
+        {rows.length > 0 && (
+          <a
+            href={packDownloadUrl(scope, id, isCompany ? { project_id: proj || undefined } : { agent_id: agent || undefined, department_id: dept || undefined })}
+            download
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border border-slate-700/70 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800/60"
+            title={
+              isCompany
+                ? 'Download every listed deliverable as one zip, filed per project'
+                : 'Download every listed deliverable as one zip'
+            }
+          >
+            ↓ Download all
+          </a>
         )}
         <span className="ml-auto text-[11px] tabular-nums text-slate-500">
           {rows.length} deliverable{rows.length === 1 ? '' : 's'}
@@ -243,6 +277,15 @@ function DeliverableItem({
         >
           {formatRelativeTime(row.created_at)}
         </span>
+        <a
+          href={fileDownloadUrl(row.id)}
+          download
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 rounded px-1 py-0.5 text-[12px] text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
+          title="Download this file"
+        >
+          ↓
+        </a>
       </div>
     </li>
   );
@@ -260,6 +303,13 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
       footer={
         row && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+            <a
+              href={fileDownloadUrl(row.id)}
+              download
+              className="rounded border border-slate-700/70 px-2 py-0.5 text-slate-200 hover:bg-slate-800/60"
+            >
+              ↓ Download file
+            </a>
             <span>sha256 {row.sha256.slice(0, 12)}…</span>
             <span className="min-w-0 flex-1 truncate" title={row.path}>
               {row.path}

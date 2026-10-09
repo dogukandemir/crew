@@ -262,7 +262,9 @@ class FakeCrewRunner:
         root.mkdir(parents=True, exist_ok=True)
         p = root / name
         body = f"# {req.task.title}\n\n{text}\n"
-        p.write_text(body, encoding="utf-8")
+        # Byte-exact write: text mode would turn \n into \r\n on Windows and the
+        # recorded sha256/bytes would then describe a file that does not exist.
+        p.write_bytes(body.encode("utf-8"))
         digest = hashlib.sha256(body.encode()).hexdigest()
 
         async def _record() -> None:

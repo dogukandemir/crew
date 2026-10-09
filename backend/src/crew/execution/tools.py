@@ -402,10 +402,13 @@ def h_artifact_publish(ctx: ToolContext, args: dict) -> dict:
     root = (ctx.artifacts or (ctx.workspace or Path.cwd())) / (ctx.task_id or "task")
     root.mkdir(parents=True, exist_ok=True)
     p = root / name
-    p.write_text(content, encoding="utf-8")
+    # Byte-exact write: text mode mangles \n to \r\n on Windows, and the recorded
+    # sha256 must describe the bytes actually stored (downloads verify against it).
+    p.write_bytes(content.encode("utf-8"))
     import hashlib
     digest = hashlib.sha256(content.encode()).hexdigest()
-    run_on_loop(_record_artifact(ctx, name, p, len(content), digest))
+    nbytes = len(content.encode("utf-8"))
+    run_on_loop(_record_artifact(ctx, name, p, nbytes, digest))
     return {"ok": True, "data": {"name": name, "path": str(p), "sha256": digest, "bytes": len(content)}}
 
 

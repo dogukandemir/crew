@@ -123,6 +123,22 @@ Rules that cost real time on this host:
 | Audit chain could hash order-dependently / lose the actor | `sort_keys=True` off → canonical form varies with key order; `agent_id or ""` → `and` drops the requester from the audit | `test_canonical_form_ignores_key_order`, `test_approval_request_audits_the_agent_as_actor` |
 | A plain secret reveal could mint a lease | `use: bool = False` has a default — only `use=True` may write a `SecretLease`; nothing asserted the negative | `test_vault_reveal_unknown_and_lease_only_on_use` |
 
+## Fixed from the end-user review pass (2026-10)
+
+A live walkthrough (fresh install, full journey) drove this batch — commits `1ff0105`,
+`ddc7057`, `355fa78`:
+
+| Finding | Cause | Fix / guard |
+|---------|-------|-------------|
+| Events showed "2h ago" on rows seconds old; history shifted by the host offset | SQLite returns naive datetimes; browsers parse naive ISO as LOCAL | every wire timestamp goes through `events.utc_iso`; `format.ts` parses naive strings as UTC (tests both sides) |
+| The Captain's desk orders never ran ("It runs with the next wave") | `ready_tasks`/`assign_tasks` filtered `Task.run_id == run.id`, so standalone tasks (run_id NULL) were invisible to every wave | both queries include run-less tasks; a wave adopts them into its run on pickup (`_run_task`); the reply says "queued — press Start run" when no run is open |
+| "Start run" with an unchanged goal silently re-planned and re-charged everything | no prior-work awareness | Overview asks first when the goal already produced completed tasks (or a run is open) |
+| Tasks table showed raw agent-id prefixes; Verification column explained an API path | no roster join; a caption shipped as column content | assignee/department/squad resolve names via the org tree; verdict badge shown when present |
+| Success showed 0% for never-worked agents; G1–G4 undefined | zero done ≠ zero success; jargon without legend | "—" + tooltip; grade chips carry class names; score tooltip |
+| `weights=NaN` in the reward ledger | `Number({...})` on the weights dict | render only finite numeric components |
+| 11 user-visible `(docs/NN)` / API-path strings across 9 panels | copy hygiene | replaced with user language |
+| Board cards clipped; the whole board scrolled vertically | column lists had no height constraint (`min-h-0 flex-1 overflow-y-auto` now) | verified live: each column scrolls its own cards |
+
 ## Bugs found and fixed during the first session (and the tests that now hold them)
 
 | Bug | Cause | Guard test |

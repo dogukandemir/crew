@@ -219,7 +219,9 @@ class CouncilCreate(BaseModel):
     constraints: list[str] = Field(default_factory=list)
     task_id: str | None = None
     panel: list[str] = Field(default_factory=list)
-    rounds: int = 1
+    # 0 = the server debates and decides on its own (the normal path — a convened
+    # council must end in a decision); >0 = run round one now, client drives.
+    rounds: int = 0
 
 
 class BrainWriteBody(BaseModel):
@@ -1420,7 +1422,41 @@ async def convene(project_id: str, body: CouncilCreate, user: dict = Depends(req
         raise _problem(422, "validation_error", str(e)) from e
     if body.rounds > 0:
         await council.run_round(project_id=project_id, session_id=out["session_id"])
+    else:
+        # Convene-and-forget used to leave the session 'open' forever — nothing
+        # advanced it and no client knew to. The server now seats the board,
+        # debates up to two rounds and records the binding decision on its own.
+        asyncio.create_task(_drive_council(project_id=project_id, session_id=out["session_id"]))
     return out
+
+
+async def _drive_council(*, project_id: str, session_id: str) -> None:
+    """Debate (up to two rounds) then decide — a convened council must end in a
+    decision on the record, not in a session nobody ever closes."""
+    try:
+        for _ in range(4):
+            async with session_scope() as s:
+                sess = await s.get(CouncilSession, session_id)
+                if sess is None:
+                    return
+                is_open, rounds = sess.status == "open", sess.rounds or 0
+            if not is_open:
+                return
+            if rounds >= 2:
+                break
+            await council.run_round(project_id=project_id, session_id=session_id)
+        async with session_scope() as s:
+            sess = await s.get(CouncilSession, session_id)
+            project = await s.get(Project, project_id)
+            still_open = sess is not None and sess.status == "open"
+        if still_open and project is not None:
+            await council.decide(project=project, session_id=session_id,
+                                 actor="system:orchestrator")
+    except Exception as e:  # the record must show a failed debate, not silence
+        await ev.emit("council.failed", project_id=project_id, severity="error",
+                      title="council debate failed", summary=str(e)[:200],
+                      payload={"session_id": session_id, "error": f"{type(e).__name__}: {e}"},
+                      actor="system:orchestrator")
 
 
 @api.get("/councils/{session_id}")

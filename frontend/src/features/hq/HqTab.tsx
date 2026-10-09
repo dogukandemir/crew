@@ -4,7 +4,7 @@
  * the floor move: review the books, allocate the portfolio, convene the board.
  */
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useCompanyHq } from '../../app/hooks';
 import { useTabs } from '../../stores/tabs';
@@ -23,10 +23,18 @@ export function HqTab({ companyId }: { companyId: string }) {
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['company-hq', companyId] });
   const review = useMutation({ mutationFn: () => api.reviewCompany(companyId), onSuccess: invalidate });
   const allocate = useMutation({ mutationFn: () => api.allocateCompany(companyId), onSuccess: invalidate });
+  const decisions = useQuery({
+    queryKey: ['decisions', companyId],
+    queryFn: () => api.listDecisions(companyId),
+    refetchInterval: 20_000,
+  });
   const openTab = useTabs((s) => s.openTab);
   const session = useMutation({
     mutationFn: () => api.conveneBoard(companyId, { topic: topic.trim() }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      void qc.invalidateQueries({ queryKey: ['decisions', companyId] });
+    },
   });
 
   if (hq.isPending) return <SkeletonRows rows={6} />;
@@ -98,6 +106,22 @@ export function HqTab({ companyId }: { companyId: string }) {
         </div>
       </div>
       {error && <p className="px-3 pb-1 text-xs text-rose-400">{error.message}</p>}
+
+      {decisions.data && decisions.data.items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-800/70 px-3 py-1.5 text-[11px] text-slate-500">
+          <span className="uppercase tracking-wide">Board decisions</span>
+          {decisions.data.items.slice(0, 4).map((d) => (
+            <span
+              key={d.id}
+              className="max-w-72 truncate rounded border border-slate-800/70 bg-slate-900/50 px-2 py-0.5"
+              title={`${d.question}\n\n${d.rationale ?? ''}`}
+            >
+              <span className="text-slate-200">{d.chosen_option}</span>
+              <span className="text-slate-500"> · {d.question}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 border-t border-slate-800/70">
         <HqFloor hq={d} />

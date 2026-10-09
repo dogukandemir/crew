@@ -482,3 +482,28 @@ async def test_deliverables_at_three_levels(client):
     # honest 404s
     assert (await client.get("/api/artifacts/nope/content")).status_code == 404
     assert (await client.get("/api/companies/nope/artifacts")).status_code == 404
+
+
+async def test_convening_a_council_ends_in_a_decision(client):
+    """The board button, end to end: convene ALONE (no client-driven rounds) must
+    land a binding decision — the session used to sit 'open' forever because
+    nothing advanced it."""
+    p = await _create_project(client, "Auto Council")
+    r = await client.post(f"/api/projects/{p['id']}/councils", json={
+        "question": "Adopt the new pricing?",
+        "options": [{"id": "yes", "label": "Adopt"}, {"id": "no", "label": "Hold"}],
+        "criteria": ["evidence", "risk"]})
+    assert r.status_code == 201, r.text
+    sid = r.json()["session_id"]
+
+    session = {}
+    for _ in range(60):
+        await asyncio.sleep(0.25)
+        session = (await client.get(f"/api/councils/{sid}")).json()
+        if session.get("decision_id") or session.get("status") != "open":
+            break
+    assert session.get("decision_id"), f"session never closed: {session}"
+    assert session["rounds"] >= 1 and session["status"] != "open"
+
+    items = (await client.get(f"/api/decisions?project_id={p['id']}")).json()["items"]
+    assert items and items[0]["id"] == session["decision_id"], "the decision is on the record"

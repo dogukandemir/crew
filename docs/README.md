@@ -57,6 +57,10 @@ Decisions that were expensive to make and would be expensive to reverse:
 - [0011 — The board of directors, the portfolio call, and the HQ floor](adr/0011-board-of-directors-and-portfolio.md)
 - [0012 — The command desk: the Captain speaks, the orchestrator answers](adr/0012-command-desk.md)
 - [0013 — First-run onboarding: one key, stored in the vault](adr/0013-first-run-onboarding.md)
+- [0014 — Agent growth: grades, promotions and demotions on evidence](adr/0014-agent-growth.md)
+- [0015 — Company-first navigation: the company owns HQ, projects are members](adr/0015-company-first-navigation.md)
+- [0016 — Agent souls and the HR hiring ladder](adr/0016-agent-souls-and-hr-hiring.md)
+- [0017 — Workspaces, egress and the security review gate](adr/0017-workspaces-and-security-review.md)
 
 ## Conventions
 

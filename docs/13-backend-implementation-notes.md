@@ -172,6 +172,25 @@ fails a test instead of the product. Also this round: the founding wizard is the
 company creation path, command-desk examples are English, and vitest 3 → 5 cleared
 `npm audit` (dev-only advisories).
 
+## The deliverables surface (three scopes) and operating cadence (2026-10)
+
+**Deliverables.** One artifact record, three readable scopes — individual agent, department,
+company — with the producing agent's name on every row (and the project name at company
+scope). Backend: `GET /api/projects/{id}/artifacts` (`?agent_id`/`?department_id`),
+`GET /api/companies/{id}/artifacts` (`?project_id`/`?agent_id`), and
+`GET /api/artifacts/{id}/content` — a bounded (256 KB) text read that refuses any file
+outside the data directory, saying the reason out loud. UI: a **Deliverables** tab on every
+workspace (project and company forms of the same panel; filters + click-to-read), and a
+per-agent section in the agent drawer. The offline runner now writes a REAL deliverable
+file per simulated task — a demo whose deliverables surface is empty would lie.
+
+**Operating cadence.** The answer to "the run ended, now the company just sits there":
+`settings.cadence_enabled` + `settings.cadence_max_runs` (1–10, default 3). When a run
+COMPLETES, the engine starts one follow-on pass (`Continue: <goal> (follow-on pass n/m)`),
+emits `run.cadence.started`, and stops at the cap with `run.cadence.held`. A person's run
+resets the streak; failures and pauses never continue. Off by default — the breakpoints are
+visible in the record either way.
+
 ## Deliberate gaps (not bugs — next session's work)
 
 1. **Alembic migrations** are not generated; dev uses `create_all`. Prod requires a revision.

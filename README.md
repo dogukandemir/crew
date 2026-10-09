@@ -221,7 +221,7 @@ renderer notes (14–17) are indexed in [docs/README.md](docs/README.md).
 
 ```bash
 # backend
-uv run pytest                    # 193 tests, no network required
+uv run pytest                    # 200 tests, no network required
 uv run pytest -m live -s         # real provider run (needs a key; costs a few cents)
 uv run ruff check .              # must stay clean
 uv run python -m crew status     # env, data dir, model tiers, key presence, sandbox mode

@@ -109,6 +109,13 @@ additively for pre-tree readers; `nodes` is the flat index of `root`.
 | POST | `/api/tasks/{id}/retry` \| `/cancel` \| `/reassign` \| `/escalate` | controls |
 | GET | `/api/tasks/{id}/artifacts` | artifact list |
 
+### Deliverables (one artifact read at three scopes)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/projects/{id}/artifacts` | project deliverables; `?agent_id=`/`?department_id=` narrow the scope; every row resolves the producing **agent name** + department |
+| GET | `/api/companies/{id}/artifacts` | company rollup across member projects; `?project_id=`/`?agent_id=` narrow; rows name agent **and** project |
+| GET | `/api/artifacts/{id}/content` | bounded text read (256 KB) of one deliverable — only files under the data directory; anything else answers `available:false` with the reason |
+
 ### Boards (ADR 0010)
 | Method | Path | Purpose |
 |--------|------|---------|

@@ -80,6 +80,28 @@ without spending money. That is how the test suite and any offline demo work.
 | Audit chain unverifiable | timestamps were hashed as aware ISO strings but stored naive by SQLite | `test_audit_chain_verifies_and_detects_tampering` |
 | Council produced no positions | a project with one agent has no eligible panellists | `test_council_debate_and_decision` |
 
+## Bugs found and fixed by the fresh-clone audit (K/Ö round)
+
+The audit cloned the repo into a clean directory, ran it with `CREW_OFFLINE_LLM=true`
+against an empty `CREW_DATA_DIR`, and walked the product end to end. The mock had been
+flattering the UI: two shapes the frontend and `dev/mock` agreed on were never served
+by the real backend.
+
+| Bug | Cause | Guard test |
+|-----|-------|-----------|
+| Office, Org chart and Agents roster showed "nobody hired" under a completed run | `/org` served `{project, orchestrator, departments[]}` while every reader walks `org.data?.root`; the mock served `{root}` | `test_ui_contract_shapes`, `test_org_tree.py` |
+| Every budget bar read "— / —" / "$0.00 / $0.00" | `serialize_project()` shipped only `*_usd`; the UI binds `budget_cap_micros`/`spend_micros` | `test_ui_contract_shapes` |
+| First live re-run of the fix crashed `org_tree` | `Squad` has no spend column (mock squads had one) — the empty-project contract test never walked a squad | `test_org_tree_is_a_rooted_tree_with_squads` |
+| A brand-new project displayed "on track" | verdict fell through to `on_track` with zero finished work | `test_a_member_with_no_finished_work_is_never_on_track` |
+| Company Brains member index showed "person · personal", no names | rollup skipped owner-name resolution | contract test's `owner_name` assertion |
+| UI on Vite 5174+ could not reach a dev backend | CORS pinned to `localhost:5173` | dev `allow_origin_regex` in `api/main.py` (any localhost port) |
+
+Contract guard: `docs/11 §1a` lists every field the UI binds per surface, and
+`test_ui_contract_shapes` asserts them against the real app — the drift class now
+fails a test instead of the product. Also this round: the founding wizard is the only
+company creation path, command-desk examples are English, and vitest 3 → 5 cleared
+`npm audit` (dev-only advisories).
+
 ## Deliberate gaps (not bugs — next session's work)
 
 1. **Alembic migrations** are not generated; dev uses `create_all`. Prod requires a revision.

@@ -1097,7 +1097,8 @@ const companyBrainsOverview = (id) => {
     const p = projectById(mid);
     return { project_id: mid, name: p?.name ?? mid,
              brains: (BRAINS_BY_ID[mid] ?? []).map((b) => ({ id: b.id, scope: b.scope,
-                                                              label: b.label, entries: b.entries })) };
+                                                              label: b.label, owner_name: b.owner_name,
+                                                              entries: b.entries })) };
   });
   const cb = (BRAINS_BY_ID[id] ?? [])[0] ?? null;
   return { company_id: id,

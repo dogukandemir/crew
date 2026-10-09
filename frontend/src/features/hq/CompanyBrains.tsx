@@ -128,7 +128,7 @@ export function CompanyBrains({ companyId }: { companyId: string }) {
                     className="rounded border border-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400"
                   >
                     {SCOPE_LABEL[b.scope] ?? b.scope}
-                    {b.label ? ` · ${b.label}` : ''} · {b.entries}
+                    {(b.owner_name || b.label) ? ` · ${b.owner_name || b.label}` : ''} · {b.entries}
                   </span>
                 ))}
                 {m.brains.length === 0 && (

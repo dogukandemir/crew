@@ -23,6 +23,10 @@ interface UiState {
   newProjectCompanyId: string | null;
   setNewProjectOpen: (open: boolean, companyId?: string | null) => void;
 
+  /** The founding wizard (ADR 0015): the ONE way a company is created. */
+  foundWizardOpen: boolean;
+  setFoundWizardOpen: (open: boolean) => void;
+
   killConfirmOpen: boolean;
   setKillConfirmOpen: (open: boolean) => void;
 
@@ -53,6 +57,9 @@ export const useUi = create<UiState>((set) => ({
   newProjectCompanyId: null,
   setNewProjectOpen: (newProjectOpen, companyId) =>
     set({ newProjectOpen, newProjectCompanyId: newProjectOpen ? companyId ?? null : null }),
+
+  foundWizardOpen: false,
+  setFoundWizardOpen: (foundWizardOpen) => set({ foundWizardOpen }),
 
   killConfirmOpen: false,
   setKillConfirmOpen: (killConfirmOpen) => set({ killConfirmOpen }),

@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useCompanies, useProjects } from '../../app/hooks';
 import { openProjectTab } from '../../stores/tabs';
+import { useUi } from '../../stores/ui';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import type { CompanyVerdictName } from '../../api/types';
@@ -23,16 +23,11 @@ export function CompaniesSection() {
   const companies = useCompanies();
   const projects = useProjects();
   const qc = useQueryClient();
-  const [name, setName] = useState('');
+  // The founding wizard is the ONE creation path (audit Ö2): this section opens it,
+  // it does not create companies behind its back with a bare name field.
+  const setFoundWizardOpen = useUi((s) => s.setFoundWizardOpen);
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['companies'] });
-  const create = useMutation({
-    mutationFn: () => api.createCompany({ name: name.trim() }),
-    onSuccess: () => {
-      setName('');
-      invalidate();
-    },
-  });
   const attach = useMutation({
     mutationFn: (p: { companyId: string; projectId: string }) =>
       api.attachProjectToCompany(p.companyId, p.projectId),
@@ -50,26 +45,15 @@ export function CompaniesSection() {
 
   const items = companies.data?.items ?? [];
   const attachable = (projects.data?.items ?? []).filter((p) => !p.company_id);
-  const error = create.error ?? attach.error ?? review.error;
+  const error = attach.error ?? review.error;
 
   return (
     <section className="mt-8">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-300">Companies</h2>
         <div className="flex items-center gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New company name"
-            className="rounded-md border border-slate-700/60 bg-slate-900/60 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={!name.trim() || create.isPending}
-            onClick={() => create.mutate()}
-          >
-            ＋ New company
+          <Button variant="primary" size="sm" onClick={() => setFoundWizardOpen(true)}>
+            ⌂ Found a company
           </Button>
         </div>
       </div>
@@ -78,9 +62,10 @@ export function CompaniesSection() {
 
       {items.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
-          None yet. A company is a headquarters that holds the portfolio: it hires a CEO, projects attach
-          to it, and a review writes one binding directive — grounded in each project&apos;s own numbers —
-          into every member&apos;s stream.
+          None yet. A company is a headquarters that holds the portfolio: it hires a CEO, projects live
+          under it, and a review writes one binding directive — grounded in each project&apos;s own
+          numbers — into every member&apos;s stream. Use <em>Found a company</em> — the wizard creates
+          the company, its first project and the first run in one go.
         </p>
       ) : (
         <ul className="mt-3 space-y-3">

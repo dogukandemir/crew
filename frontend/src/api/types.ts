@@ -283,7 +283,7 @@ export interface CompanyBrainsPage {
   members: {
     project_id: string;
     name: string;
-    brains: { id: string; scope: Brain['scope']; label?: string; entries: number }[];
+    brains: { id: string; scope: Brain['scope']; label?: string; owner_name?: string; entries: number }[];
   }[];
 }
 

@@ -156,13 +156,13 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
             <div className="rounded-lg border border-dashed border-slate-700/70 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400">
               <p className="font-medium text-slate-300">Nothing yet — the record is empty.</p>
               <p className="mt-1 text-slate-300">
-                Try: <em>durum ne?</em> · <em>@Ada, raporu hazırla</em> ·{' '}
-                <em>herkese 15 dakika mola</em> · <em>@Marcus'u görevden al, sebep: …</em> ·{' '}
-                <em>hedef: pazar planı</em>
+                Try: <em>what&apos;s the status?</em> · <em>@Orchestrator, give me a launch summary</em> ·{' '}
+                <em>take a 15 minute break, everyone</em> · <em>reassign the migration task, reason: blocked too long</em> ·{' '}
+                <em>goal: ship the beta by Friday</em>
               </p>
               <p className="mt-1 text-slate-500">
-                A plain sentence is an order; “bir fikrim var:” floats an idea to be weighed;
-                a question mark asks instead of ordering.
+                A plain sentence is an order; “I have an idea:” floats an idea to be weighed;
+                a question mark asks instead of ordering. Turkish works too.
               </p>
             </div>
           )}

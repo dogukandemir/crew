@@ -97,6 +97,13 @@ def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
                 hit = a["id"]
                 break
         if hit is None:
+            # a role word addresses whoever holds it: @Orchestrator, @Head of People…
+            for a in roster:
+                role = _norm(str(a.get("role", "")))
+                if role and (role == nt or (len(nt) >= 4 and role.startswith(nt))):
+                    hit = a["id"]
+                    break
+        if hit is None:
             if tok.isalpha():
                 unknown.append(tok)
         elif hit not in ids:

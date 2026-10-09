@@ -35,6 +35,7 @@ class Role(StrEnum):
     COO = "coo"
     HEAD = "head"
     LEAD = "lead"
+    HR = "hr"
     WORKER = "worker"
     SPECIALIST = "specialist"
     CRITIC = "critic"

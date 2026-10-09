@@ -50,6 +50,7 @@ def build_system_prompt(
     department: str | None = None,
     knowledge: float | None = None,
     tenure_days: int = 0,
+    soul: dict | None = None,
 ) -> PromptBundle:
     role_enum = Role(role) if role in {r.value for r in Role} else Role.WORKER
     template = ROLE_TEMPLATES[role_enum]
@@ -88,14 +89,20 @@ def build_system_prompt(
         f"{context_pack or '(no relevant memory)'}"
     )
 
-    sections = {
-        "identity": identity,
+    sections = {"identity": identity}
+    if soul:
+        # The person behind the role (ADR 0016). It colours HOW the work is done and
+        # written — the standing rules and the record still decide what is true.
+        from crew.domain.soul import soul_prompt_block
+
+        sections["soul"] = soul_prompt_block(soul)
+    sections.update({
         "chain_of_command": chain,
         "authority": authority,
         "method": f"{method}\n{skills_line}",
         "context": context,
         "rules": STANDING_RULES,
-    }
+    })
     system = "\n\n".join(f"## {k.replace('_', ' ').upper()}\n{v}" for k, v in sections.items())
     return PromptBundle(system=system, user="", sections=sections)
 
@@ -152,14 +159,19 @@ def build_crewai_goal(mission: str, title: str) -> str:
     return f"{mission} Deliver the assigned task: {title}."
 
 
-def build_backstory(*, role: str, department: str | None, grade: int) -> str:
+def build_backstory(*, role: str, department: str | None, grade: int,
+                    soul: dict | None = None) -> str:
     role_enum = Role(role) if role in {r.value for r in Role} else Role.WORKER
     template = ROLE_TEMPLATES[role_enum]
     grade_label = Grade(min(5, max(0, int(grade)))).label
     where = f" in the {department} department" if department else ""
-    return (
+    base = (
         f"You are a {grade_label}-grade {template.title.lower()}{where}. "
         f"{template.mission} You are measured on verified outcomes, not activity: an unverifiable "
         "claim is worse than an honest 'unverified'. Your reward record decides your grade, your "
         "model and your budget — solid, cited, complete work pays; hand-waving costs you."
     )
+    if soul and soul.get("voice"):
+        # ADR 0016: the person's voice, in the one line CrewAI reads.
+        base += f" Your voice: {soul['voice']}."
+    return base

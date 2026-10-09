@@ -40,6 +40,11 @@ the **reward system**, the **memory hierarchy**, **security governance** and **o
   idea, or a question*. The orchestrator parses it, executes it against the real services
   (assign, reassign, fire, breaks, goals, budgets, hires), and every action lands on the
   record, attributed end to end. No god-hands, no whispers.
+- **People, not templates.** Every hire gets a **soul** — a human name, personality, values,
+  a vision and a voice that ride the system prompt — and growth hires are interviewed by a
+  **Head of People**: candidates are scored against the real gap, the real budget and the
+  floor they would join; misfits are rejected with cited reasons, at most two before one
+  always lands (ADR 0016). Realism, bounded.
 - **Observability as a first-class feature.** Every thought, tool call, token and dollar is
   an append-only event. Watch live by project, department or agent; replay history like a
   video; verify the hash-chained audit trail.

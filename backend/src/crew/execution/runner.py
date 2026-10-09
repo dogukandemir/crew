@@ -38,6 +38,8 @@ class AgentSnapshot:
     reports: list[str] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
     decision_style: str = "analytical"
+    # Soul (ADR 0016): rides the system prompt's SOUL section and the backstory voice.
+    soul: dict = field(default_factory=dict)
 
     @classmethod
     def from_agent(cls, a: Any, *, manager_name: str | None = None,
@@ -48,6 +50,7 @@ class AgentSnapshot:
             token_cap_per_step=a.token_cap_per_step, tools=list(a.tools or []),
             department_id=a.department_id, department_name=department_name,
             squad_id=a.squad_id, manager_name=manager_name, skills=skills or [],
+            soul=dict(a.soul or {}),
         )
 
 
@@ -140,7 +143,8 @@ class CrewAICrewRunner:
         crew_agent = Agent(
             role=f"{agent.name} — {agent.role}",
             goal=build_crewai_goal(agent.mission, req.task.title),
-            backstory=build_backstory(role=agent.role, department=agent.department_name, grade=agent.grade),
+            backstory=build_backstory(role=agent.role, department=agent.department_name,
+                                      grade=agent.grade, soul=agent.soul or None),
             llm=llm,
             tools=tools,
             max_iter=max(3, min(12, steps_budget(req.task.effort))),

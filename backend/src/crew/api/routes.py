@@ -303,6 +303,23 @@ def _tenure_days(created: datetime | None) -> int:
     return max(0, (datetime.now(UTC) - created).days)
 
 
+def _soul_md(a: Agent) -> str:
+    """The drawer's soul.md (ADR 0016) — rendered from the stored soul, never authored."""
+    if not a.soul:
+        return ""
+    from crew.domain import soul as soul_mod
+
+    title = a.role
+    try:
+        from crew.domain.catalog import ROLE_TEMPLATES
+        from crew.domain.enums import Role as _Role
+
+        title = ROLE_TEMPLATES[_Role(a.role)].title
+    except (ValueError, KeyError):
+        pass
+    return soul_mod.render_soul_md(a.soul, role_title=title)
+
+
 async def agent_dict(a: Agent) -> dict:
     async with session_scope() as s:
         skills = (await s.execute(
@@ -312,6 +329,8 @@ async def agent_dict(a: Agent) -> dict:
         "id": a.id, "project_id": a.project_id, "name": a.name, "role": a.role,
         "grade": int(a.grade), "grade_label": Grade(min(5, max(0, int(a.grade)))).label,
         "state": a.state, "mission": a.mission, "decision_style": a.decision_style,
+        # Soul (ADR 0016): the person behind the role, with the one-page soul.md.
+        "soul": a.soul or {}, "soul_md": _soul_md(a),
         "autonomy": a.autonomy, "model_tier": a.model_tier,
         "model_id": a.model_id or router.model_for_tier(__import__("crew.domain.enums", fromlist=["ModelTier"]).ModelTier(a.model_tier)),
         "department_id": a.department_id, "squad_id": a.squad_id, "manager_id": a.manager_id,

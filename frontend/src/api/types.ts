@@ -464,6 +464,21 @@ export interface OrgTree {
 export type AgentState = 'idle' | 'busy' | 'probation' | 'suspended' | 'archived';
 export type Autonomy = 'supervised' | 'bounded' | 'autonomous';
 
+/** Soul (ADR 0016): the person behind the role — composed at hire, never authored. */
+export interface AgentSoul {
+  name?: string;
+  first?: string;
+  origin?: string;
+  traits?: string[];
+  values?: string[];
+  vision?: string;
+  voice?: string;
+  quirks?: string[];
+  background?: string;
+  /** `deterministic` or `model:<id>` — which one wrote it is part of the record. */
+  source?: string;
+}
+
 export interface Agent {
   id: string;
   project_id: string;
@@ -477,6 +492,9 @@ export interface Agent {
   mission?: string;
   responsibilities?: string[];
   decision_style?: string;
+  /** Soul (ADR 0016) + its rendered one-page markdown. */
+  soul?: AgentSoul;
+  soul_md?: string;
   autonomy?: Autonomy;
   model_tier?: string;
   model_id?: string;

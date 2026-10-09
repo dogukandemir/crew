@@ -250,9 +250,24 @@ const A = {
     company_knowledge: 0.05, tenure_days: 0,
     skills: [{ skill_id: 'engineering-management', proficiency: 0.8, evidence_count: 1 }, { skill_id: 'release-planning', proficiency: 0.75, evidence_count: 1 }],
   }),
+  // HR (ADR 0016): seated before the first growth wave; interviews are her paper trail.
+  a11: mk('a11', 'Greta Keller', 'Head of People', 4, 'idle', 0.71, 'd5', {
+    mission: 'Hiring is the product: every candidate interviewed against the gap, the budget and this floor.',
+    manager_id: 'a0', spend_micros: 30_000,
+    company_knowledge: 0.32, tenure_days: 18,
+    model_tier: 'reasoning',
+    skills: [{ skill_id: 'interviewing', proficiency: 0.82, evidence_count: 5 }, { skill_id: 'team-composition', proficiency: 0.76, evidence_count: 4 }],
+  }),
+  // Landed through an HR opening with friction: two walked, the third stayed.
+  a12: mk('a12', 'Asha Kapoor', 'Platform Specialist', 1, 'busy', 0.58, 'd4', {
+    mission: 'Platform capacity for the cutover window: runners, pipelines, and the dry runs.',
+    manager_id: 'a7', spend_micros: 40_000,
+    company_knowledge: 0.08, tenure_days: 1,
+    skills: [{ skill_id: 'platform-engineering', proficiency: 0.55, evidence_count: 1 }, { skill_id: 'kubernetes', proficiency: 0.5, evidence_count: 1 }],
+  }),
 };
 
-const DEPT_NAMES = { d1: 'Product', d2: 'Development', d3: 'Design', d4: 'Platform' };
+const DEPT_NAMES = { d1: 'Product', d2: 'Development', d3: 'Design', d4: 'Platform', d5: 'People' };
 const squadNode = (children) => ({
   id: 's1', kind: 'squad', name: 'Launch squad', state: 'active', spend_micros: 900_000,
   open_tasks: 1, department_id: 'd1', children,
@@ -271,10 +286,13 @@ const orgNow = () => {
   const children = [A.a0, deptNode('d1', [squadNode([A.a1, A.a2])], { mission: 'discovery, specs, priorities' })];
   children.push(deptNode('d2', t >= BEAT.hire ? [A.a3, A.a4, A.a6] : [A.a3, A.a4], { mission: 'ship the code, keep main green' }));
   children.push(deptNode('d3', [A.a5], { mission: 'tokens, flows, the human edge' }));
+  // HR sits on the floor from the first growth wave on (ADR 0016).
+  children.push(deptNode('d5', [A.a11], { mission: 'hiring, interviews, keeping the floor honest' }));
   if (t >= BEAT.dept) {
     const platform = [A.a7];
     if (t >= BEAT.second) platform.push(A.a8);
     if (t >= BEAT.third) platform.push(A.a9);
+    if (t >= BEAT.post) platform.push(A.a12);
     children.push(deptNode('d4', platform, { mission: 'runners, pipelines, the 3am pager' }));
   }
   // t+78: Development grows a manager — the person the promotions report to.
@@ -484,6 +502,35 @@ const buildEvents = () => {
     );
   }
 
+  // HR's paper trail (ADR 0016): one opening with friction — two walked, the third
+  // landed. Rejects cite real numbers; the interview note is on the record.
+  const hrStory = [];
+  if (t >= BEAT.post) {
+    const label = 'worker1:Platform:r2';
+    hrStory.push(
+      ['a11', 'hiring.role.opened', 'opening: Platform Specialist', 52,
+        { role: 'worker', skills: ['platform-engineering', 'kubernetes'], headroom_micros: 1_200_000, label }],
+      ['a11', 'hiring.candidate.proposed', 'candidate: Lena Vogel', 51,
+        { candidate: 'Lena Vogel', role: 'worker', skills: ['documentation'], grade: 1, label }],
+      ['a11', 'hiring.candidate.rejected', 'rejected: Lena Vogel', 50,
+        { candidate: 'Lena Vogel', dimension: 'skill_shortfall',
+          reason: 'covers 0% of the gap — kubernetes, platform-engineering goes uncovered', label }],
+      ['a11', 'hiring.candidate.proposed', 'candidate: Tomás Ríos', 49,
+        { candidate: 'Tomás Ríos', role: 'worker', skills: ['platform-engineering', 'kubernetes'], grade: 3, label }],
+      ['a11', 'hiring.candidate.rejected', 'rejected: Tomás Ríos', 48,
+        { candidate: 'Tomás Ríos', dimension: 'grade_overreach',
+          reason: 'expects 1,550,000µ$ against 1,200,000µ$ remaining', label }],
+      ['a11', 'hiring.candidate.proposed', 'candidate: Asha Kapoor', 47,
+        { candidate: 'Asha Kapoor', role: 'worker', skills: ['platform-engineering', 'kubernetes'], grade: 1, label }],
+      ['a11', 'hiring.candidate.interviewed', 'interviewed: Asha Kapoor', 46,
+        { candidate: 'Asha Kapoor', method: 'deterministic',
+          scores: { coverage: 1.0, budget_fit: true, complementarity: 1.0, vision: 1.0, total: 1.0, passed: true },
+          note: 'Pass. Covers 100% of the platform gap at 250,000µ$; adds coverage the floor lacks.', label }],
+      ['a12', 'org.agent.hired', 'hired Platform Specialist (grade Junior)', 45,
+        { agent_id: 'a12', role: 'worker', grade: 1, name: 'Asha Kapoor', rationale: 'worker 1 for platform — HR: Pass. Covers 100% of the platform gap.' }],
+    );
+  }
+
   return [...(() => {
     // Two raw events only make sense while the migration is stuck: the approval
     // request and the escalation itself. Once the council has decided they are
@@ -496,7 +543,7 @@ const buildEvents = () => {
         ? [e[0], e[1], e[2], 100 + (t2 - BEAT.decide), ...e.slice(4)]
         : e,
     );
-  })(), ...hires, ...whispers, ...council].map((entry, i) => {
+  })(), ...hires, ...whispers, ...hrStory, ...council].map((entry, i) => {
     const [agent_id, type, title, secAgo, payload, summary] = entry;
     return {
     id: `e${i}`,
@@ -504,7 +551,7 @@ const buildEvents = () => {
     seq: i + 1,
     ts: ago(secAgo),
     type,
-    severity: type === 'task.escalated' ? 'warning' : 'info',
+    severity: type === 'task.escalated' ? 'warning' : type.endsWith('.rejected') ? 'notice' : 'info',
     title,
     summary: summary ?? null,
     payload: payload ?? { i, title, agent: agent_id },
@@ -592,6 +639,52 @@ const ALL_AGENTS = () => {
   const out = agentsNow();
   for (const a of [...P2_AGENTS, ...P3_AGENTS]) out[a.id] = a;
   return out;
+};
+
+// ── Souls (ADR 0016): the mock mirrors the shape — deterministic per name ────────
+const SOUL_TRAITS = [
+  'methodical — keeps a scratchpad of dead ends', 'fast to prototype, slow to claim',
+  'decisive under ambiguity', 'notices the detail everyone else skipped',
+  'keeps promises small — and keeps them', 'reads the footnotes before the headline',
+];
+const SOUL_VALUES = [
+  'evidence over opinion', 'clarity is kindness', 'the record is the truth — write it down',
+  'cite it or drop it', 'small sharp teams over big soft ones',
+];
+const SOUL_VISIONS = [
+  'Wants to be the person whose work never needs an apology.',
+  'Aims to make correctness the default, not a heroic effort.',
+  'Wants an org where every promise is traceable and every ‘done’ is real.',
+  'Believes a calm team with a written plan beats a heroic one.',
+];
+const SOUL_VOICES = [
+  'plain and precise', 'short, concrete sentences', 'leads with the finding, not the story',
+  'dry humour, zero fluff',
+];
+const soulHash = (s) => {
+  let h = 0;
+  for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return Math.abs(h);
+};
+const soulOf = (a) => {
+  const h = soulHash(a.name || a.id);
+  const pick = (arr, k) => arr[(h >> k) % arr.length];
+  return {
+    name: a.name,
+    first: String(a.name || '').split(' ')[0],
+    traits: [pick(SOUL_TRAITS, 0), pick(SOUL_TRAITS, 3), pick(SOUL_TRAITS, 7)],
+    values: [pick(SOUL_VALUES, 0), pick(SOUL_VALUES, 4)],
+    vision: pick(SOUL_VISIONS, 2),
+    voice: pick(SOUL_VOICES, 5),
+    background: 'Came up through teams that lived on postmortems.',
+    source: 'deterministic',
+  };
+};
+const soulMd = (a) => {
+  const s = soulOf(a);
+  return `# ${s.name} — ${a.role}\n\n> ${s.vision}\n\n## Personality\n` +
+    s.traits.map((t) => `- ${t}`).join('\n') + '\n\n## Values\n' +
+    s.values.map((v) => `- ${v}`).join('\n') + `\n\n## Voice\n- ${s.voice}\n`;
 };
 
 const staticEvents = (project_id, rows) => rows.map((r, i) => {
@@ -731,7 +824,8 @@ const MEMBERS = [
     teams: [{ id: 'd1', name: 'Product', head_name: 'Anika Rao', agents: 2 },
             { id: 'd2', name: 'Development', head_name: 'Elena Rossi', agents: 4 },
             { id: 'd3', name: 'Design', head_name: 'Giulia Romano', agents: 1 },
-            { id: 'd4', name: 'Platform', head_name: 'Zeynep Arslan', agents: 3 }] },
+            { id: 'd4', name: 'Platform', head_name: 'Zeynep Arslan', agents: 3 },
+            { id: 'd5', name: 'People', head_name: 'Greta Keller', agents: 1 }] },
   { id: 'p2', name: 'Nimbus — mobile app', status: 'active', verdict: 'at_risk', spend_ratio: 0.84,
     directive: 'quality alarm: 2 of the last 5 releases rolled back — pair an SRE with mobile on the crash-rate regression',
     completed: 2, failed: 3, open_tasks: 4,
@@ -939,7 +1033,7 @@ const routes = [
   [/^\/api\/projects\/([^/]+)\/egress$/, () => ({ allow: ['api.deepseek.com', 'registry.npmjs.org', 'docs.python.org', 'status.northwind.dev'], blocked: [] })],
   [/^\/api\/projects\/([^/]+)\/agents\/([^/]+)\/context$/, (m) => CONTEXT(m[2])],
   [/^\/api\/agents\/([^/]+)\/rewards$/, (m) => paged(REWARDS[m[1]] ?? [])],
-  [/^\/api\/agents\/([^/]+)$/, (m) => ALL_AGENTS()[m[1]] ?? null],
+  [/^\/api\/agents\/([^/]+)$/, (m) => { const a = ALL_AGENTS()[m[1]]; return a ? { ...a, soul: soulOf(a), soul_md: soulMd(a) } : null; }],
   [/^\/api\/tasks\/([^/]+)\/artifacts$/, (m) => paged(ARTIFACTS[m[1]] ?? [])],
   [/^\/api\/tasks\/([^/]+)$/, (m) => {
     const t = [...tasksNow(), ...P2_TASKS(), ...P3_TASKS()].find((x) => x.id === m[1]);

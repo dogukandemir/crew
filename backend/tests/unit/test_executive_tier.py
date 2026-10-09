@@ -42,8 +42,13 @@ async def test_two_departments_of_a_function_earn_one_chief(bound_loop, project)
         p = await s.get(Project, project["id"])
 
     created = await org._staff_function_chiefs(project=p, run_id="r-1", orchestrator_id=None)
-    assert len(created) == 1, "exactly one function reached two departments"
-    chief = created[0]
+    # growth hires seat the Head of People first (ADR 0016) — the chief is the story here
+    hr = [c for c in created if c.get("role") == Role.HR.value]
+    assert len(hr) == 1, "the first growth wave seats a Head of People"
+    assert hr[0]["name"] and " " in hr[0]["name"], "and it is a person, not a 'Head #1'"
+    chiefs = [c for c in created if c.get("role") in {r.value for r in (Role.CTO, Role.CMO, Role.CPO, Role.COO)}]
+    assert len(chiefs) == 1, "exactly one function reached two departments"
+    chief = chiefs[0]
     assert chief["role"] == Role.CTO.value and chief["grade"] == Grade.CHIEF
 
     async with session_scope() as s:

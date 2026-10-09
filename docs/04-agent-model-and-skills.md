@@ -8,6 +8,8 @@ the HiringService composes a `RoleSpec` and the PromptBuilder renders it.
 ```
 Agent
 ├─ identity      id, name (auto, unique, human-readable), role, grade, avatar seed
+├─ soul          the person behind the role (ADR 0016): traits[], values[], vision,
+│                voice, quirks[], background, source (deterministic | model:<id>)
 ├─ org           project_id, department_id, squad_id?, manager_id, reports_to
 ├─ profile       mission (1 sentence), responsibilities[], expertise[], tone,
 │                decision_style (analytical | pragmatic | cautious | creative)
@@ -26,16 +28,20 @@ Agent
 System prompt sections, in order (kept under a hard token budget per tier):
 
 1. **Identity** — name, role, grade, one-line mission.
-2. **Chain of command** — who I report to, who reports to me, when to escalate, the exact
+2. **Soul** — the person (ADR 0016): personality traits, values, vision, voice and
+   background, with the honesty guard attached: *it shapes HOW work is done and written,
+   never what counts as true*. Present only when the agent has a soul (`prompt_version`
+   2); absent for pre-soul hires.
+3. **Chain of command** — who I report to, who reports to me, when to escalate, the exact
    escalation contract (what to include: what I tried, evidence, what I need).
-3. **Authority** — what I may decide alone; what needs approval; where the policy engine will
+4. **Authority** — what I may decide alone; what needs approval; where the policy engine will
    physically stop me (so the agent does not waste turns attempting denied actions).
-4. **Method** — role-specific operating procedure (e.g. analyst: source before claim; critic:
+5. **Method** — role-specific operating procedure (e.g. analyst: source before claim; critic:
    attack the strongest version; decider: weigh evidence, preserve dissent).
-5. **Deliverable contract** — the exact output schema required for the task.
-6. **Context pack** — retrieved brain entries, labelled with provenance and trust level
+6. **Deliverable contract** — the exact output schema required for the task.
+7. **Context pack** — retrieved brain entries, labelled with provenance and trust level
    (`trusted` = internal, `untrusted` = from the internet).
-7. **Standing rules** — untrusted-content handling, no fabricated evidence, cite sources,
+8. **Standing rules** — untrusted-content handling, no fabricated evidence, cite sources,
    report blockers early rather than guessing.
 
 The prompt is versioned (`prompt_version` on the agent) and stored with the run so the replay

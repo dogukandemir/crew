@@ -133,6 +133,10 @@ class Agent(Base):
     mission: Mapped[str] = mapped_column(Text, default="")
     responsibilities: Mapped[list] = mapped_column(JSON, default=list)
     decision_style: Mapped[str] = mapped_column(String(40), default="analytical")
+    # Soul (ADR 0016): the person behind the role — name, traits, values, vision,
+    # voice, quirks, background. Composed at hire (domain/soul.py), rides the system
+    # prompt as the SOUL section. JSON, nullable-default: pre-soul hires have {}.
+    soul: Mapped[dict] = mapped_column(JSON, default=dict)
     autonomy: Mapped[str] = mapped_column(String(20), default="supervised")
     model_tier: Mapped[str] = mapped_column(String(20), default="fast")
     model_id: Mapped[str] = mapped_column(String(120), default="")

@@ -59,8 +59,14 @@ decision_style, autonomy(supervised|bounded|autonomous), model_tier, model_id,
 token_cap_per_step, spend_cap_per_run_micros, spend_cap_per_day_micros, spend_today_micros,
 score(float), score_confidence(float), evidence_count, success_rate, tasks_done, tasks_failed,
 penalty_count, company_knowledge(float 0..1 — ADR 0014: grows with verified work),
+soul(json — ADR 0016: the person: traits, values, vision, voice, quirks, background,
+source(deterministic|model:<id>)),
 prompt_version, brain_id, tools(json), approval_rules(json), created_at,
 archived_at, last_active_at`
+
+Hiring candidates (ADR 0016) are **events, not tables**: the `hiring.*` payloads carry who
+applied, their interview scores, and why they walked — the record keeps them; the roster
+never does.
 
 ### skills / agent_skills
 `skills: id, label, category, description, typical_tools(json), verification_hints(json),

@@ -27,6 +27,7 @@ from crew.core.models import (
 from crew.core.reward import KNOWLEDGE_ON_HIRE, RewardEngine
 from crew.core.security import audit, budget
 from crew.core.settings import settings
+from crew.domain import soul as soul_mod
 from crew.domain.catalog import ROLE_TEMPLATES, SKILLS_BY_ID, RoleSpec, skills_for_keywords
 from crew.domain.enums import BrainKind, BrainScope, Capability, Effort, Grade, ModelTier, Role, TaskState
 from crew.execution.models import router
@@ -316,7 +317,8 @@ async def create_squad(*, project_id: str, department_id: str, name: str, missio
 
 async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | None = None,
                      squad_id: str | None = None, manager_id: str | None = None,
-                     rationale: str = "", actor: str = "system") -> dict:
+                     rationale: str = "", actor: str = "system",
+                     soul: dict | None = None, name: str | None = None) -> dict:
     # hiring respects the budget (docs/17 batch 2): a project at its ceiling must not be
     # staffed into the ground by a planner loop. estimate_agent_cost finally guards a decision.
     est = estimate_agent_cost(spec.role)
@@ -353,16 +355,37 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
                                 .order_by(desc(Agent.archived_at)).limit(1))
         if recent and not rationale:
             raise ValueError("hire refused: identical role was laid off recently without a new rationale")
-
-        grade = spec.grade
-        if spec.role in (Role.WORKER, Role.ANALYST) and grade > Grade.JUNIOR:
-            grade = Grade.JUNIOR           # cheap by default; promotion is earned (docs/02 §5)
+    # The person (ADR 0016): every hire gets a soul. Composed deterministically from
+    # the role's banks; deepened by the model only when a provider answers (the source
+    # is recorded on the soul — never silently mixed). HR candidates arrive pre-named.
+    grade_pre = spec.grade
+    if spec.role in (Role.WORKER, Role.ANALYST) and grade_pre > Grade.JUNIOR:
+        grade_pre = Grade.JUNIOR       # cheap by default; promotion is earned (docs/02 §5)
+    if soul is None:
+        async with session_scope() as s0:
+            idx = int(await s0.scalar(select(func.count(Agent.id)).where(
+                Agent.project_id == project_id)) or 0) + 1
+            used = set((await s0.scalars(select(Agent.name).where(
+                Agent.project_id == project_id))).all())
+        for attempt in range(5):
+            candidate_soul = soul_mod.compose_soul(
+                role=spec.role.value, grade=int(grade_pre),
+                seed=f"{project_id}:{spec.role.value}:{idx + attempt}")
+            if candidate_soul["name"] not in used:
+                break
+        soul = await _polish_soul(candidate_soul) or candidate_soul
+    chosen_name = (name or str(soul.get("name") or "")).strip()
+    if not chosen_name:
+        raise ValueError("hire needs a name — the soul carried none and none was given")
+    grade = grade_pre
+    async with session_scope() as s:
         a = Agent(
             project_id=project_id, department_id=department_id, squad_id=squad_id, manager_id=manager_id,
-            name=await _unique_name(s, project_id, spec.title, spec.role),
+            name=chosen_name,
             role=spec.role.value, grade=int(grade), mission=spec.mission,
             responsibilities=spec.skills[:8], tools=sorted({c.value for c in spec.capabilities}),
             hire_rationale=rationale, state="idle", company_knowledge=KNOWLEDGE_ON_HIRE,
+            soul=soul, prompt_version=2,
         )
         RewardEngine.apply_grade_limits_pure(a)
         s.add(a)
@@ -381,11 +404,11 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
                   agent_id=aid, severity="notice", title=f"hired {spec.title} (grade {Grade(int(grade)).label})",
                   summary=spec.mission, payload={"agent_id": aid, "role": spec.role.value,
                                                  "grade": int(grade), "skills": spec.skills,
-                                                 "rationale": rationale},
+                                                 "name": chosen_name, "rationale": rationale},
                   actor=actor)
     await audit(actor_kind="system", actor_id=actor, action="agent.hired", resource_kind="agent",
                 resource_id=aid, reason=rationale[:200])
-    return {"id": aid, "name": spec.title, "role": spec.role.value, "grade": int(grade),
+    return {"id": aid, "name": chosen_name, "role": spec.role.value, "grade": int(grade),
             "department_id": department_id, "squad_id": squad_id, "brain_id": b, "skills": spec.skills}
 
 
@@ -403,10 +426,38 @@ async def _ensure_agent_brain(s, project_id: str, agent_id: str) -> str:
     return b.id
 
 
-async def _unique_name(s, project_id: str, title: str, role: Role) -> str:
-    base = title if role not in (Role.WORKER,) else "Specialist"
-    n = int(await s.scalar(select(func.count(Agent.id)).where(Agent.project_id == project_id))) + 1
-    return f"{base} #{n}"
+async def _polish_soul(soul: dict) -> dict | None:
+    """Best effort (ADR 0016): the model may deepen the wording — never invent facts.
+
+    Returns None when no provider answers (offline, no key) so the deterministic soul
+    stands untouched. Only `background` and `vision` may change; the source is stamped.
+    """
+    from crew.control.council import _llm_json
+
+    system = (
+        "You are the HR system of an AI company. Deepen this new hire's soul: rewrite "
+        "'background' (one sentence) and 'vision' (one sentence) in the same tone as the "
+        "rest. Keep every other field verbatim; invent no employers, schools or facts. "
+        'JSON only: {"background": "...", "vision": "..."}'
+    )
+    payload = {k: soul.get(k) for k in ("name", "traits", "values", "vision", "voice",
+                                        "background")}
+    try:
+        raw = _llm_json(ModelTier.FAST, system, json.dumps(payload, ensure_ascii=False))
+    except Exception as e:  # a hire never fails on polish
+        log.info("soul polish skipped: %s", e)
+        return None
+    if not isinstance(raw, dict):
+        return None
+    out = dict(soul)
+    for key in ("background", "vision"):
+        val = str(raw.get(key) or "").strip()
+        if 10 <= len(val) <= 300:
+            out[key] = val
+    if out == soul:
+        return None
+    out["source"] = f"model:{router.model_for_tier(ModelTier.FAST)}"
+    return out
 
 
 async def layoff_agent(*, project_id: str, agent_id: str, reason: str, actor: str = "system") -> None:
@@ -755,6 +806,8 @@ async def _staff_function_chiefs(*, project: Project, run_id: str,
     leaves the function headless: the departments keep reporting to the orchestrator,
     a legal chain, just a flatter one.
     """
+    from crew.control import hiring
+
     created: list[dict] = []
     async with session_scope() as s:
         depts = (await s.scalars(select(Department).where(Department.project_id == project.id,
@@ -775,14 +828,20 @@ async def _staff_function_chiefs(*, project: Project, run_id: str,
         if any(a.role == role.value for a in agents):
             continue
         title = FUNCTION_TITLE[function]
+        hr_created = await hiring.ensure_hr(
+            project=project, run_id=run_id, orchestrator_id=orchestrator_id,
+            actor=f"agent:{orchestrator_id}" if orchestrator_id else "system")
+        if hr_created:
+            created.append(hr_created)
         try:
-            chief = await hire_agent(
-                project_id=project.id,
+            chief = await hiring.hr_hire(
+                project=project,
                 spec=RoleSpec.from_template(role, mission=f"Chief of the {title} function",
                                             rationale=f"the function reached {len(members)} departments"),
-                manager_id=orchestrator_id,
+                run_id=run_id, manager_id=orchestrator_id,
                 rationale=f"the {title} function now spans {len(members)} departments; someone must chair it",
                 actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+                category=function, label=f"chief:{function}:{run_id[:6]}",
             )
         except ValueError as e:
             log.info("function chief refused: %s", e)
@@ -805,7 +864,14 @@ async def _staff_function_chiefs(*, project: Project, run_id: str,
 
 async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id: str,
                      orchestrator_id: str | None = None, per_department_budget_usd: float = 1.5) -> list[dict]:
-    """Turn capability gaps into departments/agents (docs/02 §5). Cheap by default."""
+    """Turn capability gaps into departments/agents (docs/02 §5). Cheap by default.
+
+    Growth hires go through HR (ADR 0016): the Head of People is seated before the
+    first wave that actually hires, and every opening is interviewed — rejections are
+    bounded (at most two) and always grounded in the rubric's real numbers.
+    """
+    from crew.control import hiring
+
     created: list[dict] = []
     by_category: dict[str, list[str]] = {}
     for sid in gaps:
@@ -828,6 +894,13 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
                           payload={"scope_kind": "org", "scope_id": project.id,
                                    "needed_micros": plan_cost, "available_micros": headroom})
             continue
+        # Seat the Head of People before the first hiring wave (ADR 0016). The
+        # bootstrap hire is direct — the first HR head cannot interview themselves.
+        hr_created = await hiring.ensure_hr(
+            project=project, run_id=run_id, orchestrator_id=orchestrator_id,
+            actor=f"agent:{orchestrator_id}" if orchestrator_id else "system")
+        if hr_created:
+            created.append(hr_created)
         dept_name = CATEGORY_TO_DEPARTMENT.get(category, "Operations")
         dept = await department_for_category(project.id, category)
         if dept is None:
@@ -849,12 +922,13 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
             # a head reports to its function's chief when one exists, else to the orchestrator
             chief_id = (await _function_chief_id(project.id, category)) or orchestrator_id
             try:
-                head = await hire_agent(
-                    project_id=project.id,
+                head = await hiring.hr_hire(
+                    project=project,
                     spec=RoleSpec.from_template(Role.HEAD, mission=f"Head of {dept_name}", rationale=f"new department for {skill_ids}"),
-                    department_id=dept_id, manager_id=chief_id,
+                    run_id=run_id, department_id=dept_id, manager_id=chief_id,
                     rationale=f"department {dept_name} needs a head to staff {', '.join(skill_ids)}",
                     actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+                    category=category, label=f"head:{dept_name}:{run_id[:6]}",
                 )
             except ValueError as e:
                 log.info("head hire refused: %s", e)
@@ -877,13 +951,14 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
         )
         created.append({"kind": "squad", **squad})
         try:
-            lead = await hire_agent(
-                project_id=project.id,
+            lead = await hiring.hr_hire(
+                project=project,
                 spec=RoleSpec.from_template(Role.LEAD, skills=skill_ids, mission=f"Lead the {dept_name} squad",
                                             rationale=f"sequencing and integration for {skill_ids}"),
-                department_id=dept_id, squad_id=squad["id"],
+                run_id=run_id, department_id=dept_id, squad_id=squad["id"],
                 manager_id=head_id, rationale=f"a squad of {len(skill_ids)} skills needs a lead",
                 actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+                category=category, label=f"lead:{dept_name}:{run_id[:6]}",
             )
         except ValueError as e:
             log.info("lead hire refused: %s", e)
@@ -911,10 +986,13 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
                 rationale=f"capacity for {len(skill_ids)} skills in {dept_name}",
             )
             try:
-                w = await hire_agent(project_id=project.id, spec=spec, department_id=dept_id,
-                                     squad_id=squad["id"], manager_id=lead["id"],
-                                     rationale=f"worker {i + 1} for {category}",
-                                     actor=f"agent:{orchestrator_id}" if orchestrator_id else "system")
+                w = await hiring.hr_hire(project=project, spec=spec, run_id=run_id,
+                                         department_id=dept_id, squad_id=squad["id"],
+                                         manager_id=lead["id"],
+                                         rationale=f"worker {i + 1} for {category}",
+                                         actor=f"agent:{orchestrator_id}" if orchestrator_id else "system",
+                                         category=category,
+                                         label=f"worker{i + 1}:{dept_name}:{run_id[:6]}")
                 created.append({"kind": "agent", **w})
             except ValueError as e:
                 log.info("hire refused: %s", e)

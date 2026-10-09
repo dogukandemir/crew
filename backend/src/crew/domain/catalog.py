@@ -67,6 +67,7 @@ MIN_TIER_FOR_ROLE: dict[Role, ModelTier] = {
     Role.CRITIC: ModelTier.REASONING,
     Role.ARCHITECT: ModelTier.REASONING,
     Role.HEAD: ModelTier.REASONING,
+    Role.HR: ModelTier.REASONING,
     Role.SPECIALIST: ModelTier.REASONING,
 }
 
@@ -195,6 +196,17 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         "blockers upward immediately rather than working around them.",
         _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capability.COUNCIL_CONVENE,
                   Capability.BUDGET_REQUEST, Capability.NET_SEARCH, Capability.NET_FETCH),
+    ),
+    Role.HR: _t(
+        Role.HR, "Head of People",
+        "Own hiring: interview every candidate against the real gap, the real budget and "
+        "the team they would join — reject the misfits, keep the record honest.",
+        Grade.SENIOR, ("interviewing", "talent-assessment", "team-composition", "hiring-policy"),
+        "Interview before you hire: name the gap, test the candidate against it, against the "
+        "budget, and against the team already on the floor. A rejection is a service when it "
+        "is grounded — cite the dimension that failed. Never hire to fill a seat; hire to "
+        "close a gap.",
+        _COMMS + (Capability.ORG_HIRE, Capability.BUDGET_REQUEST),
     ),
     Role.LEAD: _t(
         Role.LEAD, "Squad Lead",

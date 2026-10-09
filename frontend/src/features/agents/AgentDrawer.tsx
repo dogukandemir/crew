@@ -109,6 +109,45 @@ export function AgentDrawer({
               )}
             </section>
 
+            {agent.data.soul && Object.keys(agent.data.soul).length > 0 && (
+              <section className="rounded-md border border-slate-700/60 bg-slate-900/50 p-3">
+                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Soul
+                </h4>
+                {agent.data.soul.vision && (
+                  <p className="text-xs italic text-slate-300">“{agent.data.soul.vision}”</p>
+                )}
+                {(agent.data.soul.traits ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(agent.data.soul.traits ?? []).map((t) => (
+                      <Badge key={t} tone="neutral">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <KeyValue
+                  className="mt-2"
+                  pairs={[
+                    ['values', (agent.data.soul.values ?? []).join(' · ') || '—'],
+                    ['voice', agent.data.soul.voice ?? '—'],
+                    ['background', agent.data.soul.background ?? '—'],
+                  ]}
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  soul {agent.data.soul.source ?? 'deterministic'}
+                </p>
+                {agent.data.soul_md && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[11px] text-slate-500">soul.md</summary>
+                    <pre className="mt-1 whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-slate-400">
+                      {agent.data.soul_md}
+                    </pre>
+                  </details>
+                )}
+              </section>
+            )}
+
             <section>
               <div className="mb-1 flex items-center justify-between">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">

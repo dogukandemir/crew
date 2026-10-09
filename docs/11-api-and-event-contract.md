@@ -42,6 +42,7 @@ quiet.
 | Office floor, Org chart, Agents roster | `/api/projects/{id}/org` | `root` — a tree of `{kind: project\|department\|squad\|agent, id, name, children[]}`, every node carrying `spend_micros` (usd on agents too) |
 | Org node drawers | `/api/projects/{id}/org` | agent nodes: `role`, `grade`, `grade_label`, `state`, `score`, `success_rate`, `open_tasks`; dept nodes: `mission`, `head_agent_id`, `budget_envelope_micros`, `open_tasks` |
 | Company Brains member index | `/api/companies/{id}/brains` | per-brain `owner_name` (a human name, not an id) |
+| Agent drawer — Soul card | `/api/agents/{id}` | `soul` + `soul_md` (the rendered one-page profile; empty object/string for pre-ADR-0016 hires) |
 
 The flat keys (`project`, `orchestrator`, `departments`, `unassigned`) ride along
 additively for pre-tree readers; `nodes` is the flat index of `root`.

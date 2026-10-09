@@ -201,6 +201,12 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "decision.recorded": ("decision_id", "chosen_option"),
     "policy.denied": ("capability",),
     "policy.approval.requested": ("capability",),
+    # HR (ADR 0016): every growth opening is a small, bounded story —
+    # an opening, its candidates, their interviews, and who walked away.
+    "hiring.role.opened": ("role", "skills", "headroom_micros"),
+    "hiring.candidate.proposed": ("candidate", "role"),
+    "hiring.candidate.interviewed": ("candidate", "scores", "method"),
+    "hiring.candidate.rejected": ("candidate", "reason"),
     "policy.approval.used": ("capability",),
     "budget.exceeded": ("scope_kind", "scope_id"),
     "security.injection.detected": ("where",),

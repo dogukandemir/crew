@@ -136,6 +136,7 @@ text. Prompts express the *intent*; the policy engine expresses the *law*.
 | `cmo` | Executive: the market function (research, business) | Chief | reasoning |
 | `cpo` | Executive: the product function (design, content, media) | Chief | reasoning |
 | `coo` | Executive: the operations function (org, meta) | Chief | reasoning |
+| `hr` | People manager: owns hiring — interviews every candidate against the gap, the budget and the floor (ADR 0016) | Senior | reasoning |
 | `head` | Department manager: staffing, planning within domain, quality bar | Senior | reasoning |
 | `lead` | Squad manager: sequencing, unblocking, integration | Senior | standard |
 | `worker` | Does the work with tools | Junior→Senior | fast/standard |
@@ -180,6 +181,17 @@ gap detected
                   └─ Head drafts the department mission charter + first squad
                        └─ Orchestrator approves (auto-approve if under threshold)
 ```
+
+**ADR 0016 — hiring goes through HR.** Before the first wave that actually hires, the
+project seats a **Head of People** (a `People` department; the bootstrap hire is direct).
+Every subsequent growth hire — head, lead, worker, function chief — runs as an *opening*
+through `hiring.hr_hire()`: candidates arrive with souls, an interview scores them against
+the real gap, the real budget bound (`min(project headroom, department envelope remaining)`)
+and the people already on the floor, and only the passing candidate is hired. Friction is
+bounded by the owner's rule: **at most two rejections per opening, and the candidate after
+them always lands** — occasional on purpose (`hr_friction`, default 0.28 of openings), so
+the record reads like a company, not a pipeline loop. Rejected candidates exist only on the
+record (`hiring.candidate.rejected`), never as agent rows.
 
 Guardrails on spawning (all enforced in code, see docs/08):
 - `max_agents_per_project` (default 24) and `max_departments` (default 6).

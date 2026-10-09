@@ -412,6 +412,7 @@ class Orchestrator:
                 context_pack=context_pack, department=snapshot.department_name,
                 knowledge=float(agent.company_knowledge or 0.0),
                 tenure_days=max(0, (datetime.now(UTC) - created).days) if created else 0,
+                soul=snapshot.soul or None,
             )
             user_prompt = build_task_prompt(
                 title=task_spec.title, description=task_spec.description, deliverable=task_spec.deliverable,

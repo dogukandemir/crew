@@ -369,6 +369,10 @@ export interface ProjectSettings {
   model_tiers?: Record<string, string>;
   retention?: Record<string, unknown>;
   notify?: Record<string, unknown>;
+  /** Operating cadence: after a completed run, keep going for a bounded number of
+   * follow-on passes (a hand-started run resets the streak). */
+  cadence_enabled?: boolean;
+  cadence_max_runs?: number;
 }
 
 export type RunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'aborted';
@@ -659,6 +663,41 @@ export interface Artifact {
   trust?: string;
   created_at: string;
   meta?: Record<string, unknown>;
+}
+
+/** One row of the deliverables surface (project / department / company scope).
+ * Every row names the producing agent; company rows also name their project. */
+export interface DeliverableRow {
+  id: string;
+  name: string;
+  path: string;
+  mime: string;
+  kind: string;
+  bytes: number;
+  sha256: string;
+  created_at: string;
+  agent_id: string | null;
+  agent_name: string | null;
+  department_id: string | null;
+  department_name: string | null;
+  task_id: string | null;
+  task_title: string | null;
+  project_id: string;
+  project_name: string | null;
+}
+
+/** Bounded content read of one deliverable (GET /api/artifacts/{id}/content). */
+export interface DeliverableContent {
+  id: string;
+  name: string;
+  mime: string;
+  bytes: number;
+  sha256: string;
+  created_at: string;
+  available: boolean;
+  truncated?: boolean;
+  text?: string;
+  reason?: string;
 }
 
 // ─── Rewards ─────────────────────────────────────────────────────────────────

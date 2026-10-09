@@ -8,6 +8,8 @@ import type {
   Approval,
   Brain,
   BrainEntry,
+  DeliverableContent,
+  DeliverableRow,
   Department,
   EventRow,
   Health,
@@ -272,6 +274,44 @@ export function useCommands(projectId: string | null | undefined, enabled = true
     queryFn: () => api.getCommands(projectId as string),
     enabled: !!projectId && enabled,
     refetchInterval: enabled ? 5_000 : false,
+    retry: false,
+  });
+}
+
+/** Deliverables of one project — filterable by agent or department; every row
+ * carries the producing agent's name. */
+export function useProjectArtifacts(
+  id: string | null | undefined,
+  filter?: { agent_id?: string; department_id?: string },
+) {
+  return useQuery<Paged<DeliverableRow>>({
+    queryKey: ['project', id, 'artifacts', filter?.agent_id ?? '', filter?.department_id ?? ''],
+    queryFn: () => api.listProjectArtifacts(id as string, filter),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+/** Deliverables across a company's member projects — every row names its agent
+ * and its project. */
+export function useCompanyArtifacts(
+  id: string | null | undefined,
+  filter?: { project_id?: string; agent_id?: string },
+) {
+  return useQuery<Paged<DeliverableRow>>({
+    queryKey: ['company', id, 'artifacts', filter?.project_id ?? '', filter?.agent_id ?? ''],
+    queryFn: () => api.listCompanyArtifacts(id as string, filter),
+    enabled: !!id,
+    retry: false,
+  });
+}
+
+/** Bounded content read of one deliverable. */
+export function useArtifactContent(artifactId: string | null | undefined) {
+  return useQuery<DeliverableContent>({
+    queryKey: ['artifact', artifactId, 'content'],
+    queryFn: () => api.artifactContent(artifactId as string),
+    enabled: !!artifactId,
     retry: false,
   });
 }

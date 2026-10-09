@@ -228,6 +228,14 @@ class FakeCrewRunner:
                      task_id=req.task.id, agent_id=req.agent.id, trace_id=req.trace_id,
                      title="tool: brain_search", payload={"tool": "brain_search", "args": {"query": req.task.title}},
                      actor=f"agent:{req.agent.id}")
+        # The offline runner still produces a REAL deliverable file: the deliverables
+        # surface (company / department / agent scopes) must not be empty in offline
+        # mode — and a demo that points at a file which does not exist would lie.
+        if not self.fail and req.artifacts is not None:
+            try:
+                self._publish_deliverable(req, text)
+            except OSError as exc:  # never fail the simulated task over a file hiccup
+                text += f"\n\n(deliverable file could not be written: {exc})"
         tokens_in, tokens_out = 1200 + 40 * len(req.task.acceptance_criteria), 400
         model = f"offline/{req.agent.model_tier}"
         return ExecutionResult(
@@ -238,6 +246,36 @@ class FakeCrewRunner:
             cost_micros=router.cost_micros("deepseek-flash", tokens_in, tokens_out),
             model=model, steps=2, tool_calls=1, tool_errors=0,
         )
+
+    @staticmethod
+    def _deliverable_name(title: str) -> str:
+        import re
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60]
+        return f"{slug or 'deliverable'}.md"
+
+    def _publish_deliverable(self, req: ExecutionRequest, text: str) -> None:
+        import hashlib
+
+        from crew.execution.tools import run_on_loop
+        name = self._deliverable_name(req.task.title)
+        root = req.artifacts / (req.task.id or "task")
+        root.mkdir(parents=True, exist_ok=True)
+        p = root / name
+        body = f"# {req.task.title}\n\n{text}\n"
+        p.write_text(body, encoding="utf-8")
+        digest = hashlib.sha256(body.encode()).hexdigest()
+
+        async def _record() -> None:
+            from crew.core.db import session_scope
+            from crew.core.models import Artifact
+
+            async with session_scope() as s:
+                s.add(Artifact(project_id=req.project_id, task_id=req.task.id,
+                               agent_id=req.agent.id, kind="file", path=str(p),
+                               mime="text/markdown", bytes=len(body.encode()),
+                               sha256=digest, meta={"name": name}))
+
+        run_on_loop(_record())
 
 
 def select_runner() -> CrewRunner:

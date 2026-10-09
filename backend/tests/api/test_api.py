@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import httpx
 import pytest
@@ -12,6 +13,12 @@ from crew.core.db import init_db
 from crew.core.events import bind_loop
 
 pytestmark = pytest.mark.asyncio
+
+# A real file that is NOT under the data directory — used by the deliverable
+# content test to prove the server refuses to serve outside its data root.
+# (Computed at import time: pathlib resolve() is blocking and linters ban it
+# inside async tests.)
+OUTSIDE_FILE = str(Path(__file__).resolve())
 
 
 @pytest.fixture
@@ -397,3 +404,81 @@ async def test_pick_directory_cancel_and_unsupported(client, monkeypatch):
     monkeypatch.setattr(routes_mod, "_picker_available", lambda: False)
     r = await client.post("/api/system/pick-directory")
     assert r.status_code == 200 and r.json() == {"path": None, "supported": False}
+
+
+async def _await_run(client, project_id: str, goal: str = "deliver the slice") -> str:
+    r = await client.post(f"/api/projects/{project_id}/runs",
+                          json={"goal": goal, "mode": "autonomous"})
+    assert r.status_code == 202, r.text
+    run_id = r.json()["id"]
+    for _ in range(80):
+        await asyncio.sleep(0.25)
+        status = (await client.get(f"/api/runs/{run_id}")).json()["status"]
+        if status in ("completed", "failed", "paused_budget", "aborted"):
+            return status
+    raise AssertionError("run stuck")
+
+
+async def test_deliverables_at_three_levels(client):
+    """A deliverable is readable at every level of the org: the whole company, one
+    department, one agent — and at department/company level every row names the
+    producing agent. Same record, three scopes."""
+    r = await client.post("/api/found", json={
+        "name": "Deliverable Co", "mission": "ship the slice", "budget_usd": 4.0,
+        "project_name": "Slice", "project_goal": "ship the slice",
+        "project_budget_usd": 3.0, "start_run": False})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    company, project = body["company"], body["project"]
+    status = await _await_run(client, project["id"])
+    assert status in ("completed", "failed"), status
+
+    items = (await client.get(f"/api/projects/{project['id']}/artifacts")).json()["items"]
+    assert items, f"the offline run must publish artifacts (run {status})"
+    a = items[0]
+    for k in ("id", "name", "mime", "bytes", "sha256", "created_at", "agent_id",
+              "agent_name", "department_id", "department_name", "task_id",
+              "task_title", "project_id", "project_name"):
+        assert k in a, f"deliverable rows must carry {k}"
+    assert a["agent_name"], "the row resolves the producing agent's NAME, not just the id"
+    assert a["created_at"].endswith("+00:00"), "wire timestamps keep their UTC offset"
+
+    # agent-level: filtered to exactly that agent
+    one = (await client.get(
+        f"/api/projects/{project['id']}/artifacts?agent_id={a['agent_id']}")).json()["items"]
+    assert one and all(x["agent_id"] == a["agent_id"] for x in one)
+
+    # department-level: filtered to that department, agent names intact
+    if a["department_id"]:
+        dep = (await client.get(
+            f"/api/projects/{project['id']}/artifacts?department_id={a['department_id']}"
+        )).json()["items"]
+        assert dep and all(x["department_id"] == a["department_id"] for x in dep)
+        assert all(x["agent_name"] for x in dep)
+
+    # company-level rollup: superset of the project list, project + agent named
+    comp = (await client.get(f"/api/companies/{company['id']}/artifacts")).json()["items"]
+    assert {x["id"] for x in items} <= {x["id"] for x in comp}
+    assert all(x["project_name"] for x in comp if x["project_id"] == project["id"])
+    assert all(x["agent_name"] for x in comp)
+
+    # bounded content read for a file under the data directory
+    c = (await client.get(f"/api/artifacts/{a['id']}/content")).json()
+    assert c["available"] is True and isinstance(c["text"], str)
+
+    # a file outside the data directory is refused, with the reason said out loud
+    from crew.core.db import session_scope
+    from crew.core.models import Artifact
+    async with session_scope() as s:
+        s.add(Artifact(project_id=project["id"], task_id=None, agent_id=a["agent_id"],
+                       kind="file", path=OUTSIDE_FILE, bytes=1,
+                       sha256="outside", meta={"name": "outside.txt"}))
+    listed = (await client.get(
+        f"/api/projects/{project['id']}/artifacts?agent_id={a['agent_id']}")).json()["items"]
+    rogue = next(x for x in listed if x["name"] == "outside.txt")
+    c2 = (await client.get(f"/api/artifacts/{rogue['id']}/content")).json()
+    assert c2["available"] is False and "data directory" in c2["reason"]
+
+    # honest 404s
+    assert (await client.get("/api/artifacts/nope/content")).status_code == 404
+    assert (await client.get("/api/companies/nope/artifacts")).status_code == 404

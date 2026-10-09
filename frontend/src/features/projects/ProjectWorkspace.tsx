@@ -26,6 +26,7 @@ import { HqTab } from '../hq/HqTab';
 import { CompanyProjects } from '../hq/CompanyProjects';
 import { CompanyBrains } from '../hq/CompanyBrains';
 import { BoardTab } from '../board/BoardTab';
+import { DeliverablesPanel } from '../deliverables/DeliverablesPanel';
 import { cn } from '../../lib/cn';
 
 /**
@@ -141,6 +142,12 @@ function Panel({
       return <TasksPanel projectId={tab.projectId} tabId={tab.id} />;
     case 'board':
       return <BoardTab projectId={tab.projectId} />;
+    case 'deliverables':
+      return kind === 'company' ? (
+        <DeliverablesPanel scope="company" id={tab.projectId} tabId={tab.id} />
+      ) : (
+        <DeliverablesPanel scope="project" id={tab.projectId} tabId={tab.id} />
+      );
     case 'agents':
       return <AgentsPanel projectId={tab.projectId} tabId={tab.id} />;
     case 'brains':

@@ -27,6 +27,8 @@ import type {
   CouncilSession,
   CurrentUser,
   Decision,
+  DeliverableContent,
+  DeliverableRow,
   Department,
   EgressView,
   EventFilters,
@@ -406,6 +408,14 @@ export const api = {
     request<CommandAck>(`/api/tasks/${taskId}/escalate`, { method: 'POST', body: cmdBody(undefined, reason) }),
   listTaskArtifacts: (taskId: string) =>
     request<Paged<Artifact>>(`/api/tasks/${taskId}/artifacts`),
+
+  // ── Deliverables (an artifact read at three scopes) ────────────────────────
+  listProjectArtifacts: (id: string, filter?: { agent_id?: string; department_id?: string }) =>
+    request<Paged<DeliverableRow>>(`/api/projects/${id}/artifacts`, { query: filter }),
+  listCompanyArtifacts: (id: string, filter?: { project_id?: string; agent_id?: string }) =>
+    request<Paged<DeliverableRow>>(`/api/companies/${id}/artifacts`, { query: filter }),
+  artifactContent: (artifactId: string) =>
+    request<DeliverableContent>(`/api/artifacts/${artifactId}/content`),
 
   // ── Council & decisions ────────────────────────────────────────────────────
   conveneCouncil: (

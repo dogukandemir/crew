@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import type { RewardEvent } from '../../api/types';
+import type { DeliverableRow, RewardEvent } from '../../api/types';
 import { Drawer } from '../../components/ui/Drawer';
 import { Badge, severityTone } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -11,10 +11,14 @@ import { Sparkline } from '../../components/ui/Sparkline';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatClock, formatMicros, formatPercent, formatRelativeTime, formatTokens } from '../../lib/format';
-import { useAgent, useAgentContext, useAgentRewards } from '../../app/hooks';
+import { useAgent, useAgentContext, useAgentRewards, useProjectArtifacts } from '../../app/hooks';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { useUi } from '../../stores/ui';
 import { gradeLabel } from '../org/orgUtils';
+import {
+  DeliverablePreviewModal,
+  formatDeliverableSize,
+} from '../deliverables/DeliverablesPanel';
 
 /** Agent detail drawer (docs/09 §2.4 + docs/07 §3.3). */
 export function AgentDrawer({
@@ -147,6 +151,10 @@ export function AgentDrawer({
                 )}
               </section>
             )}
+
+            <section>
+              <DeliverablesSection projectId={projectId} agentId={agentId} />
+            </section>
 
             <section>
               <div className="mb-1 flex items-center justify-between">
@@ -292,5 +300,52 @@ function SteerBox({ agentId }: { agentId: string }) {
         Send
       </Button>
     </form>
+  );
+}
+
+/** This agent's published deliverables — the individual-level read of the same
+ * records the project and company surfaces list. */
+function DeliverablesSection({ projectId, agentId }: { projectId: string; agentId: string }) {
+  const q = useProjectArtifacts(projectId, { agent_id: agentId });
+  const [preview, setPreview] = useState<DeliverableRow | null>(null);
+  const items = q.data?.items ?? [];
+  return (
+    <>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Deliverables ({items.length})
+      </h4>
+      {q.isLoading ? (
+        <SkeletonRows rows={3} />
+      ) : items.length === 0 ? (
+        <p className="text-[11px] text-slate-500">
+          Nothing published yet — the outputs this agent produces land here as files.
+        </p>
+      ) : (
+        <ul className="max-h-40 overflow-y-auto rounded-md border border-slate-700/60">
+          {items.map((r) => (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => setPreview(r)}
+                className="flex w-full items-center gap-2 border-b border-slate-800/60 px-2 py-1 text-left text-[11px] last:border-0 hover:bg-slate-900/60"
+                title={r.task_title ? `From the task: ${r.task_title}` : r.path}
+              >
+                <span className="min-w-0 flex-1 truncate text-slate-300">{r.name}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">
+                  {formatDeliverableSize(r.bytes)}
+                </span>
+                <span
+                  className="shrink-0 text-slate-500"
+                  title={new Date(r.created_at).toLocaleString()}
+                >
+                  {formatRelativeTime(r.created_at)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <DeliverablePreviewModal row={preview} onClose={() => setPreview(null)} />
+    </>
   );
 }

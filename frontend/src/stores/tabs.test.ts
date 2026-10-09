@@ -8,8 +8,15 @@ import {
 } from './tabs';
 
 describe('workspace scopes (ADR 0015)', () => {
-  it('a company shows HQ, the portfolio, memory, events and settings — no office', () => {
-    expect(workspaceTabsFor('company')).toEqual(['hq', 'projects', 'brains', 'events', 'settings']);
+  it('a company shows HQ, the portfolio, deliverables, memory, events and settings — no office', () => {
+    expect(workspaceTabsFor('company')).toEqual([
+      'hq',
+      'projects',
+      'deliverables',
+      'brains',
+      'events',
+      'settings',
+    ]);
     expect(workspaceTabsFor('company')).not.toContain('office');
   });
 

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -1211,6 +1212,140 @@ async def task_artifacts(task_id: str) -> dict:
     async with session_scope() as s:
         arts = (await s.scalars(select(Artifact).where(Artifact.task_id == task_id))).all()
     return {"items": [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256} for a in arts]}
+
+
+def _artifact_display_name(a: Artifact) -> str:
+    meta = a.meta if isinstance(a.meta, dict) else {}
+    name = str(meta.get("name") or "").strip()
+    if not name:
+        name = (a.path or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    return name or a.id
+
+
+async def _artifact_context(s, project_ids: list[str],
+                            arts: list[Artifact]) -> tuple[dict, dict, dict, dict]:
+    """Name maps for a batch of artifacts: agents, departments, tasks, projects."""
+    agents = {x.id: x for x in (await s.scalars(
+        select(Agent).where(Agent.project_id.in_(project_ids)))).all()}
+    depts = {x.id: x for x in (await s.scalars(
+        select(Department).where(Department.project_id.in_(project_ids)))).all()}
+    task_ids = list({x.task_id for x in arts if x.task_id})
+    tasks = {}
+    if task_ids:
+        tasks = {x.id: x for x in (await s.scalars(select(Task).where(Task.id.in_(task_ids)))).all()}
+    projects = {x.id: x for x in (await s.scalars(
+        select(Project).where(Project.id.in_(project_ids)))).all()}
+    return agents, depts, tasks, projects
+
+
+def _artifact_row(a: Artifact, agents: dict, depts: dict, tasks: dict, projects: dict) -> dict:
+    ag = agents.get(a.agent_id or "")
+    tk = tasks.get(a.task_id or "")
+    pr = projects.get(a.project_id or "")
+    dept_id = (tk.department_id if tk else None) or (ag.department_id if ag else None)
+    dept = depts.get(dept_id or "")
+    return {
+        "id": a.id,
+        "name": _artifact_display_name(a),
+        "path": a.path,
+        "mime": a.mime,
+        "kind": a.kind,
+        "bytes": a.bytes,
+        "sha256": a.sha256,
+        "created_at": ev.utc_iso(a.created_at),
+        "agent_id": a.agent_id,
+        "agent_name": ag.name if ag else None,
+        "department_id": dept_id,
+        "department_name": dept.name if dept else None,
+        "task_id": a.task_id,
+        "task_title": tk.title if tk else None,
+        "project_id": a.project_id,
+        "project_name": pr.name if pr else None,
+    }
+
+
+@api.get("/projects/{project_id}/artifacts")
+async def project_artifacts(project_id: str, agent_id: str | None = None,
+                            department_id: str | None = None,
+                            limit: int = Query(default=200, ge=1, le=1000)) -> dict:
+    """Deliverables of one project — filterable by agent or department; every row
+    carries the producing agent's name (and department), for people-level,
+    department-level and company-level reading alike."""
+    async with session_scope() as s:
+        if await s.get(Project, project_id) is None:
+            raise _problem(404, "project not found", project_id)
+        q = select(Artifact).where(Artifact.project_id == project_id)
+        if agent_id:
+            q = q.where(Artifact.agent_id == agent_id)
+        arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+        agents, depts, tasks, projects = await _artifact_context(s, [project_id], arts)
+    rows = [_artifact_row(a, agents, depts, tasks, projects) for a in arts]
+    if department_id:
+        rows = [r for r in rows if r["department_id"] == department_id]
+    return {"items": rows}
+
+
+@api.get("/companies/{company_id}/artifacts")
+async def company_artifacts(company_id: str, project_id: str | None = None,
+                            agent_id: str | None = None,
+                            limit: int = Query(default=200, ge=1, le=1000)) -> dict:
+    """Deliverables across a company's member projects — every row names the
+    producing agent and its project."""
+    async with session_scope() as s:
+        comp = await s.get(Project, company_id)
+        if comp is None or comp.kind != "company":
+            raise _problem(404, "company not found", company_id)
+        member_ids = list(await s.scalars(select(Project.id).where(Project.company_id == company_id)))
+        if project_id:
+            if project_id not in member_ids:
+                raise _problem(404, "project is not a member of this company", project_id)
+            member_ids = [project_id]
+        arts: list[Artifact] = []
+        agents: dict = {}
+        depts: dict = {}
+        tasks: dict = {}
+        projects: dict = {}
+        if member_ids:
+            q = select(Artifact).where(Artifact.project_id.in_(member_ids))
+            if agent_id:
+                q = q.where(Artifact.agent_id == agent_id)
+            arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+            agents, depts, tasks, projects = await _artifact_context(s, member_ids, arts)
+    return {"items": [_artifact_row(a, agents, depts, tasks, projects) for a in arts]}
+
+
+@api.get("/artifacts/{artifact_id}/content")
+async def artifact_content(artifact_id: str) -> dict:
+    """Bounded text read of one deliverable. Only files under the server's data
+    directory are served — anything else reports unavailable with the reason."""
+    async with session_scope() as s:
+        a = await s.get(Artifact, artifact_id)
+    if a is None:
+        raise _problem(404, "artifact not found", artifact_id)
+    root = settings.data_dir if settings.data_dir.is_absolute() else (Path.cwd() / settings.data_dir)
+    row = {"id": a.id, "name": _artifact_display_name(a), "mime": a.mime,
+           "bytes": a.bytes, "sha256": a.sha256, "created_at": ev.utc_iso(a.created_at)}
+
+    def _read() -> dict:  # the disk work stays off the event loop
+        out = {**row, "available": False}
+        rp: Path | None = None
+        try:
+            rp = Path(a.path).resolve()
+            inside = rp.is_relative_to(root.resolve())
+        except (OSError, ValueError):
+            inside = False
+        if inside and rp is not None and rp.is_file():
+            raw = rp.read_bytes()[:262_144]
+            out["available"] = True
+            out["truncated"] = rp.stat().st_size > len(raw)
+            out["text"] = raw.decode("utf-8", errors="replace")
+        elif inside:
+            out["reason"] = "the file has been moved or deleted"
+        else:
+            out["reason"] = "the file is not stored under the server's data directory"
+        return out
+
+    return await asyncio.to_thread(_read)
 
 
 async def _task_control(task_id: str, action: str, user: dict, body: dict | None = None) -> dict:

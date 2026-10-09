@@ -20,6 +20,7 @@ export const WORKSPACE_TABS = [
   'org',
   'tasks',
   'board',
+  'deliverables',
   'agents',
   'brains',
   'rewards',
@@ -37,6 +38,7 @@ export const PROJECT_TABS: readonly WorkspaceTab[] = [
   'org',
   'tasks',
   'board',
+  'deliverables',
   'agents',
   'brains',
   'rewards',
@@ -44,9 +46,17 @@ export const PROJECT_TABS: readonly WorkspaceTab[] = [
   'settings',
 ];
 
-/** The company's own views: the floor, the portfolio, the umbrella memory, company
- * events and settings. Office/Org/Tasks/Brains-of-work/rewards belong to members. */
-export const COMPANY_TABS: readonly WorkspaceTab[] = ['hq', 'projects', 'brains', 'events', 'settings'];
+/** The company's own views: the floor, the portfolio, the deliverables rollup, the
+ * umbrella memory, company events and settings. Office/Org/Tasks/Brains-of-work/rewards
+ * belong to members. */
+export const COMPANY_TABS: readonly WorkspaceTab[] = [
+  'hq',
+  'projects',
+  'deliverables',
+  'brains',
+  'events',
+  'settings',
+];
 
 export function workspaceTabsFor(kind: string | null | undefined): readonly WorkspaceTab[] {
   return kind === 'company' ? COMPANY_TABS : PROJECT_TABS;
@@ -66,6 +76,7 @@ export const WORKSPACE_TAB_LABEL: Record<WorkspaceTab, string> = {
   org: 'Org',
   tasks: 'Tasks',
   board: 'Board',
+  deliverables: 'Deliverables',
   agents: 'Agents',
   brains: 'Brains',
   rewards: 'Reward',

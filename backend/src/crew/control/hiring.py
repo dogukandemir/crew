@@ -156,8 +156,8 @@ def assess(cand: Candidate, opening: Opening, *, team_skills: set[str]) -> dict[
 
 def _note(opening: Opening, cand: Candidate, scores: dict) -> str:
     if scores["passed"]:
-        return (f"Pass. Covers {scores['coverage']:.0%} of the {opening.label or opening.role} gap "
-                f"at {cand.expected_spend_micros}µ$; adds coverage the floor lacks.")
+        return (f"Pass. Covers {scores['coverage']:.0%} of the {opening.title} gap "
+                f"at {cand.expected_spend_micros:,}µ$; adds coverage the floor lacks.")
     return f"Reject. {'; '.join(scores['reasons'])}."
 
 

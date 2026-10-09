@@ -80,7 +80,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Crew", version=__version__, lifespan=lifespan,
                   description="Autonomous agent organization platform. See docs/ for the specification.")
     # Dev: allow any localhost port — Vite bumps to 5174+ when 5173 is taken and the
-    # fixed list would then block every API call ("Cannot reach the backend", audit Ö3).
+    # fixed list would then block every API call ("Cannot reach the backend").
     # Prod keeps the explicit list.
     dev_origin_regex = r"http://(localhost|127\.0\.0\.1):\d+" if settings.is_dev else None
     app.add_middleware(

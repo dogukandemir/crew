@@ -39,7 +39,7 @@ export function WelcomeScreen() {
   const onboarding = useOnboardingState();
   const [dismissed, setDismissed] = useState(() => onboardingDismissed());
   const [hideCard, setHideCard] = useState(false);
-  // The wizard lives in the ui store (audit Ö2): the Companies section and the welcome
+  // The wizard lives in the ui store: the Companies section and the welcome
   // CTAs all open THE SAME one — there is no second way to create a company.
   const wizardOpen = useUi((s) => s.foundWizardOpen);
   const setWizardOpen = useUi((s) => s.setFoundWizardOpen);

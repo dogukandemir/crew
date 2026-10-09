@@ -51,9 +51,9 @@ migration, and a date that has to hold without breaking anyone already in produc
   ("three mouths, one worry"), and at t+90 `gossip.surfaced` marks it as a concern.
   Every whisper carries its `basis`; the floor walks the speaker to the listener.
 - **The command desk is live (ADR 0012).** A transcript to start from — a status
-  question, an assignment to Anika, an idea floated in Turkish that is exactly the
+  question, an assignment to Anika, an idea floated that is exactly the
   council's own question — and the same lexicon the backend speaks: mentions resolve
-  against the live roster, "herkese … mola" answers with the break line, a bare
+  against the live roster, "everyone … break" answers with the break line, a bare
   "@Elena, …" comes back as an assignment with `task.created`/`task.assigned` chips.
 - **The board is the run's paper trail (ADR 0010).** Epic → workstreams → stories:
   live tasks with helpers (`+1 helping`), a review card, done work, a blocked card

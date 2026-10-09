@@ -227,7 +227,7 @@ def serialize_project(p: Project) -> dict:
         # list_projects when the project reports to a company — the UI reads `?? null`.
         "company_name": None,
         "budget_usd": p.budget_usd, "spend_usd": p.spend_usd,
-        # The UI's ledgers read raw micros (audit K2: omitting them rendered "— / —" and
+        # The UI's ledgers read raw micros (omitting them rendered "— / —" and
         # "$0.00 / $0.00" on every budget surface against the real backend, while the mock
         # masked it). Contract §5 allows additive fields; ship both units.
         "budget_cap_micros": p.budget_cap_micros, "spend_micros": p.spend_micros,

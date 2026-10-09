@@ -30,8 +30,9 @@ response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 ### 1a. Fields the UI binds to (asserted by `test_ui_contract_shapes`)
 
 These left the payloads once while the mock kept serving them — the office, the org
-chart and every budget bar rendered empty against the real backend (audit K1/K2). Each
-row now has a guard: change it and the test goes red, not the product quiet.
+chart and every budget bar rendered empty against the real backend (the fresh-clone
+audit). Each row now has a guard: change it and the test goes red, not the product
+quiet.
 
 | Surface | Endpoint | Fields the UI reads |
 |---------|----------|---------------------|

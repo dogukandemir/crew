@@ -70,13 +70,13 @@ describe('insertMention', () => {
 
 describe('modeOf', () => {
   it('reads a question mark as a question', () => {
-    expect(modeOf('durum ne?')).toBe('question');
+    expect(modeOf('status?')).toBe('question');
   });
   it('reads idea words as an idea, even with a question mark', () => {
-    expect(modeOf('bir fikrim var: belki raporu haftaya alırız?')).toBe('idea');
+    expect(modeOf('I have an idea: maybe we run the report next week?')).toBe('idea');
   });
   it('an imperative sentence is an order', () => {
-    expect(modeOf('@Ada raporu hazırla')).toBe('order');
+    expect(modeOf('@Ada, prepare the report')).toBe('order');
   });
 });
 

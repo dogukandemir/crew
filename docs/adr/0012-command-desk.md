@@ -37,19 +37,24 @@ for the reply.
 
 ### Deterministic first, model second
 
-A lexicon parser (Turkish and English) turns the message into a typed command:
+A lexicon parser (English) turns the message into a typed command:
 `status | assign | reassign | fire | break | goal | budget | hire | help`, with
-mentions resolved against the live roster and quantities (`15 dakika`, `%20`, `25$`)
+mentions resolved against the live roster and quantities (`15 minutes`, `%20`, `$25`)
 extracted. Only when confidence is low **and** a provider key is configured does the
 orchestrator's model interpret the text — into the same strict schema, validated
 against the roster. Offline, the desk says what it can and cannot carry out; it never
 guesses a destructive act.
 
+**Revision (2026-10) — English-only at launch.** The Turkish keyword set was removed
+with the rest of the non-English copy: the product ships in English first, and other
+languages come back deliberately, as locale packs, not as hidden second lexicons. The
+parser stayed a pure, table-driven function so a pack is a data change.
+
 ### Modes: orders bind, ideas are weighed, questions are answered
 
 - `order` (default) — reaches the agent's next prompt as a **binding** line under
   `CAPTAIN DIRECTIVES (from the Captain — this company's owner)`.
-- `idea` (a "fikrim var:…" or "maybe…", in either language) — the same block, labeled
+- `idea` (an “I have an idea:…” or “maybe…”) — the same block, labeled
   as something to weigh.
 - `question` (a question mark) — answered by the desk; **never** enters a task prompt.
 
@@ -63,7 +68,7 @@ the floor. Window: last 6 hours, at most 3 lines, newest first.
 | assign | `Task` created (`run_id=null`): tagged → state `assigned`; untagged → `pending`, matched at the next wave by the existing engine |
 | reassign | the old owner's latest open task moves; the old owner is freed (`busy → idle`); `task.reassigned` |
 | fire | `org.layoff_agent` (audited archive). Engine seats — orchestrator, CEO, chair, board members — **refuse**; that decision belongs to the board |
-| break | `agents.break_until = now + minutes` (default 10, cap 120; "herkese" = everyone except the engine); matching skips the agent until it passes — **work already in their hands finishes first**; "molayı kaldır"/"end the breaks" clears, targeting whoever is on one |
+| break | `agents.break_until = now + minutes` (default 10, cap 120; "everyone" = everyone except the engine); matching skips the agent until it passes — **work already in their hands finishes first**; "clear the breaks"/"end the breaks" clears, targeting whoever is on one |
 | goal | `orchestrator.start_run` |
 | budget | the cap only (`budget_cap_micros`); what is spent stays spent; audited |
 | hire | `org.hire_agent` from the closest role template (analyst/engineer/researcher/designer/writer) |

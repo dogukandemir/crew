@@ -23,7 +23,7 @@ export function CompaniesSection() {
   const companies = useCompanies();
   const projects = useProjects();
   const qc = useQueryClient();
-  // The founding wizard is the ONE creation path (audit Ö2): this section opens it,
+  // The founding wizard is the ONE creation path: this section opens it,
   // it does not create companies behind its back with a bare name field.
   const setFoundWizardOpen = useUi((s) => s.setFoundWizardOpen);
 

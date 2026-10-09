@@ -1,4 +1,4 @@
-"""org_tree serves the rooted tree the renderer walks (audit K1) — squads included.
+"""org_tree serves the rooted tree the renderer walks — squads included.
 
 The fresh-clone audit found the endpoint serving a flat shape the UI never read; the
 first re-run then crashed on Squads (no spend column). This test walks the tree with

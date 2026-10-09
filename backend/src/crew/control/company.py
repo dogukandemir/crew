@@ -98,7 +98,7 @@ async def brains_overview(company_id: str) -> dict:
             counts = {bid: int(n) for bid, n in (await s.execute(
                 select(BrainEntry.brain_id, func.count(BrainEntry.id))
                 .where(BrainEntry.project_id == m.id).group_by(BrainEntry.brain_id))).all()}
-            # Resolve owner names (audit Ö4): "person · personal" is a database, a name
+            # Resolve owner names: "person · personal" is a database, a name
             # is an org — the same resolution list_brains does, one scope up.
             dept_names = {d.id: d.name for d in (await s.scalars(
                 select(Department).where(Department.project_id == m.id))).all()}
@@ -127,7 +127,7 @@ def _aware(ts: datetime) -> datetime:
 
 def _brain_owner_name(scope: str, owner_id: str, project_name: str,
                       dept_names: dict[str, str], agent_names: dict[str, str]) -> str:
-    """A brain's human owner (audit Ö4): the same resolution `list_brains` does."""
+    """A brain's human owner: the same resolution `list_brains` does."""
     if scope in ("company", "project"):
         return project_name
     if scope == "department":
@@ -181,7 +181,7 @@ def _verdict_of(st: dict, now: datetime) -> tuple[str, str, str, dict]:
         line = (f"tighten: {st['ratio']:.0%} of the budget is used — shrink reservations and "
                 f"cheap models until the run lands")
     elif st["completed"] == 0 and st["failed"] == 0:
-        # Nothing has EVER finished here (audit Ö6): "on track" is a guess with no
+        # Nothing has EVER finished here: "on track" is a guess with no
         # completed work to stand on. If a run is in flight, say that; if nothing is,
         # say THAT — both sentences cite the record.
         verdict, severity = "no_activity", "notice"

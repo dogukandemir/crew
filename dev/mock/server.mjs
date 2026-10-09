@@ -960,25 +960,25 @@ const routes = [
 
 // ── The command desk demo (ADR 0012): a conversation to start from ──────────────
 const COMMANDS = [
-  { id: 'cm-1', role: 'captain', text: 'durum ne?', mode: 'question', ok: null,
+  { id: 'cm-1', role: 'captain', text: 'What’s the status?', mode: 'question', ok: null,
     actions: [], mentions: [], at: ago(340) },
   { id: 'cr-1', role: 'orchestrator',
     text: 'Atlas 2.0: 11 agents — 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
     mode: 'question', ok: true, actions: [], mentions: [], at: ago(339) },
-  { id: 'cm-2', role: 'captain', text: '@Anika, lansman kontrol listesini güncelle', mode: 'order',
+  { id: 'cm-2', role: 'captain', text: '@Anika, update the launch checklist', mode: 'order',
     ok: null, actions: [], mentions: ['a1'], at: ago(120) },
   { id: 'cr-2', role: 'orchestrator',
-    text: 'On it: “lansman kontrol listesini güncelle” is assigned to @Anika. It runs with the next wave.',
+    text: 'On it: “update the launch checklist” is assigned to @Anika. It runs with the next wave.',
     mode: 'order', ok: true, mentions: [],
     actions: [
       { kind: 'task.created', event_id: null, ref: 't-9f21' },
       { kind: 'task.assigned', event_id: null, ref: 'a1' },
     ],
     at: ago(119) },
-  { id: 'cm-3', role: 'captain', text: 'bir fikrim var: lansmanı iki hafta kaydırıp migration’a odaklanalım', mode: 'idea',
+  { id: 'cm-3', role: 'captain', text: 'I have an idea: slide the launch two weeks and focus on the migration', mode: 'idea',
     ok: null, actions: [], mentions: [], at: ago(60) },
   { id: 'cr-3', role: 'orchestrator',
-    text: 'Logged as an idea: “lansmanı iki hafta kaydırıp migration’a odaklanalım”. Zeynep will weigh it against the cutover calendar before anything moves.',
+    text: 'Logged as an idea: “slide the launch two weeks and focus on the migration”. Zeynep will weigh it against the cutover calendar before anything moves.',
     mode: 'idea', ok: true, actions: [], mentions: [], at: ago(59) },
 ];
 
@@ -987,29 +987,29 @@ function COMMAND_MODE(text) {
   let m = 'order';
   const q = t.indexOf('?');
   if (q >= 0 && q < 60) m = 'question';
-  if (/(fikrim|fikir|öneri|oneri|belki|idea|maybe)/i.test(t)) m = 'idea';
+  if (/(idea|maybe|suggestion|i think)/i.test(t)) m = 'idea';
   return m;
 }
 
 function COMMAND_REPLY(norm, text, ids, names) {
-  if (/gorevden al|kov|işten çıkar|isten cikar/.test(norm)) {
+  if (/fire|let .* go|dismiss|terminate/.test(norm)) {
     return { text: `Done: @${names[0] || '—'} is archived (reason: “the Captain's call”).`, actions: [] };
   }
-  if (/mola/.test(norm)) {
+  if (/break/.test(norm)) {
     return {
-      text: norm.includes('herkes')
+      text: (norm.includes('everyone') || norm.includes('all '))
         ? 'Everyone on a break for 15 minutes (no new assignments until then; work already in their hands finishes first).'
         : `@${names[0] || '—'} on a break for 10 minutes (no new assignments until then; work already in their hands finishes first).`,
       actions: [{ kind: 'agent.break.started', event_id: null, ref: ids[0] || null }],
     };
   }
-  if (/hedef|goal/.test(norm)) {
+  if (/goal/.test(norm)) {
     return {
       text: `Run started: “${text.replace(/^[^:]*:\s*/, '').slice(0, 90)}”. Planning begins on the next tick.`,
       actions: [{ kind: 'run.started', event_id: null, ref: 'r-demo' }],
     };
   }
-  if (/\?|durum|ne yap/.test(norm)) {
+  if (/\?|status|what.*doing/.test(norm)) {
     return {
       text: 'Atlas 2.0: 11 agents — 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
       actions: [],
@@ -1026,7 +1026,7 @@ function COMMAND_REPLY(norm, text, ids, names) {
     };
   }
   return {
-    text: 'I can carry these out: status (“durum ne?”) · assign (“@Elena, …”) · reassign · fire · break · goal · budget · hire. A plain sentence is an order; “bir fikrim var: …” floats an idea to be weighed; a question mark asks.',
+    text: 'I can carry these out: status (“what’s the status?”) · assign (“@Elena, prepare the report”) · reassign · fire · break · goal · budget · hire. A plain sentence is an order; “I have an idea: …” floats an idea to be weighed; a question mark asks.',
     actions: [],
   };
 }

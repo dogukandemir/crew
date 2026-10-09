@@ -83,7 +83,7 @@ export function modeOf(text: string): CommandMode {
   let mode: CommandMode = 'order';
   const q = t.indexOf('?');
   if (q >= 0 && q < 60) mode = 'question';
-  if (/(^|\s)(fikrim|fikir|öneri|oneri|belki|idea|maybe|suggestion)(\s|:|$)/i.test(t)) mode = 'idea';
+  if (/(^|\s)(idea|maybe|suggestion|i think)(\s|:|$)/i.test(t)) mode = 'idea';
   return mode;
 }
 

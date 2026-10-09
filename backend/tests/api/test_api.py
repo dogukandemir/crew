@@ -228,7 +228,7 @@ async def test_command_desk_roundtrip(client):
     """ADR 0012 at the contract boundary: the desk answers and the record keeps it."""
     p = await _create_project(client, "Desk API")
 
-    r = await client.post(f"/api/projects/{p['id']}/commands", json={"text": "durum ne?"})
+    r = await client.post(f"/api/projects/{p['id']}/commands", json={"text": "status?"})
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["message_id"] and body["reply_event_id"]
@@ -238,10 +238,10 @@ async def test_command_desk_roundtrip(client):
     assert r.status_code == 200
     msgs = r.json()["messages"]
     assert [m["role"] for m in msgs] == ["captain", "orchestrator"]
-    assert msgs[0]["text"] == "durum ne?" and msgs[1]["ok"] is True
+    assert msgs[0]["text"] == "status?" and msgs[1]["ok"] is True
     assert msgs[0]["id"] == body["message_id"]
 
-    r = await client.post("/api/projects/does-not-exist/commands", json={"text": "durum ne?"})
+    r = await client.post("/api/projects/does-not-exist/commands", json={"text": "status?"})
     assert r.status_code == 404
 
     # an empty message never reaches the desk
@@ -315,7 +315,7 @@ async def test_found_company_endpoint(client):
     assert page["company_brain"]["entries"] >= 1, "the mission seeds the umbrella"
     assert page["members"][0]["project_id"] == body["project"]["id"]
     assert all("owner_name" in b for b in page["members"][0]["brains"]), \
-        "the member index resolves names, not ids (audit Ö4)"
+        "the member index resolves names, not ids"
 
     # the member is a real project (listed), the company is not
     r4 = await client.get("/api/projects")
@@ -324,7 +324,7 @@ async def test_found_company_endpoint(client):
 
 
 async def test_ui_contract_shapes(client):
-    """The fields the UI actually reads, asserted against the REAL app (audit Ö1).
+    """The fields the UI actually reads, asserted against the REAL app.
 
     Micros and the org root once vanished from these payloads while the mock kept
     serving them — the office, the org chart and every budget bar rendered empty

@@ -163,7 +163,7 @@ goal ─► INTAKE ─► PLANNING ─► STAFFING ─► EXECUTING ─► VERIF
 
 1. **Create a project** (the ＋ button, or `POST /api/projects`) and state a goal.
 2. **Start a run** — `POST /api/projects/{id}/runs {"goal": "…", "mode": "autonomous"}`, the
-   desk (`hedef: …`), or `uv run python -m crew run --project <id> --goal "…"` headlessly.
+   desk (`goal: …`), or `uv run python -m crew run --project <id> --goal "…"` headlessly.
 3. **Watch it work**: the orchestrator plans the capability tree, hires departments and
    agents with the right skills, dispatches tasks in waves, verifies results and settles
    budgets — every step an event on the record.

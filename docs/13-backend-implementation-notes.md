@@ -80,7 +80,7 @@ without spending money. That is how the test suite and any offline demo work.
 | Audit chain unverifiable | timestamps were hashed as aware ISO strings but stored naive by SQLite | `test_audit_chain_verifies_and_detects_tampering` |
 | Council produced no positions | a project with one agent has no eligible panellists | `test_council_debate_and_decision` |
 
-## Bugs found and fixed by the fresh-clone audit (K/Ö round)
+## Bugs found and fixed by the fresh-clone audit
 
 The audit cloned the repo into a clean directory, ran it with `CREW_OFFLINE_LLM=true`
 against an empty `CREW_DATA_DIR`, and walked the product end to end. The mock had been

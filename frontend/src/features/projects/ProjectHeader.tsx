@@ -76,7 +76,7 @@ function GoalEditor({ project }: { project: Project }) {
           onClick={() => setEditing(true)}
           className="shrink-0 text-[10px] text-slate-500 underline decoration-dotted hover:text-emerald-300"
         >
-          correct this
+          edit
         </button>
       </p>
     );

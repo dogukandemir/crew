@@ -156,13 +156,13 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
             <div className="rounded-lg border border-dashed border-slate-700/70 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400">
               <p className="font-medium text-slate-300">Nothing yet — the record is empty.</p>
               <p className="mt-1 text-slate-300">
-                Try: <em>what&apos;s the status?</em> · <em>@Orchestrator, give me a launch summary</em> ·{' '}
-                <em>take a 15 minute break, everyone</em> · <em>reassign the migration task, reason: blocked too long</em> ·{' '}
+                Try: <em>what&apos;s the status?</em> · <em>@Orchestrator, prepare a launch summary</em> ·{' '}
+                <em>take a 15-minute break, everyone</em> · <em>move @Ada&apos;s task to @Bo</em> ·{' '}
                 <em>goal: ship the beta by Friday</em>
               </p>
               <p className="mt-1 text-slate-500">
                 A plain sentence is an order; “I have an idea:” floats an idea to be weighed;
-                a question mark asks instead of ordering. Turkish works too.
+                a question mark asks instead of ordering.
               </p>
             </div>
           )}
@@ -251,7 +251,7 @@ function Composer({
       <textarea
         value={draft}
         rows={2}
-        placeholder="Write to the company… (Enter sends, Shift+Enter is a new line)"
+        placeholder="Write to the company… (Enter sends · Shift+Enter for a new line)"
         onChange={(e) => {
           onDraft(e.target.value);
           onCaret(e.target.selectionStart ?? e.target.value.length);

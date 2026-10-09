@@ -2,7 +2,7 @@
 company moves.
 
 Natural language in; real actions out; every step on the record. The desk is
-deterministic-first: a lexicon parser (Turkish + English) turns the message into a
+deterministic-first: a lexicon parser (English) turns the message into a
 typed command; only when it cannot — and only when a model is configured — does the
 orchestrator's model get asked to interpret into the same strict schema. Offline it
 says what it can and cannot understand; it never guesses a destructive act.
@@ -36,20 +36,20 @@ UNFIREABLE = (Role.ORCHESTRATOR.value, Role.CEO.value, Role.CHAIR.value,
 
 # keyword → role template. The template's own skill profile does the matching (docs/04 §2).
 _HIRE_MAP: list[tuple[tuple[str, ...], Role]] = [
-    (("analist", "analyst", "veri", "data"), Role.ANALYST),
-    (("muhendis", "engineer", "developer", "gelistirici", "kod", "coding"), Role.WORKER),
-    (("arastirmaci", "researcher", "research", "arastir"), Role.ANALYST),
-    (("tasarimci", "designer", "design", "tasarim"), Role.WORKER),
-    (("yazar", "writer", "icerik", "content"), Role.WORKER),
+    (("analyst", "data"), Role.ANALYST),
+    (("engineer", "developer", "coding"), Role.WORKER),
+    (("researcher", "research"), Role.ANALYST),
+    (("designer", "design"), Role.WORKER),
+    (("writer", "content"), Role.WORKER),
 ]
 
 _HELP = (
-    "I can carry these out: status (\"durum ne?\", \"@Ada ne yapıyor?\") · assign "
-    "(\"@Ada, raporu hazırla\") · reassign (\"@Ada'nın işini @Bo'ya devret\") · fire "
-    "(\"@Marcus'u görevden al, sebep: …\") · break (\"herkese 15 dakika mola\", \"@Zoe 10 dk mola\") · "
-    "goal (\"hedef: pazarlama planı çıkar\") · budget (\"bütçeyi 25$\" / \"bütçeyi %20 artır\") · "
-    "hire (\"bir veri analisti işe al\"). Prefix a mode to set the tone: an order binds, "
-    "\"bir fikrim var: …\" is weighed, a question just gets answered."
+    "I can carry these out: status (\"what's the status?\", \"what is @Ada doing?\") · assign "
+    "(\"@Ada, prepare the report\") · reassign (\"move @Ada's task to @Bo\") · fire "
+    "(\"let @Mira go, reason: …\") · break (\"everyone takes a 15-minute break\", \"@Zoe, 10-minute break\") · "
+    "goal (\"goal: plan the Q4 campaign\") · budget (\"set the budget to $25\" / \"raise the budget by 20%\") · "
+    "hire (\"hire a data analyst\"). Prefix a mode to set the tone: an order binds, "
+    "\"I have an idea: …\" is weighed, a question just gets answered."
 )
 
 
@@ -69,9 +69,7 @@ class Command:
 
 
 def _norm(s: str) -> str:
-    out = (s.lower().replace("ı", "i").replace("ş", "s").replace("ğ", "g")
-           .replace("ü", "u").replace("ö", "o").replace("ç", "c"))
-    return re.sub(r"\s+", " ", out)
+    return re.sub(r"\s+", " ", s.lower())
 
 
 def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
@@ -81,7 +79,7 @@ def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
     desk never guesses between two people silently; the reply names who it took.
     """
     tokens = [t.strip(" ,;:!?.…").strip() for t in re.findall(r"@([^\s,;:!?]+)", text)]
-    tokens = [t.split("'")[0].split("’")[0] for t in tokens]  # Marcus'u → Marcus
+    tokens = [t.split("'")[0].split("’")[0] for t in tokens]  # @Ada's → Ada
     if not tokens:
         # no tags: look for roster first-names used as words (2+ letters)
         norm_text = _norm(text)
@@ -107,7 +105,7 @@ def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
 
 
 def parse_command(text: str, roster: list[dict]) -> Command:
-    """Lexicon parse — pure, no DB, no clock. Turkish and English both welcome."""
+    """Lexicon parse — pure, no DB, no clock. English lexicon (ADR 0012)."""
     norm = _norm(text)
     ids, unknown = _mentions(text, roster)
     cleaned = re.sub(r"@\S+", " ", text).strip(" ,;:—-")
@@ -117,47 +115,44 @@ def parse_command(text: str, roster: list[dict]) -> Command:
     # tone: a question stays a question; a floating idea is weighed, not obeyed
     if text.strip().endswith("?") or "?" in text.strip()[:60]:
         cmd.mode = "question"
-    if any(k in norm for k in ("fikir", "oneri", "dusuncem", "belki", "idea", "suggestion",
-                               "i think", "maybe")):
+    if any(k in norm for k in ("idea", "suggestion", "i think", "maybe")):
         cmd.mode = "idea"
 
-    m = re.search(r"(\d{1,3})\s*(dakika|dk|min|minutes|minute)", norm)
+    m = re.search(r"(\d{1,3})\s*-?\s*(min|minutes|minute)", norm)
     if m:
         cmd.minutes = max(1, min(MAX_BREAK_MINUTES, int(m.group(1))))
-    m = re.search(r"(?:yuzde\s*|%\s*)(\d{1,3})", norm)
+    m = re.search(r"(?:%\s*)(\d{1,3})", norm)
     if not m:
-        m = re.search(r"(\d{1,3})\s*(?:yuzde|percent|%)", norm)
+        m = re.search(r"(\d{1,3})\s*(?:percent|%)", norm)
     if m:
         cmd.percent = float(m.group(1))
-    m = re.search(r"\$?\s*(\d+(?:[.,]\d+)?)\s*(?:dolar|usd|\$)", norm)
+    m = re.search(r"\$\s*(\d+(?:[.,]\d+)?)", norm)          # $25 / $ 25
+    if not m:
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:dollars?|usd|\$)", norm)  # 25 dollars / 25$
     if m:
         cmd.amount_usd = float(m.group(1).replace(",", "."))
 
-    if any(k in norm for k in ("ne yapabilirsin", "yardim", "komutlar", "help",
-                               "what can you")):
+    if any(k in norm for k in ("help", "what can you", "commands")):
         cmd.intent, cmd.confidence = "help", 0.95
-    elif any(k in norm for k in ("mola", "break", "dinlen")):
+    elif any(k in norm for k in ("break",)):
         cmd.intent, cmd.confidence = "break", 0.9
-        cmd.everyone = any(k in norm for k in ("herkes", "herkese", "tum ", "all "))
-        cmd.clear_break = any(k in norm for k in ("kaldir", "bitir", "iptal", "clear",
-                                                  "end the"))
-    elif any(k in norm for k in ("gorevden al", "kov", "isten cikar", "fire",
-                                 "let go", "dismiss", "terminate")):
+        cmd.everyone = any(k in norm for k in ("all ", "everyone", "everybody"))
+        cmd.clear_break = any(k in norm for k in ("clear", "end the", "cancel"))
+    elif any(k in norm for k in ("fire", "let go", "dismiss", "terminate")) \
+            or re.search(r"\blet\b[^.!?]*\bgo\b", norm):
         cmd.intent, cmd.confidence = "fire", 0.9
-    elif any(k in norm for k in ("devret", "devir", "aktar", "reassign", "transfer",
-                                 "hand over")):
-        cmd.intent, cmd.confidence = "reassign", 0.85
-    elif any(k in norm for k in ("ise al", "hire", "alim")):
-        cmd.intent, cmd.confidence = "hire", 0.85
-    elif any(k in norm for k in ("butce", "budget")):
-        cmd.intent, cmd.confidence = "budget", 0.9
-    elif any(k in norm for k in ("hedef", "goal", "odaklan", "focus on")):
+    elif any(k in norm for k in ("goal", "focus on")):
         cmd.intent, cmd.confidence = "goal", 0.85
-    elif any(k in norm for k in ("durum", "status", "ne oldu", "neler oluyor",
-                                 "what's up", "ne yapiyor", "nasil gidiyor")):
+    elif any(k in norm for k in ("reassign", "transfer", "hand over", "move")):
+        cmd.intent, cmd.confidence = "reassign", 0.85
+    elif any(k in norm for k in ("hire",)):
+        cmd.intent, cmd.confidence = "hire", 0.85
+    elif any(k in norm for k in ("budget",)):
+        cmd.intent, cmd.confidence = "budget", 0.9
+    elif any(k in norm for k in ("status", "what's up", "doing")):
         cmd.intent, cmd.confidence = "status", 0.85
-    elif any(k in norm for k in ("gorev ver", "gorev:", "assign", "hazirla", "hallet",
-                                 "calis", "tamamla", "task for")) \
+    elif any(k in norm for k in ("assign", "task for", "prepare", "draft", "write",
+                                 "build", "create", "review", "fix", "handle")) \
             or ("@" in text and ":" in text):
         cmd.intent, cmd.confidence = "assign", 0.8
     return cmd
@@ -197,7 +192,7 @@ async def _interpret_with_model(text: str, roster: list[dict]) -> Command | None
         cmd.amount_usd = float(raw["amount_usd"])
     if raw.get("percent") is not None:
         cmd.percent = float(raw["percent"])
-    cmd.everyone = any(k in _norm(text) for k in ("herkes", "herkese", "all "))
+    cmd.everyone = any(k in _norm(text) for k in ("all ", "everyone", "everybody"))
     cmd.clear_break = False
     cmd.confidence = float(raw.get("confidence", 0.7))
     return cmd
@@ -414,7 +409,7 @@ async def _reassign(project_id: str, parsed: Command, roster: list[dict],
 async def _fire(project_id: str, parsed: Command, roster: list[dict],
                 actor: str) -> tuple[str, list[dict], bool]:
     if not parsed.mentions:
-        return ("Who should be let go? Tag them: “@Marcus'u görevden al”.", [], False)
+        return ("Who should be let go? Tag them: “fire @Ada, reason: …”.", [], False)
     to_fire = parsed.mentions[0]
     entry = next((a for a in roster if a["id"] == to_fire), None)
     if entry is None:
@@ -439,8 +434,8 @@ async def _break(project_id: str, parsed: Command, roster: list[dict],
         # "end the breaks" with no names: whoever is actually on one
         targets = [a for a in roster if a.get("break_until")]
     else:
-        return ("A break for whom? Tag someone (“@Zoe 10 dk mola”) or say "
-                "“herkese 15 dakika mola”.", [], False)
+        return ("A break for whom? Tag someone (“@Zoe, 10-minute break”) or say "
+                "“everyone, break for 15 minutes”.", [], False)
     if not targets:
         if parsed.clear_break:
             return ("Nobody is on a break.", [], False)
@@ -492,7 +487,8 @@ async def _budget(project_id: str, parsed: Command, actor: str) -> tuple[str, li
     elif parsed.percent is not None:
         new_cap = int(old_cap * (1 + parsed.percent / 100.0))
     else:
-        return ("Give me a number: “bütçeyi 25$” or “bütçeyi %20 artır”.", [], False)
+        return ("Give me a number: “set the budget to $25” or “raise the budget "
+                "by 20%”.", [], False)
     new_cap = max(new_cap, 0)
     async with session_scope() as s:
         project = await s.get(Project, project_id)
@@ -514,7 +510,7 @@ async def _hire(project_id: str, parsed: Command, raw: str, actor: str) -> tuple
             break
     if role is None:
         return ("I can hire an analyst, an engineer, a researcher, a designer or a "
-                "writer — say which (“bir veri analisti işe al”).", [], False)
+                "writer — say which (“hire a data analyst”).", [], False)
     spec = RoleSpec.from_template(role, mission=f"hired by the Captain: {raw[:100]}")
     agent = await org.hire_agent(project_id=project_id, spec=spec,
                                  rationale=f"the Captain's hire: {raw[:100]}", actor=actor)

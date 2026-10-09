@@ -14,7 +14,7 @@ from crew.domain.enums import TaskState
 ROSTER = [
     {"id": "a1", "name": "Ada Lovelace", "role": "worker", "state": "idle"},
     {"id": "a2", "name": "Nils", "role": "worker", "state": "idle"},
-    {"id": "a3", "name": "Marcus", "role": "coo", "state": "idle"},
+    {"id": "a3", "name": "Mira", "role": "coo", "state": "idle"},
 ]
 
 
@@ -28,40 +28,40 @@ async def _agent(s, project_id: str, name: str, *, role: str = "worker", **kw) -
 
 # ── the lexicon (pure) ──────────────────────────────────────────────────────────────
 
-def test_parse_turkish_assignment_routes_to_the_named_agent():
-    c = commands.parse_command("@Ada, pazarlama raporunu hazırla", ROSTER)
+def test_parse_assignment_routes_to_the_named_agent():
+    c = commands.parse_command("@Ada, prepare the marketing report", ROSTER)
     assert c.intent == "assign" and c.mentions == ["a1"]
 
 
 def test_parse_break_for_everyone_with_minutes():
-    c = commands.parse_command("herkese 15 dakika mola ver", ROSTER)
+    c = commands.parse_command("everyone takes a 15-minute break", ROSTER)
     assert c.intent == "break" and c.everyone and c.minutes == 15
-    clear = commands.parse_command("molayı kaldır", ROSTER)
+    clear = commands.parse_command("clear the breaks", ROSTER)
     assert clear.intent == "break" and clear.clear_break
 
 
 def test_parse_fire_carries_the_reason_text():
-    c = commands.parse_command("@Marcus'u görevden al, sebep: sürekli hata", ROSTER)
-    assert c.intent == "fire" and c.mentions == ["a3"] and "sebep" in c.text
+    c = commands.parse_command("let @Mira go, reason: repeated failures", ROSTER)
+    assert c.intent == "fire" and c.mentions == ["a3"] and "reason" in c.text
 
 
 def test_parse_reassign_needs_both_names():
-    c = commands.parse_command("@Ada'nın işini @Nils'e devret", ROSTER)
+    c = commands.parse_command("move @Ada's task to @Nils", ROSTER)
     assert c.intent == "reassign" and c.mentions == ["a1", "a2"]
 
 
 def test_parse_question_mode_for_status():
-    c = commands.parse_command("@Ada ne yapıyor?", ROSTER)
+    c = commands.parse_command("what is @Ada doing?", ROSTER)
     assert c.intent == "status" and c.mode == "question" and c.mentions == ["a1"]
 
 
 def test_parse_idea_mode_is_weighed_not_ordered():
-    c = commands.parse_command("bir fikrim var: belki raporu haftaya alırız", ROSTER)
+    c = commands.parse_command("I have an idea: maybe we run the report next week", ROSTER)
     assert c.mode == "idea"
 
 
 def test_parse_unknown_stays_unparsed_with_low_confidence():
-    c = commands.parse_command("bugün hava çok güzel", ROSTER)
+    c = commands.parse_command("the weather is nice today", ROSTER)
     assert c.intent == "unparsed" and c.confidence < 0.6
 
 
@@ -73,7 +73,7 @@ async def test_assign_creates_a_task_and_ties_it_to_the_named_agent(bound_loop, 
         ada = await _agent(s, project["id"], "Ada", department_id=None)
         ada_id = ada.id
     out = await commands.handle_command(project_id=project["id"],
-                                        text="@Ada, aylık özeti hazırla",
+                                        text="@Ada, prepare the monthly summary",
                                         actor="user:tester")
     assert out["reply"]["ok"] is True and "Ada" in out["reply"]["text"]
     async with session_scope() as s:
@@ -94,7 +94,8 @@ async def test_break_parks_matching_and_clears(bound_loop, project):
         ida = await _agent(s, project["id"], "Ida")
         ida_id = ida.id
     out = await commands.handle_command(project_id=project["id"],
-                                        text="herkese 20 dakika mola", actor="user:t")
+                                        text="everyone takes a 20 minute break",
+                                        actor="user:t")
     assert out["reply"]["ok"] is True
     async with session_scope() as s:
         row = await s.get(Agent, ida_id)
@@ -110,7 +111,7 @@ async def test_break_parks_matching_and_clears(bound_loop, project):
         t2 = (await s.scalars(select(Task).where(Task.run_id == "r-break"))).all()
     assert n == 0 and t2[0].state == TaskState.BLOCKED.value
 
-    out2 = await commands.handle_command(project_id=project["id"], text="molayı kaldır",
+    out2 = await commands.handle_command(project_id=project["id"], text="clear the breaks",
                                          actor="user:t")
     assert out2["reply"]["ok"] is True
     async with session_scope() as s:
@@ -121,18 +122,18 @@ async def test_break_parks_matching_and_clears(bound_loop, project):
 @pytest.mark.asyncio
 async def test_fire_archives_and_cannot_touch_the_engine(bound_loop, project):
     async with session_scope() as s:
-        marcus = await _agent(s, project["id"], "Marcus")
+        mira = await _agent(s, project["id"], "Mira")
         eng = await _agent(s, project["id"], "Onyx", role="orchestrator")
-        marcus_id, eng_id = marcus.id, eng.id
+        mira_id, eng_id = mira.id, eng.id
     out = await commands.handle_command(project_id=project["id"],
-                                        text="@Marcus'u görevden al, sebep: tekrarlayan hata",
+                                        text="let @Mira go, reason: repeated failures",
                                         actor="user:t")
     assert out["reply"]["ok"] is True and "archived" in out["reply"]["text"]
     refuse = await commands.handle_command(project_id=project["id"],
-                                           text="@Onyx'i görevden al", actor="user:t")
+                                           text="fire @Onyx", actor="user:t")
     assert refuse["reply"]["ok"] is True and "board" in refuse["reply"]["text"]
     async with session_scope() as s:
-        assert (await s.get(Agent, marcus_id)).state == "archived"
+        assert (await s.get(Agent, mira_id)).state == "archived"
         assert (await s.get(Agent, eng_id)).state != "archived"
 
 
@@ -147,7 +148,7 @@ async def test_reassign_moves_the_task_and_frees_the_old_owner(bound_loop, proje
         await s.flush()
         ada_id, bo_id, tid = ada.id, bo.id, t.id
     out = await commands.handle_command(project_id=project["id"],
-                                        text="@Ada'nın işini @Bo'ya devret", actor="user:t")
+                                        text="move @Ada's task to @Bo", actor="user:t")
     assert out["reply"]["ok"] is True and "Bo" in out["reply"]["text"]
     async with session_scope() as s:
         t2 = await s.get(Task, tid)
@@ -161,7 +162,7 @@ async def test_reassign_moves_the_task_and_frees_the_old_owner(bound_loop, proje
 @pytest.mark.asyncio
 async def test_budget_command_writes_the_cap(bound_loop, project):
     out = await commands.handle_command(project_id=project["id"],
-                                        text="bütçeyi 25$ yap", actor="user:t")
+                                        text="set the budget to $25", actor="user:t")
     assert out["reply"]["ok"] is True
     async with session_scope() as s:
         p = await s.get(Project, project["id"])
@@ -171,7 +172,7 @@ async def test_budget_command_writes_the_cap(bound_loop, project):
 @pytest.mark.asyncio
 async def test_goal_command_starts_a_run(bound_loop, project):
     out = await commands.handle_command(project_id=project["id"],
-                                        text="hedef: Q4 kampanyasını planla", actor="user:t")
+                                        text="goal: plan the Q4 campaign", actor="user:t")
     assert out["reply"]["ok"] is True and "Run started" in out["reply"]["text"]
     async with session_scope() as s:
         runs = (await s.scalars(select(Run).where(Run.project_id == project["id"]))).all()
@@ -180,7 +181,7 @@ async def test_goal_command_starts_a_run(bound_loop, project):
 
 @pytest.mark.asyncio
 async def test_transcript_reads_back_the_exchange(bound_loop, project):
-    await commands.handle_command(project_id=project["id"], text="durum ne?",
+    await commands.handle_command(project_id=project["id"], text="status?",
                                   actor="user:t")
     t = await commands.transcript(project_id=project["id"])
     roles = [m["role"] for m in t["messages"]]
@@ -198,10 +199,10 @@ async def test_an_order_reaches_the_prompt_of_the_tagged_agent(bound_loop, proje
         other = await _agent(s, project["id"], "Silas")
         ada_id, other_id = ada.id, other.id
     await commands.handle_command(project_id=project["id"],
-                                  text="@Ada, özet tablosunu hazırla", actor="user:t")
+                                  text="@Ada, prepare the summary table", actor="user:t")
     mine = await orchestrator._captain_notes(project["id"], ada_id)
     theirs = await orchestrator._captain_notes(project["id"], other_id)
-    assert any("binding" in m and "özet tablosunu" in m for m in mine)
+    assert any("binding" in m and "summary table" in m for m in mine)
     assert theirs == [], "an addressed order does not leak to the whole floor"
 
 
@@ -216,15 +217,15 @@ async def test_only_landed_words_bind_the_floor(bound_loop, project):
         eng = await _agent(s, project["id"], "Onyx", role="orchestrator")
         ada_id, eng_id = ada.id, eng.id
     # an unparsed sentence, a refused dismissal, an answered question — all recorded:
-    await commands.handle_command(project_id=project["id"], text="bugün hava çok güzel",
+    await commands.handle_command(project_id=project["id"], text="the weather is nice today",
                                   actor="user:t")
-    await commands.handle_command(project_id=project["id"], text="@Onyx'i görevden al",
+    await commands.handle_command(project_id=project["id"], text="fire @Onyx",
                                   actor="user:t")
-    await commands.handle_command(project_id=project["id"], text="durum ne?", actor="user:t")
+    await commands.handle_command(project_id=project["id"], text="status?", actor="user:t")
     assert await orchestrator._captain_notes(project["id"], ada_id) == []
     assert await orchestrator._captain_notes(project["id"], eng_id) == []
     # a landed order binds its addressee
     await commands.handle_command(project_id=project["id"],
-                                  text="@Ada, satış özetini hazırla", actor="user:t")
+                                  text="@Ada, prepare the sales summary", actor="user:t")
     mine = await orchestrator._captain_notes(project["id"], ada_id)
-    assert any("binding" in m and "satış özetini" in m for m in mine)
+    assert any("binding" in m and "sales summary" in m for m in mine)

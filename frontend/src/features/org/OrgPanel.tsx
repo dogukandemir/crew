@@ -87,7 +87,7 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
         <span className="tabular-nums">
-          {counts.department} dept · {counts.squad} squad · {counts.agent} agent
+          {counts.department} depts · {counts.squad} squads · {counts.agent} agents
         </span>
         <span className="ml-auto flex items-center gap-1">
           <Button size="xs" variant={hideArchived ? 'secondary' : 'ghost'} onClick={() => setHideArchived((v) => !v)}>
@@ -97,7 +97,7 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
             show cost
           </Button>
           <Button size="xs" variant={hearOrg ? 'secondary' : 'ghost'} onClick={() => setHearOrg((v) => !v)}>
-            hear the org
+            live pulse
           </Button>
           <Button size="xs" variant="primary" onClick={() => setHireOpen(true)}>
             ＋ Hire

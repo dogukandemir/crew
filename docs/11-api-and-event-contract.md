@@ -55,6 +55,7 @@ additively for pre-tree readers; `nodes` is the flat index of `root`.
 | GET | `/api/health` | liveness + version + contract version |
 | GET | `/api/system/status` | db, bus, scheduler, vault, providers health |
 | POST | `/api/system/kill` | kill all runs (confirm:true) |
+| POST | `/api/system/pick-directory` | show the OS folder picker on the host and return `{path, supported}` — the founding wizard's Browse button (ADR 0017); loopback-only in prod, 409 while a dialog is already open |
 | POST | `/api/auth/login` | `{email,password}` → tokens (token mode) |
 | POST | `/api/auth/refresh` | rotate access token |
 | POST | `/api/auth/logout` | revoke session |

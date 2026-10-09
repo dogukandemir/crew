@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
@@ -411,6 +416,71 @@ async def system_status() -> dict:
         "vault": "configured" if settings.vault_key else "missing",
         "runner": type(select_runner()).__name__,
     }
+
+
+# ── directory picker (ADR 0017: the workspace root is chosen at founding) ───────────
+# A browser cannot hand back an absolute path, so the machine that actually owns the
+# filesystem shows the dialog: the backend spawns the OS folder picker (Windows Forms /
+# osascript / zenity) and returns the choice. One dialog at a time; prod is loopback-only.
+_picker_lock = threading.Lock()
+
+
+def _picker_available() -> bool:
+    if os.name == "nt":
+        return shutil.which("powershell") is not None
+    if sys.platform == "darwin":
+        return shutil.which("osascript") is not None
+    return shutil.which("zenity") is not None
+
+
+def _pick_directory_native() -> str | None:
+    """Show the OS folder picker on the host; None = cancelled, timed out or dismissed."""
+    try:
+        if os.name == "nt":
+            script = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                "$f.Description = 'Choose the workspace root for this company'; "
+                "$f.ShowNewFolderButton = $true; "
+                "if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+                "{ [Console]::Out.Write($f.SelectedPath) }"
+            )
+            proc = subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", script],
+                                  capture_output=True, text=True, timeout=300)
+        elif sys.platform == "darwin":
+            proc = subprocess.run(
+                ["osascript", "-e",
+                 'POSIX path of (choose folder with prompt "Choose the workspace root")'],
+                capture_output=True, text=True, timeout=300)
+        else:
+            proc = subprocess.run(["zenity", "--file-selection", "--directory",
+                                   "--title=Choose the workspace root"],
+                                  capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (proc.stdout or "").strip() or None
+
+
+@api.post("/system/pick-directory")
+def pick_directory(request: Request, user: dict = Depends(require_user)) -> dict:
+    """Open the OS folder picker on the host and return the chosen absolute path.
+
+    Supports the founding wizard's Browse button (ADR 0017). Returns `{path: null,
+    supported: false}` where no desktop picker exists so the UI can say "type it".
+    """
+    if not settings.is_dev:
+        host = (request.client.host if request.client else "") or ""
+        if host not in ("127.0.0.1", "::1", "localhost"):
+            raise _problem(403, "the directory picker is available on the local machine only")
+    if not _picker_available():
+        return {"path": None, "supported": False}
+    if not _picker_lock.acquire(blocking=False):
+        raise _problem(409, "a directory picker is already open")
+    try:
+        path = _pick_directory_native()
+    finally:
+        _picker_lock.release()
+    return {"path": path, "supported": True}
 
 
 @api.post("/system/kill", dependencies=[Depends(require_user)])

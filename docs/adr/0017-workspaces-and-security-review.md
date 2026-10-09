@@ -28,7 +28,11 @@ with three gaps the owner called out:
   machine-level root; tests override it, never the real home.
 - **Founding chooses the company's root.** The wizard's optional *Workspace path* field
   is stored as `company.settings.workspace_root` (absolute path required; created and
-  probed at founding — a failure refuses the founding with a clear error).
+  probed at founding — a failure refuses the founding with a clear error). The field has
+  a **Browse** button: a browser cannot read absolute paths, so the backend shows the OS
+  folder picker on the machine that owns the filesystem (`POST /api/system/pick-directory`,
+  Windows Forms / osascript / zenity; loopback-only in prod, one dialog at a time) and the
+  choice fills the input. Cancelling changes nothing.
 - **Default when not given:** `{workspace_root}/{company_name}/{project_name}` —
   each of the two name segments sanitized for the filesystem (illegal chars removed,
   no traversal, never empty), per the owner's formula.

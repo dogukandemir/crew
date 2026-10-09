@@ -225,6 +225,13 @@ export const api = {
     request<OnboardingKeyResult>('/api/onboarding/key', { method: 'POST', body: { provider, key } }),
   killAll: (confirm: boolean) =>
     request<CommandAck>('/api/system/kill', { method: 'POST', body: { confirm } }),
+  /** The founding wizard's Browse button (ADR 0017): the backend shows the OS folder
+   * picker on this machine and returns the chosen absolute path (null = cancelled). */
+  pickDirectory: () =>
+    request<{ path: string | null; supported: boolean }>('/api/system/pick-directory', {
+      method: 'POST',
+      body: {},
+    }),
   login: (email: string, password: string) =>
     request<{ access_token: string; refresh_token?: string }>('/api/auth/login', {
       method: 'POST',

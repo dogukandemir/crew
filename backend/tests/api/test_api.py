@@ -364,3 +364,28 @@ async def test_ui_contract_shapes(client):
     # (total/next_cursor) is documented-optional and the client backfills it (docs/11 §5)
     tasks = (await client.get(f"/api/projects/{p['id']}/tasks")).json()
     assert "items" in tasks and isinstance(tasks["items"], list)
+
+
+async def test_pick_directory_returns_the_os_choice(client, monkeypatch):
+    """The founding wizard's Browse button (ADR 0017): the host dialog's choice comes
+    back as an absolute path — the browser never touches the filesystem itself."""
+    from crew.api import routes as routes_mod
+
+    monkeypatch.setattr(routes_mod, "_pick_directory_native", lambda: "C:/picked/root")
+    r = await client.post("/api/system/pick-directory")
+    assert r.status_code == 200
+    assert r.json() == {"path": "C:/picked/root", "supported": True}
+
+
+async def test_pick_directory_cancel_and_unsupported(client, monkeypatch):
+    from crew.api import routes as routes_mod
+
+    monkeypatch.setattr(routes_mod, "_pick_directory_native", lambda: None)
+    r = await client.post("/api/system/pick-directory")
+    body = r.json()
+    assert r.status_code == 200 and body["path"] is None and body["supported"] is True, \
+        "a cancelled dialog is an honest null, not an error"
+
+    monkeypatch.setattr(routes_mod, "_picker_available", lambda: False)
+    r = await client.post("/api/system/pick-directory")
+    assert r.status_code == 200 and r.json() == {"path": None, "supported": False}

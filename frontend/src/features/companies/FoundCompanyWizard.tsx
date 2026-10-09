@@ -82,6 +82,21 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
     },
   });
 
+  // Browse (ADR 0017): the browser cannot read absolute paths, so the backend shows
+  // the OS folder picker on this machine and hands the choice back.
+  const pickDir = useMutation({
+    mutationFn: () => api.pickDirectory(),
+    onSuccess: (r) => {
+      if (r.path) {
+        setWorkspacePath(r.path);
+      } else if (!r.supported) {
+        setToast({ kind: 'error', message: 'No folder picker on this machine — type the path instead.' });
+      }
+      // cancelled: stay silent; the input keeps whatever it had
+    },
+    onError: (err) => setToast({ kind: 'error', message: String(err) }),
+  });
+
   const valid =
     name.trim().length > 0 && projectName.trim().length > 0 && goal.trim().length >= 3;
 
@@ -180,12 +195,23 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
               label="Workspace root"
               hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree — they can never touch anything outside it. Empty → ~/crew/workspace/{company}/{project}."
             >
-              <Input
-                value={workspacePath}
-                onChange={(e) => setWorkspacePath(e.target.value)}
-                placeholder="Absolute path, e.g. D:\\crew-work or /srv/crew"
-                className="font-mono text-xs"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={workspacePath}
+                  onChange={(e) => setWorkspacePath(e.target.value)}
+                  placeholder="Absolute path, e.g. D:\\crew-work or /srv/crew"
+                  className="min-w-0 flex-1 font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  type="button"
+                  loading={pickDir.isPending}
+                  onClick={() => pickDir.mutate()}
+                >
+                  Browse…
+                </Button>
+              </div>
             </Field>
           </>
         )}

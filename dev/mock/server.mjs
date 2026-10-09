@@ -1518,6 +1518,11 @@ const server = http.createServer((req, res) => {
   }
   // Approvals decisions and the always-allow list (ADR 0017): the demo answers like
   // the real backend so the tray's new review cards and the settings list behave.
+  if (/^\/api\/system\/pick-directory$/.test(url.pathname) && req.method === 'POST') {
+    // The demo cannot open an OS dialog: answer like a user who picked this folder.
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ path: 'C:/crew-demo/workspaces', supported: true }));
+  }
   if (/^\/api\/approvals\/([^/]+)\/(grant|deny)$/.test(url.pathname) && req.method === 'POST') {
     let raw = '';
     req.on('data', (c) => { raw += c; });

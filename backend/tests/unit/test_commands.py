@@ -234,3 +234,28 @@ async def test_only_landed_words_bind_the_floor(bound_loop, project):
                                   text="@Ada, prepare the sales summary", actor="user:t")
     mine = await orchestrator._captain_notes(project["id"], ada_id)
     assert any("binding" in m and "sales summary" in m for m in mine)
+
+
+@pytest.mark.asyncio
+async def test_assign_strips_a_two_word_addressee_from_the_title(bound_loop, project):
+    """The parser eats the '@' token, not the whole name: a two-word addressee left the
+    surname stuck to the title ('Schreiber, draft …')."""
+    async with session_scope() as s:
+        b = await _agent(s, project["id"], "Grace Hopper")
+        bid = b.id
+    out = await commands.handle_command(project_id=project["id"],
+                                        text="@Grace Hopper, write the spec",
+                                        actor="user:tester")
+    assert out["reply"]["ok"] is True
+    async with session_scope() as s:
+        rows = (await s.scalars(select(Task).where(Task.assignee_agent_id == bid))).all()
+    assert rows and rows[0].title == "write the spec", f"title: {rows[0].title if rows else None}"
+
+
+def test_parse_qa_verb_and_comma_mention_assign():
+    """'@Ada, qa the page' is an order — the lexicon knew draft/write but not QA, and
+    the punctuation form only accepted a colon."""
+    c = commands.parse_command("@Ada, qa the pricing page", ROSTER)
+    assert c.intent == "assign" and c.confidence >= 0.8
+    c2 = commands.parse_command("@Bo, tidy the board", ROSTER)
+    assert c2.intent == "assign", "a comma after the mention is still a directed order"

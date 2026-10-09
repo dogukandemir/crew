@@ -159,8 +159,8 @@ def parse_command(text: str, roster: list[dict]) -> Command:
     elif any(k in norm for k in ("status", "what's up", "doing")):
         cmd.intent, cmd.confidence = "status", 0.85
     elif any(k in norm for k in ("assign", "task for", "prepare", "draft", "write",
-                                 "build", "create", "review", "fix", "handle")) \
-            or ("@" in text and ":" in text):
+                                 "build", "create", "review", "fix", "handle", "qa ")) \
+            or ("@" in text and (":" in text or "," in text)):
         cmd.intent, cmd.confidence = "assign", 0.8
     return cmd
 
@@ -333,9 +333,10 @@ async def _assign(project_id: str, parsed: Command, roster: list[dict], raw: str
     async with session_scope() as s:
         agent = await s.get(Agent, target) if target else None
         if agent:
-            # the mention marker is stripped by the parser but the NAME stays in the
-            # sentence: "@Lena Schreiber, draft the checklist" → "draft the checklist"
-            for alias in (agent.name, agent.name.split()[0]):
+            # the mention marker is stripped by the parser but part of the NAME stays in
+            # the sentence: "@Lena Schreiber, draft …" → "draft …" (the parser eats
+            # "@Lena", leaving "Schreiber, …" — check name, first AND last word)
+            for alias in (agent.name, agent.name.split()[0], agent.name.split()[-1]):
                 if alias and title.lower().startswith(alias.lower()):
                     title = title[len(alias):].lstrip(" ,:—-·").strip() or title
                     break

@@ -1084,10 +1084,9 @@ async def org_tree(project_id: str) -> dict:
     orchestrator = next((a for a in live if a.id == orch_id), None)
 
     def squad_node(sq: Squad, members: list[Agent]) -> dict:
+        # A squad tracks no budget of its own — no invented spend fields.
         return {"id": sq.id, "kind": "squad", "name": sq.name, "mission": sq.mission,
                 "state": sq.status, "lead_agent_id": sq.lead_agent_id,
-                "spend_usd": round(sq.spend_micros / 1e6, 4),
-                "spend_micros": sq.spend_micros, "cost_micros": sq.spend_micros,
                 "children": [agent_node(a) for a in members]}
 
     dept_nodes: list[dict] = []
@@ -1119,8 +1118,7 @@ async def org_tree(project_id: str) -> dict:
             "children": children,
             # legacy flat view, kept additively (contract §5)
             "squads": [{"id": sq.id, "kind": "squad", "name": sq.name, "mission": sq.mission,
-                        "lead_agent_id": sq.lead_agent_id, "status": sq.status,
-                        "spend_micros": sq.spend_micros} for sq in d_squads],
+                        "lead_agent_id": sq.lead_agent_id, "status": sq.status} for sq in d_squads],
             "agents": [agent_node(a) for a in d_agents],
         })
 

@@ -418,6 +418,14 @@ async def _fire(project_id: str, parsed: Command, roster: list[dict],
         return (f"@{entry['name']} holds an office the desk doesn't dismiss "
                 f"({entry['role']}) — that decision belongs to the board.", [], False)
     reason = parsed.text or "the Captain's call"
+    # The reason reads the reason: strip the verb phrase, and if the Captain said
+    # "reason: …" use exactly that — never the command's leftovers.
+    reason = re.sub(r"^(?:let\b[^,;:]*?\bgo|fire|dismiss|terminate)\b[ ,;:—-]*", "",
+                    reason, flags=re.I).strip(" ,;:—-")
+    m = re.search(r"\breason\b\s*[:\-–—]?\s*(.+)", reason, flags=re.I)
+    if m:
+        reason = m.group(1).strip()
+    reason = reason or "the Captain's call"
     await org.layoff_agent(project_id=project_id, agent_id=to_fire, reason=reason[:300],
                            actor=actor)
     return (f"Done: @{entry['name']} is archived (reason: “{reason[:80]}”).", [], True)

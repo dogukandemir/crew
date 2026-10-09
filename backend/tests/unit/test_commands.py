@@ -129,6 +129,8 @@ async def test_fire_archives_and_cannot_touch_the_engine(bound_loop, project):
                                         text="let @Mira go, reason: repeated failures",
                                         actor="user:t")
     assert out["reply"]["ok"] is True and "archived" in out["reply"]["text"]
+    assert "repeated failures" in out["reply"]["text"], \
+        "the reason reads the reason, not the verb residue"
     refuse = await commands.handle_command(project_id=project["id"],
                                            text="fire @Onyx", actor="user:t")
     assert refuse["reply"]["ok"] is True and "board" in refuse["reply"]["text"]

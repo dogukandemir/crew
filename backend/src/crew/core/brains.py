@@ -1,4 +1,8 @@
-"""Three-level memory: project / department / agent brains (docs/06).
+"""Four-level memory: company / project / department / agent brains (docs/06, ADR 0015).
+
+The company brain is the umbrella: it lives on the company's own row, review and
+allocation decisions land in it, and every member project's agents retrieve from it —
+so a directive written once is available across the whole portfolio.
 
 MVP retrieval is lexical (token overlap) + recency + importance + trust, which keeps the
 system dependency-free; the scoring function lives in one place so a vector index can be
@@ -15,7 +19,7 @@ from sqlalchemy import select
 
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Brain, BrainEntry, BrainLink
+from crew.core.models import Agent, Brain, BrainEntry, BrainLink, Department, Project
 from crew.domain.enums import BrainKind, BrainScope, Trust
 
 WORD_RE = re.compile(r"[a-zA-Z0-9_\-]{3,}")
@@ -68,6 +72,28 @@ class BrainService:
     async def ensure_project_brain(self, project_id: str, label: str = "project") -> str:
         return await self.ensure_brain(project_id, BrainScope.PROJECT, project_id, label)
 
+    async def ensure_company_brain(self, company_id: str, label: str = "company") -> str:
+        """The umbrella memory (ADR 0015). Companies created before the company scope
+        existed kept their memory in a project-scope brain on the same row — flip it
+        rather than strand the entries."""
+        async with session_scope() as s:
+            row = await s.scalar(select(Brain).where(Brain.project_id == company_id,
+                                                     Brain.scope == BrainScope.COMPANY.value))
+            if row:
+                return row.id
+            legacy = await s.scalar(select(Brain).where(Brain.project_id == company_id,
+                                                        Brain.scope == BrainScope.PROJECT.value))
+            if legacy:
+                legacy.scope = BrainScope.COMPANY.value
+                legacy.label = label
+                s.add(legacy)
+                return legacy.id
+            b = Brain(project_id=company_id, scope=BrainScope.COMPANY.value,
+                      owner_id=company_id, label=label)
+            s.add(b)
+            await s.flush()
+            return b.id
+
     async def list_brains(self, project_id: str) -> list[dict]:
         from sqlalchemy import func
 
@@ -78,8 +104,25 @@ class BrainService:
                     BrainEntry.project_id == project_id).group_by(BrainEntry.brain_id)
             )).all()
             counts = {bid: int(n) for bid, n in rows}
-        return [{"id": b.id, "scope": b.scope, "owner_id": b.owner_id, "label": b.label,
-                 "entries": counts.get(b.id, 0), "created_at": b.created_at.isoformat()} for b in brains]
+            # Resolve owner names (ADR 0015): the four levels get human labels —
+            # "department · 3fa2c1" is a database, "Design" is an org.
+            proj = await s.get(Project, project_id)
+            dept_names = {d.id: d.name for d in (await s.scalars(
+                select(Department).where(Department.project_id == project_id))).all()}
+            agent_names = {a.id: a.name for a in (await s.scalars(
+                select(Agent).where(Agent.project_id == project_id))).all()}
+        out = []
+        for b in brains:
+            if b.scope in (BrainScope.COMPANY.value, BrainScope.PROJECT.value):
+                owner_name = proj.name if proj is not None else ""
+            elif b.scope == BrainScope.DEPARTMENT.value:
+                owner_name = dept_names.get(b.owner_id, "")
+            else:
+                owner_name = agent_names.get(b.owner_id, "")
+            out.append({"id": b.id, "scope": b.scope, "owner_id": b.owner_id, "label": b.label,
+                        "owner_name": owner_name,
+                        "entries": counts.get(b.id, 0), "created_at": b.created_at.isoformat()})
+        return out
 
     # ── read/write rights ─────────────────────────────────────────────────────────
     @staticmethod
@@ -88,6 +131,13 @@ class BrainService:
             return True, "system"
         if brain.scope == BrainScope.AGENT.value:
             return (actor.brain_id == brain.id), "agent brain is private"
+        if brain.scope == BrainScope.COMPANY.value:
+            # The umbrella memory belongs to the company's own row: its officers
+            # (CEO / board chair) write policy and directives; a member project's
+            # orchestrator only READS it (ADR 0015).
+            if actor.project_id == brain.project_id and actor.role in ("ceo", "chair"):
+                return True, ""
+            return False, "only the company's CEO/chair may write to the company brain"
         if brain.scope == BrainScope.DEPARTMENT.value:
             if actor.role in ("head", "lead") and actor.department_id == brain.owner_id:
                 return True, ""
@@ -182,13 +232,17 @@ class BrainService:
     # ── reads ─────────────────────────────────────────────────────────────────────
     async def search(self, *, project_id: str, brain_ids: list[str] | None, query: str, top_k: int = 8,
                      kinds: list[str] | None = None, record_use: bool = True) -> list[dict]:
+        """Retrieval scoped by BRAIN, not by row: the company brain's entries live on the
+        company's row (ADR 0015), so a member's agents must still find them — the brain
+        list handed in IS the scope."""
         qtok = _tokens(query)
         async with session_scope() as s:
-            stmt = select(BrainEntry).where(BrainEntry.project_id == project_id,
-                                            BrainEntry.superseded_by.is_(None),
+            stmt = select(BrainEntry).where(BrainEntry.superseded_by.is_(None),
                                             BrainEntry.archived_at.is_(None))
             if brain_ids:
                 stmt = stmt.where(BrainEntry.brain_id.in_(brain_ids))
+            else:
+                stmt = stmt.where(BrainEntry.project_id == project_id)
             if kinds:
                 stmt = stmt.where(BrainEntry.kind.in_(kinds))
             rows = (await s.scalars(stmt.limit(500))).all()
@@ -207,9 +261,19 @@ class BrainService:
             return [{**self._serialize(r), "score": total, "score_parts": parts} for total, parts, r in top]
 
     async def brains_for_agent(self, project_id: str, agent: Agent | None) -> list[str]:
-        """Scope resolution: agent brain, department brain, project brain (docs/06 §1)."""
+        """Scope resolution: agent brain, department brain, project brain, and the
+        company brain of the project's parent company (docs/06 §1, ADR 0015)."""
         ids: list[str] = []
         async with session_scope() as s:
+            # The umbrella first: company memory is retrieved by every member's agents,
+            # which is what makes a directive written once binding everywhere.
+            proj = await s.get(Project, project_id)
+            company_id = proj.company_id if proj is not None else None
+            if company_id:
+                co_brain = await s.scalar(select(Brain).where(
+                    Brain.project_id == company_id, Brain.scope == BrainScope.COMPANY.value))
+                if co_brain:
+                    ids.append(co_brain.id)
             if agent is not None:
                 if not agent.brain_id:
                     agent.brain_id = None
@@ -227,7 +291,7 @@ class BrainService:
                     ids.append(agent.brain_id)
             else:
                 rows = (await s.scalars(select(Brain.id).where(Brain.project_id == project_id))).all()
-                ids = list(rows)
+                ids.extend(list(rows))
         return ids
 
     async def context_pack(self, *, project_id: str, agent: Agent | None, query: str,

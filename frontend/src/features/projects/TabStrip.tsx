@@ -5,6 +5,7 @@ import { useUi } from '../../stores/ui';
 import { cn } from '../../lib/cn';
 import { StatusDot, dotForState, type DotState } from '../../components/ui/StatusDot';
 import { formatMicros } from '../../lib/format';
+import { groupKeyMaker, groupTabs } from './tabGroups';
 import type { Project } from '../../api/types';
 
 function tabDot(project: Project | undefined, socketState: string | undefined): DotState {
@@ -18,7 +19,17 @@ function tabDot(project: Project | undefined, socketState: string | undefined): 
   return dotForState(project.stage === 'EXECUTING' ? 'running' : project.stage.toLowerCase());
 }
 
-function Tab({ tab, name, project }: { tab: ProjectTab; name: string; project?: Project }) {
+function Tab({
+  tab,
+  name,
+  parentName,
+  project,
+}: {
+  tab: ProjectTab;
+  name: string;
+  parentName?: string;
+  project?: Project;
+}) {
   const activeTabId = useTabs((s) => s.activeTabId);
   const setActive = useTabs((s) => s.setActive);
   const closeTab = useTabs((s) => s.closeTab);
@@ -43,9 +54,11 @@ function Tab({ tab, name, project }: { tab: ProjectTab; name: string; project?: 
         type="button"
         onClick={() => setActive(tab.id)}
         className="flex min-w-0 items-center gap-2"
-        title={`${name}${tab.viewKey !== 'main' ? ` · view ${tab.viewKey}` : ''}`}
+        title={`${parentName ? `${parentName} › ` : ''}${name}${tab.viewKey !== 'main' ? ` · view ${tab.viewKey}` : ''}`}
       >
         <StatusDot state={tabDot(project, socketState)} pulse={active && socketState === 'connected'} />
+        {/* A member tab shows its company one breadcrumb up (ADR 0015). */}
+        {parentName && <span className="shrink-0 text-[10px] text-slate-600">⌂</span>}
         <span className="truncate">{name}</span>
         {tab.viewKey !== 'main' && <span className="text-[10px] text-slate-500">{tab.viewKey}</span>}
         {project && (
@@ -96,16 +109,25 @@ export function TabStrip() {
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
 
   const byId = new Map((projects.data?.items ?? []).map((p) => [p.id, p]));
+  // Hierarchy in the strip (ADR 0015): members sit with their company, and a member
+  // tab says which company it belongs to.
+  const members = new Map((projects.data?.items ?? []).map((p) => [p.id, p.company_id ?? null]));
+  const groupKeyOf = groupKeyMaker(members);
+  const ordered = groupTabs(tabs, groupKeyOf);
 
   return (
     <div className="flex items-end gap-0.5 overflow-x-auto border-b border-slate-700/60 bg-slate-950/60 px-2 pt-1">
       {tabs.length === 0 && (
         <span className="px-2 py-1 text-xs text-slate-500">No project tabs open</span>
       )}
-      {tabs.map((tab) => {
+      {ordered.map((tab) => {
         const project = byId.get(tab.projectId);
         const name = project?.name ?? names[tab.projectId] ?? tab.projectId.slice(0, 8);
-        return <Tab key={tab.id} tab={tab} name={name} project={project} />;
+        const companyId = project?.company_id ?? null;
+        const parentName = companyId
+          ? byId.get(companyId)?.name ?? names[companyId]
+          : undefined;
+        return <Tab key={tab.id} tab={tab} name={name} parentName={parentName} project={project} />;
       })}
       <button
         type="button"

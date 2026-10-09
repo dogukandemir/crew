@@ -13,14 +13,7 @@ import { Button } from '../../components/ui/Button';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { HqFloor } from './HqFloor';
-import type { CompanyVerdictName } from '../../api/types';
-
-const VERDICT_TONE: Record<CompanyVerdictName, 'success' | 'warning' | 'muted' | 'danger'> = {
-  on_track: 'success',
-  at_risk: 'warning',
-  no_activity: 'muted',
-  stop: 'danger',
-};
+import { VERDICT_TONE } from './verdict';
 
 export function HqTab({ companyId }: { companyId: string }) {
   const hq = useCompanyHq(companyId);

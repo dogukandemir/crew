@@ -75,6 +75,15 @@ export function useCompanyHq(companyId: string | null | undefined) {
   });
 }
 
+export function useCompanyBrains(companyId: string | null | undefined) {
+  // The umbrella memory page (ADR 0015): company brain + the members' index.
+  return useQuery({
+    queryKey: ['company-brains', companyId],
+    queryFn: () => api.getCompanyBrains(companyId as string),
+    enabled: !!companyId,
+  });
+}
+
 export function useProject(id: string | null | undefined) {
   return useQuery({
     queryKey: ['project', id],

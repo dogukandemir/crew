@@ -19,6 +19,7 @@ from crew.core.models import (
     BrainEntry,
     Department,
     Project,
+    Run,
     Squad,
     Task,
     usd_to_micros,
@@ -27,7 +28,7 @@ from crew.core.reward import KNOWLEDGE_ON_HIRE, RewardEngine
 from crew.core.security import audit, budget
 from crew.core.settings import settings
 from crew.domain.catalog import ROLE_TEMPLATES, SKILLS_BY_ID, RoleSpec, skills_for_keywords
-from crew.domain.enums import BrainScope, Capability, Effort, Grade, ModelTier, Role, TaskState
+from crew.domain.enums import BrainKind, BrainScope, Capability, Effort, Grade, ModelTier, Role, TaskState
 from crew.execution.models import router
 from crew.execution.runner import estimated_cost_micros
 
@@ -103,27 +104,49 @@ FUNCTION_TITLE: dict[str, str] = {
 # ── project ─────────────────────────────────────────────────────────────────────────
 async def create_project(*, name: str, goal: str = "", budget_usd: float | None = None,
                          description: str = "", owner_id: str | None = None,
-                         settings_patch: dict | None = None, kind: str = "project") -> dict:
+                         settings_patch: dict | None = None, kind: str = "project",
+                         company_id: str | None = None) -> dict:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "project"
     cap_usd = min(budget_usd or settings.default_project_budget_usd, settings.hard_budget_usd)
+    if company_id:
+        # A project born under a company (ADR 0015): validate before anything is written.
+        async with session_scope() as s:
+            co = await s.get(Project, company_id)
+            if co is None or co.kind != "company":
+                raise KeyError(company_id)
     p = Project(name=name, slug=slug, goal=goal, description=description, owner_id=owner_id,
-                kind=kind,
+                kind=kind, company_id=company_id,
                 settings={**DEFAULT_PROJECT_SETTINGS, **(settings_patch or {})},
                 budget_cap_micros=usd_to_micros(cap_usd))
     async with session_scope() as s:
         s.add(p)
         await s.flush()
         pid = p.id
-    project_brain = await brain_service.ensure_project_brain(pid)
+    if kind == "company":
+        # The company's memory is the umbrella brain (ADR 0015) — member projects'
+        # agents retrieve from it, review/allocate decisions land in it.
+        company_brain = await brain_service.ensure_company_brain(pid, label=f"{name} · company")
+    else:
+        project_brain = await brain_service.ensure_project_brain(pid)
     async with session_scope() as s:
         row = await s.get(Project, pid)
-        row.settings = {**row.settings, "project_brain_id": project_brain}
+        if kind == "company":
+            row.settings = {**row.settings, "company_brain_id": company_brain}
+        else:
+            row.settings = {**row.settings, "project_brain_id": project_brain}
         s.add(row)
     settings.workspace_dir(pid).mkdir(parents=True, exist_ok=True)
     settings.artifacts_dir(pid).mkdir(parents=True, exist_ok=True)
     if kind == "company":
         # a company is a headquarters project whose executive is the CEO, not an
         # orchestrator: ordinary runs never touch it (ADR 0009).
+        if goal.strip():
+            # The mission is the company brain's first entry: every member's agents
+            # retrieve it (ADR 0015). A company without a stated mission writes none.
+            await brain_service.write(project_id=pid, brain_id=company_brain, kind=BrainKind.FACT,
+                                      title="Mission", body=goal.strip(),
+                                      source={"via": "company.founding"}, importance=0.9,
+                                      tags=["mission"])
         ceo = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CEO),
                                rationale="company bootstrap: the portfolio chair")
         # governance (ADR 0011): the board is seated with the company — a chair and two
@@ -162,6 +185,19 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
         s.add(row)
     await ev.emit("project.created", project_id=pid, severity="notice", title=f"project created: {name}",
                   payload={"project_id": pid, "name": name, "budget_usd": cap_usd}, actor="user")
+    if company_id:
+        # The report chain gains a top: orchestrator → CEO (ADR 0009/0015).
+        async with session_scope() as s:
+            co = await s.get(Project, company_id)
+            ceo_id = (co.settings or {}).get("ceo_id") if co else None
+            if ceo_id:
+                orch_row = await s.get(Agent, orch["id"])
+                if orch_row is not None:
+                    orch_row.manager_id = ceo_id
+                    s.add(orch_row)
+        await ev.emit("company.project.joined", project_id=company_id, severity="notice",
+                      title=f"{name} joins the company",
+                      payload={"company_id": company_id, "project_id": pid}, actor="user")
     await audit(actor_kind="user", actor_id=owner_id or "local", action="project.created",
                 resource_kind="project", resource_id=pid, reason=f"budget=${cap_usd}")
     return await get_project(pid)
@@ -172,7 +208,13 @@ async def get_project(project_id: str) -> dict:
         p = await s.get(Project, project_id)
         if p is None:
             raise KeyError(project_id)
-    return serialize_project(p)
+        d = serialize_project(p)
+        if p.company_id:
+            # The breadcrumb's upper half (ADR 0015): the company this project reports to.
+            co = await s.get(Project, p.company_id)
+            if co is not None:
+                d["company_name"] = co.name
+    return d
 
 
 def serialize_project(p: Project) -> dict:
@@ -191,9 +233,16 @@ async def list_projects() -> list[dict]:
     async with session_scope() as s:
         rows = (await s.scalars(select(Project).where(Project.kind == "project")
                                 .order_by(desc(Project.created_at)))).all()
+        ids = [p.id for p in rows]
+        run_counts: dict[str, int] = {}
+        if ids:
+            run_counts = {pid: int(n) for pid, n in (await s.execute(
+                select(Run.project_id, func.count(Run.id)).where(Run.project_id.in_(ids))
+                .group_by(Run.project_id))).all()}
     out = []
     for p in rows:
         d = serialize_project(p)
+        d["runs"] = run_counts.get(p.id, 0)
         async with session_scope() as s:
             d["agents"] = int(await s.scalar(select(func.count(Agent.id)).where(
                 Agent.project_id == p.id, Agent.state != "archived")))
@@ -201,6 +250,9 @@ async def list_projects() -> list[dict]:
                 Department.project_id == p.id, Department.status != "archived")))
             d["open_tasks"] = int(await s.scalar(select(func.count(Task.id)).where(
                 Task.project_id == p.id, Task.state.in_(["pending", "blocked", "ready", "assigned", "running"]))))
+            if p.company_id:
+                co_row = await s.get(Project, p.company_id)
+                d["company_name"] = co_row.name if co_row is not None else None
             d["pending_approvals"] = 0
         out.append(d)
     return out

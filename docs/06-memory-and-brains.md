@@ -1,12 +1,19 @@
 # 06 — Memory & Brains
 
-Three brains, three scopes, one retrieval interface. The point is that an agent sees *enough*
+Four brains, four scopes, one retrieval interface. The point is that an agent sees *enough*
 context to act well and not so much that it is slow, expensive or confused.
 
-## 1. The three levels
+## 1. The four levels
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
+│ COMPANY BRAIN  (scope: company — ADR 0015)                                    │
+│ Mission · portfolio review lessons · allocation decisions · company policy    │
+│ The umbrella: retrieved by EVERY member project's agents (brain-id scoped)    │
+│ Readers: every member's agents    Writers: the company's CEO / board chair     │
+└───────────────▲──────────────────────────────────────────────────────────────┘
+                │ one directive written once reaches the whole portfolio
+┌───────────────┴──────────────────────────────────────────────────────────────┐
 │ PROJECT BRAIN  (scope: project)                                              │
 │ Goals & success criteria · constraints · standing policies · decision log     │
 │ org history (who was hired/fired and why) · KPI rollups · cross-dept patterns │
@@ -30,10 +37,12 @@ context to act well and not so much that it is slow, expensive or confused.
 
 **Scoping rules (enforced in `BrainService`, not by prompts)**
 - Read: own brain always; department brain if member; project brain if `project-memory.read`
-  granted (executives) or if the entry is marked `public` (policies, glossary, decisions).
+  granted (executives) or if the entry is marked `public` (policies, glossary, decisions);
+  the company brain of the project's parent company (the umbrella).
 - Write: own brain always; department brain if role ≥ lead; project brain only
-  Orchestrator/Librarian. Cross-project reads are impossible — brain ids are namespaced by
-  project and the repository layer refuses cross-project joins.
+  Orchestrator/Librarian; company brain only the company's own CEO/chair. Retrieval is
+  scoped by brain id — a member project finds the company brain's entries even though they
+  live on the company's row (ADR 0015).
 - The council is special: while a debate is open, the panel gets read access to a
   **shared evidence pack** (snapshot, not live memory) so debate is fair and reproducible.
 

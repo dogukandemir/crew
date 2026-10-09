@@ -44,7 +44,7 @@ response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects` | list (id, name, status, stage, spend, budget, badge) |
-| POST | `/api/projects` | create `{name, goal, budget_cap_usd, settings?}` |
+| POST | `/api/projects` | create `{name, goal, budget_usd?, company_id?, settings?}` — with `company_id` the project is **born under** that company: report chain wired, `company.project.joined` told (ADR 0015) |
 | GET | `/api/projects/{id}` | detail + stage + rollups |
 | PATCH | `/api/projects/{id}` | rename, edit goal, settings patch |
 | POST | `/api/projects/{id}/pause` \| `/resume` \| `/kill` | lifecycle controls |
@@ -106,6 +106,8 @@ Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `
 | POST | `/api/companies/{id}/allocate` | the CEO's portfolio call — **writes the member caps**; a `stop` verdict funds nothing new |
 | POST | `/api/companies/{id}/board-session` | convene the board of directors `{topic, options?}` (council machinery; `board.convened`) |
 | POST | `/api/companies/{id}/board` | seat another director `{role: chair\|board_member}` |
+| GET | `/api/companies/{id}/brains` | the umbrella memory page (ADR 0015): the company brain (+ entry count) and a per-member index of where memory lives — read-only; entries open on `GET /api/brains/{id}/entries` |
+| POST | `/api/found` | **found a company** `{name, mission, budget_usd, project_name, project_goal, project_budget_usd, mode, start_run}` → the company, its first project born under it, and (optionally) its first run, in one call; seeds the company brain with the mission (ADR 0015) |
 
 Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 `company.allocation.decided` (`company_id`, `allocations`, `headroom_micros`, `method`).

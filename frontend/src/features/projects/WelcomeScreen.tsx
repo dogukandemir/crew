@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useOnboardingState, useProjects } from '../../app/hooks';
+import { useCompanies, useOnboardingState, useProjects } from '../../app/hooks';
 import { CompaniesSection } from '../companies/CompaniesSection';
+import { FoundCompanyWizard } from '../companies/FoundCompanyWizard';
+import { GettingStarted } from '../companies/GettingStartedCard';
 import { OnboardingCard } from '../onboarding/OnboardingCard';
 import {
   clearOnboardingDismissal,
@@ -23,16 +25,24 @@ const STATUS_TONE = {
   failed: 'danger',
 } as const;
 
-/** Shown when no project tab is open — the empty state teaches (docs/09 §4). */
+/**
+ * Shown when no project tab is open — the empty state teaches (docs/09 §4). Since
+ * ADR 0015 the path is company-first: found a company (wizard), then its projects;
+ * a standalone project stays one click away.
+ */
 export function WelcomeScreen() {
   const projects = useProjects();
+  const companies = useCompanies();
   const openTab = useTabs((s) => s.openTab);
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
   const setToast = useUi((s) => s.setToast);
   const onboarding = useOnboardingState();
   const [dismissed, setDismissed] = useState(() => onboardingDismissed());
   const [hideCard, setHideCard] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const showCard = !hideCard && shouldShowOnboarding(onboarding.data, dismissed);
+
+  const hasCompanies = (companies.data?.items.length ?? 0) > 0;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -56,13 +66,38 @@ export function WelcomeScreen() {
         </button>
       )}
 
+      <GettingStarted
+        providerReady={onboarding.data?.needed === false}
+        companies={companies.data?.items.length ?? 0}
+        projects={projects.data?.items.length ?? 0}
+        runs={(projects.data?.items ?? []).reduce((n, p) => n + (p.runs ?? 0), 0)}
+        onFound={() => setWizardOpen(true)}
+        onNewProject={() => setNewProjectOpen(true)}
+      />
+
       <CompaniesSection />
 
       <div className="mt-5 flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-300">Projects</h2>
-        <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
-          ＋ New project
-        </Button>
+        {hasCompanies ? (
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => setWizardOpen(true)}>
+              ⌂ Found another company
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
+              ＋ New project
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => setNewProjectOpen(true)}>
+              ＋ Standalone project
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>
+              ⌂ Found a company
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="mt-3">
@@ -73,11 +108,17 @@ export function WelcomeScreen() {
         {projects.isSuccess && projects.data.items.length === 0 && (
           <EmptyState
             title="No projects yet"
-            description="Name a project and state a goal — the orchestrator works out which skills are needed and hires the people it doesn't have."
+            description="A company holds the portfolio; a project is what its org works on. Found the company first — or start a standalone project."
             action={
-              <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
-                Create the first project
-              </Button>
+              hasCompanies ? (
+                <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
+                  Create the first project
+                </Button>
+              ) : (
+                <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>
+                  ⌂ Found your first company
+                </Button>
+              )
             }
           />
         )}
@@ -91,9 +132,17 @@ export function WelcomeScreen() {
                   onClick={() => openTab(p.id, 'main', 'office')}
                 >
                   <div className="flex items-center gap-2">
+                    {p.company_name && (
+                      <span
+                        className="shrink-0 text-[10px] text-slate-500"
+                        title={`Reports up to ${p.company_name}`}
+                      >
+                        ⌂ {p.company_name} ›
+                      </span>
+                    )}
                     <span className="truncate text-sm font-medium text-slate-100">{p.name}</span>
                     <Badge tone={STATUS_TONE[p.status] ?? 'neutral'}>{p.status}</Badge>
-                    <Badge tone="info">{p.stage}</Badge>
+                    {p.kind !== 'company' && <Badge tone="info">{p.stage}</Badge>}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-slate-500">{p.goal}</p>
                 </button>
@@ -124,6 +173,8 @@ export function WelcomeScreen() {
           }}
         />
       )}
+
+      <FoundCompanyWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }

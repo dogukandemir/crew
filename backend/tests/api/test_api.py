@@ -290,3 +290,32 @@ async def test_onboarding_key_roundtrip(client, monkeypatch):
         # make the in-process side of the save invisible to the rest of the suite
         os.environ.pop("DEEPSEEK_API_KEY", None)
         settings.deepseek_api_key = ""
+
+
+async def test_found_company_endpoint(client):
+    """ADR 0015: one call founds the company, lands the first project UNDER it, and the
+    payload carries the breadcrumb's upper half; the umbrella brain serves the page."""
+    r = await client.post("/api/found", json={
+        "name": "API Foundry", "mission": "ship the first slice", "budget_usd": 4.0,
+        "project_name": "Slice", "project_goal": "ship the api slice",
+        "project_budget_usd": 2.0, "start_run": False,
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["company"]["kind"] == "company"
+    assert body["project"]["company_id"] == body["company"]["id"]
+    assert body["run"] is None, "start_run=False starts nothing"
+
+    r2 = await client.get(f"/api/projects/{body['project']['id']}")
+    assert r2.json()["company_name"] == "API Foundry"
+
+    r3 = await client.get(f"/api/companies/{body['company']['id']}/brains")
+    assert r3.status_code == 200
+    page = r3.json()
+    assert page["company_brain"]["entries"] >= 1, "the mission seeds the umbrella"
+    assert page["members"][0]["project_id"] == body["project"]["id"]
+
+    # the member is a real project (listed), the company is not
+    r4 = await client.get("/api/projects")
+    listed = {x["id"] for x in r4.json()["items"]}
+    assert body["project"]["id"] in listed and body["company"]["id"] not in listed

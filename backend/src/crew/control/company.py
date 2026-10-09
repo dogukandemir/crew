@@ -9,7 +9,10 @@ has, so governance needs nothing invented. Its working parts:
 - a member project's orchestrator reports to the CEO once the project joins;
 - a review reads every member project's numbers and writes ONE grounded directive into
   each member's stream — the orchestrator reads directives into its task prompts, so a
-  directive is binding work, not a dashboard.
+  directive is binding work, not a dashboard;
+- the company brain (ADR 0015, `BrainScope.COMPANY`) is the umbrella memory: the mission
+  seeds it, reviews and allocations land in it, and every member project's agents
+  retrieve from it — one directive, available everywhere.
 
 The review is deliberately deterministic for now: every line cites the numbers it came
 from (spend ratio, completed, failed). An LLM garnish can come later; a lie cannot.
@@ -26,9 +29,9 @@ from crew.control import org
 from crew.core import events as ev
 from crew.core.brains import brain_service
 from crew.core.db import session_scope
-from crew.core.models import Agent, Department, Event, Project, Task
+from crew.core.models import Agent, Brain, BrainEntry, Department, Event, Project, Task
 from crew.domain.catalog import RoleSpec
-from crew.domain.enums import Role
+from crew.domain.enums import BrainScope, Role
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +56,60 @@ async def create_company(*, name: str, mission: str = "", budget_usd: float | No
     """Create the company (a kind='company' project) and hire its CEO."""
     return await org.create_project(name=name, goal=mission, budget_usd=budget_usd,
                                     owner_id=owner_id, kind="company")
+
+
+async def found_company(*, name: str, mission: str = "", budget_usd: float | None = None,
+                        owner_id: str | None = None, project_name: str, project_goal: str = "",
+                        project_budget_usd: float | None = None) -> dict:
+    """One breath (ADR 0015): the company, then its first project born UNDER it.
+
+    The wizard's single call. The first run is started by the API layer (it owns the
+    background driving), so this returns the rows that now exist — nothing is claimed
+    that was not written."""
+    company = await create_company(name=name, mission=mission, budget_usd=budget_usd,
+                                   owner_id=owner_id)
+    project = await org.create_project(name=project_name, goal=project_goal,
+                                       budget_usd=project_budget_usd, owner_id=owner_id,
+                                       company_id=company["id"])
+    return {"company": company, "project": project}
+
+
+async def brains_overview(company_id: str) -> dict:
+    """The umbrella brain plus every member's memory index — one honest page (ADR 0015).
+
+    The company brain is served with its entry count; members list their brains with
+    per-brain counts so the UI can show WHERE knowledge lives without fetching every
+    project's stream. Read-only by design: a member's memory is opened from its own tab."""
+    async with session_scope() as s:
+        company = await s.get(Project, company_id)
+        if company is None or company.kind != "company":
+            raise KeyError(company_id)
+        members = (await s.scalars(select(Project).where(
+            Project.company_id == company_id, Project.kind == "project"))).all()
+        co_brains = (await s.scalars(select(Brain).where(
+            Brain.project_id == company_id,
+            Brain.scope == BrainScope.COMPANY.value))).all()
+        co_counts = {bid: int(n) for bid, n in (await s.execute(
+            select(BrainEntry.brain_id, func.count(BrainEntry.id))
+            .where(BrainEntry.project_id == company_id).group_by(BrainEntry.brain_id))).all()}
+        member_rows: list[dict] = []
+        for m in members:
+            brains = (await s.scalars(select(Brain).where(Brain.project_id == m.id))).all()
+            counts = {bid: int(n) for bid, n in (await s.execute(
+                select(BrainEntry.brain_id, func.count(BrainEntry.id))
+                .where(BrainEntry.project_id == m.id).group_by(BrainEntry.brain_id))).all()}
+            member_rows.append({
+                "project_id": m.id, "name": m.name,
+                "brains": [{"id": b.id, "scope": b.scope, "label": b.label,
+                            "entries": counts.get(b.id, 0)} for b in brains],
+            })
+    first = co_brains[0] if co_brains else None
+    return {
+        "company_id": company_id,
+        "company_brain": ({"id": first.id, "label": first.label,
+                           "entries": co_counts.get(first.id, 0)} if first else None),
+        "members": member_rows,
+    }
 
 
 def _aware(ts: datetime) -> datetime:
@@ -245,7 +302,7 @@ async def review(*, company_id: str, actor: str = "system") -> dict:
                                       "verdicts": verdicts, "counts": counts},
                              actor=f"agent:{ceo_id}" if ceo_id else actor)
     try:
-        brain_id = await brain_service.ensure_project_brain(company_id)
+        brain_id = await brain_service.ensure_company_brain(company_id)
         await brain_service.write(project_id=company_id, brain_id=brain_id, kind="lesson",
                                   title=f"Portfolio review: {len(verdicts)} projects",
                                   body="; ".join(f"{v['name']}: {v['verdict']}" for v in verdicts)
@@ -334,7 +391,7 @@ async def allocate(*, company_id: str, actor: str = "system") -> dict:
                            "method": view["method"]},
                   actor=f"agent:{ceo_id}" if ceo_id else actor)
     try:
-        brain_id = await brain_service.ensure_project_brain(company_id)
+        brain_id = await brain_service.ensure_company_brain(company_id)
         await brain_service.write(
             project_id=company_id, brain_id=brain_id, kind="decision",
             title=f"Portfolio allocation ({len(allocations)} projects)",

@@ -274,6 +274,38 @@ export interface Company {
   last_review: CompanyLastReview | null;
 }
 
+/** The company's memory page (GET /companies/{id}/brains, ADR 0015): the umbrella
+ * brain plus a per-member index of where memory lives. Read-only — a member's
+ * entries open from its own Brains tab. */
+export interface CompanyBrainsPage {
+  company_id: string;
+  company_brain: { id: string; label?: string; entries: number } | null;
+  members: {
+    project_id: string;
+    name: string;
+    brains: { id: string; scope: Brain['scope']; label?: string; entries: number }[];
+  }[];
+}
+
+/** Founding a company (POST /found, ADR 0015): company + first project under it +
+ * the first run, in one call. */
+export interface FoundInput {
+  name: string;
+  mission?: string;
+  budget_usd?: number;
+  project_name: string;
+  project_goal?: string;
+  project_budget_usd?: number;
+  mode?: 'autonomous' | 'interactive';
+  start_run?: boolean;
+}
+
+export interface FoundResult {
+  company: Project;
+  project: Project;
+  run: Run | null;
+}
+
 export interface CompanyReview {
   company_id: string;
   verdicts: CompanyVerdict[];
@@ -292,6 +324,8 @@ export interface Project {
   /** Additive (ADR 0009): companies are kind='company'; member projects carry company_id. */
   kind?: 'project' | 'company';
   company_id?: string | null;
+  /** The breadcrumb's upper half (ADR 0015): the company a member reports to. */
+  company_name?: string | null;
   created_at: string;
   updated_at?: string;
   archived_at?: string | null;
@@ -307,6 +341,8 @@ export interface Project {
   tasks_done?: number;
   tasks_total?: number;
   success_rate?: number;
+  /** Runs ever started (ADR 0015) — the welcome checklist reads it honestly. */
+  runs?: number;
   pending_approvals?: number;
   badge?: number;
 }
@@ -696,8 +732,12 @@ export interface EventRow {
 export interface Brain {
   id: string;
   project_id: string;
-  scope: 'project' | 'department' | 'agent';
+  scope: 'company' | 'project' | 'department' | 'agent';
   owner_id?: string | null;
+  /** The human owner (ADR 0015): company name, project name, department name or
+   * agent name — resolved by the backend so the four levels read as an org. */
+  owner_name?: string;
+  label?: string;
   created_at?: string;
   entry_count?: number;
   last_activity_at?: string | null;

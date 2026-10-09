@@ -19,7 +19,9 @@ interface UiState {
   setApprovalsOpen: (open: boolean) => void;
 
   newProjectOpen: boolean;
-  setNewProjectOpen: (open: boolean) => void;
+  /** Which company the dialog is born under (ADR 0015): null = the user picks. */
+  newProjectCompanyId: string | null;
+  setNewProjectOpen: (open: boolean, companyId?: string | null) => void;
 
   killConfirmOpen: boolean;
   setKillConfirmOpen: (open: boolean) => void;
@@ -48,7 +50,9 @@ export const useUi = create<UiState>((set) => ({
   setApprovalsOpen: (approvalsOpen) => set({ approvalsOpen }),
 
   newProjectOpen: false,
-  setNewProjectOpen: (newProjectOpen) => set({ newProjectOpen }),
+  newProjectCompanyId: null,
+  setNewProjectOpen: (newProjectOpen, companyId) =>
+    set({ newProjectOpen, newProjectCompanyId: newProjectOpen ? companyId ?? null : null }),
 
   killConfirmOpen: false,
   setKillConfirmOpen: (killConfirmOpen) => set({ killConfirmOpen }),

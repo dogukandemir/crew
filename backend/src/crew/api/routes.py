@@ -73,12 +73,27 @@ class ProjectCreate(BaseModel):
     description: str = ""
     budget_usd: float | None = None
     settings: dict | None = None
+    # Born under a company (ADR 0015): the dialog's selector sends this.
+    company_id: str | None = None
 
 
 class CompanyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     mission: str = ""
     budget_usd: float | None = None
+
+
+class FoundBody(BaseModel):
+    """The founding wizard's one call (ADR 0015): company, first project under it, first run."""
+
+    name: str = Field(min_length=1, max_length=120)
+    mission: str = ""
+    budget_usd: float | None = None
+    project_name: str = Field(min_length=1, max_length=200)
+    project_goal: str = ""
+    project_budget_usd: float | None = None
+    mode: str = "autonomous"
+    start_run: bool = True
 
 
 class CompanyProjectBody(BaseModel):
@@ -414,9 +429,14 @@ async def get_projects() -> dict:
 
 @api.post("/projects", status_code=201)
 async def post_project(body: ProjectCreate, user: dict = Depends(require_user)) -> dict:
-    return await org.create_project(name=body.name, goal=body.goal, description=body.description,
-                                    budget_usd=body.budget_usd, owner_id=user["id"],
-                                    settings_patch=body.settings)
+    try:
+        return await org.create_project(name=body.name, goal=body.goal,
+                                        description=body.description,
+                                        budget_usd=body.budget_usd, owner_id=user["id"],
+                                        settings_patch=body.settings,
+                                        company_id=body.company_id)
+    except KeyError as e:
+        raise _problem(404, "company not found", str(e)) from e
 
 
 @api.get("/companies")
@@ -428,6 +448,25 @@ async def get_companies() -> dict:
 async def post_company(body: CompanyCreate, user: dict = Depends(require_user)) -> dict:
     return await company.create_company(name=body.name, mission=body.mission,
                                         budget_usd=body.budget_usd, owner_id=user["id"])
+
+
+@api.post("/found", status_code=201)
+async def post_found(body: FoundBody, user: dict = Depends(require_user)) -> dict:
+    """Company + its first project in one transaction-shaped call, then the first run
+    is started and driven in the background — the wizard lands on a company already
+    working, not a shell to fill in (ADR 0015)."""
+    found = await company.found_company(name=body.name, mission=body.mission,
+                                        budget_usd=body.budget_usd, owner_id=user["id"],
+                                        project_name=body.project_name,
+                                        project_goal=body.project_goal,
+                                        project_budget_usd=body.project_budget_usd)
+    run: dict | None = None
+    if body.start_run:
+        goal = (body.project_goal or body.project_name).strip()
+        run = await orchestrator.start_run(project_id=found["project"]["id"], goal=goal,
+                                           mode=body.mode, actor=user["id"])
+        asyncio.create_task(_drive(found["project"]["id"], run["id"]))
+    return {**found, "run": run}
 
 
 @api.get("/companies/{company_id}")
@@ -467,6 +506,15 @@ async def post_company_review(company_id: str, user: dict = Depends(require_user
 
 
 # ── governance: portfolio, board of directors, the HQ floor (ADR 0011) ─────────────
+@api.get("/companies/{company_id}/brains")
+async def get_company_brains(company_id: str) -> dict:
+    """The umbrella brain + every member's memory index (ADR 0015)."""
+    try:
+        return await company.brains_overview(company_id=company_id)
+    except KeyError as e:
+        raise _problem(404, "company not found", company_id) from e
+
+
 @api.get("/companies/{company_id}/hq")
 async def get_company_hq(company_id: str) -> dict:
     try:

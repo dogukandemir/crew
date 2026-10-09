@@ -26,6 +26,29 @@ Tailwind + Radix primitives (shadcn-style), React Flow (org chart, DAG), Rechart
   identities are `project_id + viewKey`.
 - Global header: connection state, global kill switch (double-confirm), global budget meter.
 
+**Hierarchy (ADR 0015).** A tab's kind decides its internal views — the company is one
+level up, never a sibling:
+
+```
+   COMPANY TAB (kind=company)            MEMBER PROJECT TAB
+   ├─ HQ        the floor, board,        ├─ Office / Overview / Org / Tasks /
+   │            review, allocation       │  Board / Agents / Brains / Rewards /
+   ├─ Projects  portfolio cards +        │  Events / Settings — and NO HQ;
+   │            ＋ New project here      │  the header leads ⌂ Company › Project
+   ├─ Brains    umbrella + member index  └─ Brains links up to the company brain
+   ├─ Events    company-stream
+   └─ Settings
+```
+
+- The **breadcrumb** (`⌂ Company ›`) is the only way up; the strip groups members next to
+  their company and prefixes them `⌂`.
+- **Company-first founding:** the welcome screen leads with *Found a company* — a wizard
+  (Quick: template + name; Detailed: mission, project, budgets, run mode) that calls
+  `POST /api/found` and lands on the company floor. *Standalone project* stays one click
+  away; the new-project dialog offers `Company ▾` (preselected) vs standalone.
+- A four-step **getting-started checklist** reads the record (provider → company → project
+  → first run); it hides when done and never marks a step from a dismissal.
+
 ## 2. Project workspace layout
 
 ```

@@ -21,6 +21,7 @@ import type {
   CommandMessage,
   CommandPostResult,
   Company,
+  CompanyBrainsPage,
   CompanyReview,
   CouncilSession,
   CurrentUser,
@@ -29,6 +30,8 @@ import type {
   EgressView,
   EventFilters,
   EventRow,
+  FoundInput,
+  FoundResult,
   Health,
   Hq,
   LeaderboardEntry,
@@ -257,6 +260,11 @@ export const api = {
   patchBoardItem: (itemId: string, patch: { state?: string }) =>
     request<BoardItem>(`/api/board/items/${itemId}`, { method: 'PATCH', body: patch }),
   getCompanyHq: (companyId: string) => request<Hq>(`/api/companies/${companyId}/hq`),
+  getCompanyBrains: (companyId: string) =>
+    request<CompanyBrainsPage>(`/api/companies/${companyId}/brains`),
+  /** The founding wizard's one call (ADR 0015). */
+  foundCompany: (input: FoundInput) =>
+    request<FoundResult>('/api/found', { method: 'POST', body: input }),
   allocateCompany: (companyId: string) =>
     request<{ headroom_micros: number }>(`/api/companies/${companyId}/allocate`, { method: 'POST' }),
   conveneBoard: (companyId: string, input: { topic: string }) =>
@@ -276,7 +284,8 @@ export const api = {
   createProject: (input: {
     name: string;
     goal: string;
-    budget_cap_usd?: number;
+    budget_usd?: number;
+    company_id?: string | null;
     settings?: Partial<ProjectSettings>;
   }) => request<Project>('/api/projects', { method: 'POST', body: input }),
   getProject: (id: string) => request<Project>(`/api/projects/${id}`),
@@ -409,7 +418,14 @@ export const api = {
     }),
 
   // ── Brains ─────────────────────────────────────────────────────────────────
-  listBrains: (id: string) => request<Brain[]>(`/api/projects/${id}/brains`),
+  // The endpoint wraps its list ({items}) and counts entries as `entries`; normalize
+  // here so panels iterate a real array with a stable field name.
+  listBrains: async (id: string): Promise<Brain[]> => {
+    const res = await request<{ items: Array<Brain & { entries?: number }> }>(
+      `/api/projects/${id}/brains`,
+    );
+    return res.items.map((b) => ({ ...b, entry_count: b.entry_count ?? b.entries ?? 0 }));
+  },
   listBrainEntries: (
     brainId: string,
     filter?: { kind?: string; tag?: string; q?: string; cursor?: string },

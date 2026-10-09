@@ -193,6 +193,7 @@ class EventSeverity(StrEnum):
 
 
 class BrainScope(StrEnum):
+    COMPANY = "company"
     PROJECT = "project"
     DEPARTMENT = "department"
     AGENT = "agent"

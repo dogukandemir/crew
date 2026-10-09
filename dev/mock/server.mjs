@@ -117,6 +117,35 @@ const FORGE = {
 };
 const PROJECTS_BY_ID = { p1: PROJECT, p2: NIMBUS, p3: FORGE };
 
+// ── What gets founded/created in THIS session (ADR 0015) ────────────────────
+// The /found wizard and the New-project dialog write here, so the demo flow opens
+// a tab that actually exists — an empty company, not a borrowed one.
+const FOUND = { companies: [], projects: [], runs: [] };
+const projectsList = () => [PROJECT, NIMBUS, FORGE, ...FOUND.projects];
+// A company IS a project row (ADR 0009): its own detail endpoint must serve too, or
+// the company's tab header would read "detail unavailable".
+const asProjectRow = (c) => ({
+  id: c.id, name: c.name, goal: c.mission || '', description: '', status: c.status ?? 'active',
+  stage: 'INTAKE', kind: 'company', company_id: null, created_at: '2026-09-01T09:00:00.000Z',
+  updated_at: new Date().toISOString(), tags: [],
+  budget_cap_micros: Math.round((c.budget_usd ?? 8) * 1_000_000),
+  spend_micros: Math.round((c.spend_usd ?? 0) * 1_000_000),
+  pending_approvals: 0, org_size: 0, tasks_done: 0, tasks_total: 0, settings: BASE_SETTINGS(),
+});
+const companyRowById = (id) => {
+  const c = id === 'co1' ? COMPANY() : FOUND.companies.find((x) => x.id === id) ?? null;
+  return c ? asProjectRow(c) : null;
+};
+const projectById = (id) => PROJECTS_BY_ID[id] ?? FOUND.projects.find((p) => p.id === id)
+  ?? companyRowById(id);
+const companyNameOf = (companyId) =>
+  companyId === 'co1' ? 'Northwind Labs'
+    : FOUND.companies.find((c) => c.id === companyId)?.name ?? null;
+// Every project payload carries the hierarchy fields (ADR 0015): kind, the company
+// breadcrumb and its run count — the strip and the welcome checklist read them.
+const projectMeta = (p) => ({ ...p, kind: p.kind ?? 'project', company_name: companyNameOf(p.company_id),
+                              runs: runsOf(p.id).length });
+
 // ── The schedule ────────────────────────────────────────────────────────────
 // t+12 Karan (software engineer) joins Development — an existing room gains a desk;
 // t+30 a hire into nothing opens Platform — a brand-new room on the canvas; t+48,
@@ -255,6 +284,15 @@ const orgNow = () => {
       id: 'p1', kind: 'project', name: PROJECT.name, state: 'active', spend_micros: 3_800_000,
       score: 0.8, open_tasks: 3, children,
     },
+  };
+};
+
+/** A project with nothing on its record yet — honest emptiness, not borrowed data. */
+const emptyOrg = (id) => {
+  const p = projectById(id);
+  return {
+    root: { id, kind: 'project', name: p?.name ?? id, state: 'active', spend_micros: 0,
+            score: 0, open_tasks: 0, children: [] },
   };
 };
 
@@ -590,23 +628,64 @@ const P2_RUNS = [
               lessons: ['roll back first, bisect second — the store reviews wanted neither'],
               cost_micros: 380_000 } },
 ];
-const runsOf = (id) => (id === 'p2' ? P2_RUNS : id === 'p3' ? [] : RUNS);
+const runsOf = (id) =>
+  [...(id === 'p2' ? P2_RUNS : id === 'p3' ? [] : id === 'p1' ? RUNS : []),
+   ...FOUND.runs.filter((r) => r.project_id === id)];
 const BRAINS_BY_ID = {
-  p1: [
-    { id: 'b1', project_id: 'p1', scope: 'project', entry_count: 3, children: [
-      { id: 'b2', project_id: 'p1', scope: 'department', owner_id: 'd4', entry_count: 2 },
-    ] },
+  // The umbrella (ADR 0015): the company's own memory lives on the company row.
+  co1: [
+    { id: 'b-co1', project_id: 'co1', scope: 'company', label: 'Northwind Labs · company',
+      owner_name: 'Northwind Labs', entries: 3 },
   ],
-  p2: [{ id: 'b-p2', project_id: 'p2', scope: 'project', entry_count: 2, children: [] }],
-  p3: [{ id: 'b-p3', project_id: 'p3', scope: 'project', entry_count: 1, children: [] }],
+  // Four levels in one project: project, department, individual (company above).
+  p1: [
+    { id: 'b1', project_id: 'p1', scope: 'project', label: 'project',
+      owner_name: 'Atlas — customer data platform', entries: 3 },
+    { id: 'b2', project_id: 'p1', scope: 'department', label: 'Platform department',
+      owner_name: 'Platform', entries: 2 },
+    { id: 'b-a3', project_id: 'p1', scope: 'agent', label: 'personal',
+      owner_name: 'Elena Rossi', entries: 2 },
+  ],
+  p2: [{ id: 'b-p2', project_id: 'p2', scope: 'project', label: 'project',
+         owner_name: 'Nimbus — mobile app', entries: 2 }],
+  p3: [{ id: 'b-p3', project_id: 'p3', scope: 'project', label: 'project',
+         owner_name: 'Forge — design system', entries: 1 }],
 };
 const BRAIN_ENTRIES = {
+  'b-co1': [
+    { id: 'be-c1', brain_id: 'b-co1', kind: 'fact', title: 'Mission',
+      body: 'Ship software people trust — and make the Atlas 2.0 launch the release that proves it.',
+      trust: 1, importance: 0.9, use_count: 9, tags: ['mission'], source: {}, created_at: daysAgo(28) },
+    { id: 'be-c2', brain_id: 'b-co1', kind: 'lesson', title: 'Portfolio review: 3 projects',
+      body: 'Atlas — customer data platform: on_track; Nimbus — mobile app: at_risk; Forge — design system: stop',
+      trust: 0.8, importance: 0.7, use_count: 4, tags: ['review', 'portfolio'],
+      source: { via: 'company.review' }, created_at: ago(12) },
+    { id: 'be-c3', brain_id: 'b-co1', kind: 'decision', title: 'Portfolio allocation (3 projects)',
+      body: 'Atlas: priority 1 ($4.52 cap); Nimbus: priority 2 ($2.61 cap); Forge: priority 3 — no new money.',
+      trust: 0.85, importance: 0.8, use_count: 3, tags: ['allocation', 'portfolio'],
+      source: { via: 'company.allocate' }, created_at: ago(1460) },
+  ],
+  'b-a3': [
+    { id: 'be-a31', brain_id: 'b-a3', kind: 'lesson', title: 'Rollback #112: in-place deploys are the enemy',
+      body: 'The March rollback was mine. Blue/green first, even when the window looks comfortable.', trust: 0.9, importance: 0.75, use_count: 5, tags: ['deploy'], source: { run_id: 'r1' }, created_at: daysAgo(3.5) },
+    { id: 'be-a32', brain_id: 'b-a3', kind: 'procedure', title: 'My release checklist before paging anyone',
+      body: 'Regression suite green, canary at 5% for ten minutes, rollback command in the runbook — then escalate.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['release'], source: {}, created_at: daysAgo(2.2) },
+  ],
   'b-p2': [
     { id: 'be-n1', brain_id: 'b-p2', kind: 'fact', title: 'Crash rate correlates with the offline cache warm path', body: 'Cold starts that miss the cache warm step crash on Android 15 only.', trust: 0.7, importance: 0.7, use_count: 2, tags: ['mobile'], source: { run_id: 'r-p2' }, created_at: daysAgo(1.3) },
     { id: 'be-n2', brain_id: 'b-p2', kind: 'procedure', title: 'Roll back first, bisect second', body: 'The store reviews punishes a slow rollback more than a cold fix.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['release'], source: { run_id: 'r-p2' }, created_at: daysAgo(1.3) },
   ],
   'b-p3': [
     { id: 'be-g1', brain_id: 'b-p3', kind: 'procedure', title: 'Freeze playbook: audit kept, pipeline stopped', body: 'Kept the component inventory and the token spec; everything else waits for a fresh rationale.', trust: 0.85, importance: 0.7, use_count: 1, tags: ['audit'], source: {}, created_at: daysAgo(21) },
+  ],
+  b1: [
+    { id: 'be1', brain_id: 'b1', kind: 'procedure', title: 'Deploy playbook: blue/green first, never in-place', body: 'In-place deploys burned us in March (rollback #112). Every atlas-api release goes blue/green with a <60s rollback path.', trust: 0.9, importance: 0.7, use_count: 6, decay_score: 0.95, tags: ['deploy', 'ops'], source: { run_id: 'r1' }, created_at: daysAgo(4) },
+    { id: 'be2', brain_id: 'b1', kind: 'fact', title: 'atlas-api p95 latency budget: 250 ms', body: 'The SDK team budgets 40 ms for Atlas calls; stay under it or the mobile team pages you.', trust: 0.85, importance: 0.65, use_count: 5, decay_score: 0.9, tags: ['performance'], source: { url: 'https://status.northwind.dev' }, created_at: daysAgo(4) },
+    { id: 'be3', brain_id: 'b1', kind: 'insight', title: 'Zero-downtime migration beats the launch date', body: 'The dual-write window is cheap now and expensive at 3× traffic; the slip buys verification, not comfort.', trust: 0.7, importance: 0.8, use_count: 2, tags: ['migration', 'launch'], source: { run_id: 'r2' }, created_at: daysAgo(0.5) },
+  ],
+  b2: [
+    { id: 'be4', brain_id: 'b2', kind: 'fact', title: 'status.northwind.dev is the only customer-facing status source', body: 'Never narrate incidents in the changelog; point at the status page.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['ops'], source: { run_id: 'r1' }, created_at: daysAgo(2) },
+    { id: 'be5', brain_id: 'b2', kind: 'procedure', title: 'Pager escalation: platform on-call is primary for atlas-api after 19:00 ET', body: 'The rotation lives in Opsgenie; hand off with a written summary, not a vibe.', trust: 0.75, importance: 0.6, use_count: 4, tags: ['ops', 'oncall'], source: { run_id: 'r1' }, created_at: daysAgo(2) },
   ],
 };
 const DEPARTMENT_DETAILS = {
@@ -826,9 +905,9 @@ const routes = [
   [/^\/api\/onboarding\/state$/, () => onboardingState()],
   [/^\/api\/health$/, () => ({ status: 'ok', version: '0.1.0-mock', contract: 1 })],
   [/^\/api\/system\/status$/, () => ({ db: { ok: true }, bus: { ok: true } })],
-  [/^\/api\/projects$/, () => paged([PROJECT, NIMBUS, FORGE])],
-  [/^\/api\/projects\/([^/]+)\/org$/, (m) => (m[1] === 'p2' ? p2Org() : m[1] === 'p3' ? p3Org() : orgNow())],
-  [/^\/api\/projects\/([^/]+)\/tasks$/, (m) => paged(m[1] === 'p2' ? P2_TASKS() : m[1] === 'p3' ? P3_TASKS() : tasksNow())],
+  [/^\/api\/projects$/, () => paged(projectsList().map(projectMeta))],
+  [/^\/api\/projects\/([^/]+)\/org$/, (m) => (m[1] === 'p2' ? p2Org() : m[1] === 'p3' ? p3Org() : m[1] === 'p1' ? orgNow() : emptyOrg(m[1]))],
+  [/^\/api\/projects\/([^/]+)\/tasks$/, (m) => paged(m[1] === 'p2' ? P2_TASKS() : m[1] === 'p3' ? P3_TASKS() : m[1] === 'p1' ? tasksNow() : [])],
   [/^\/api\/projects\/([^/]+)\/metrics$/, (m) => ({
     p1: { cost_micros: 3_800_000, task_success_rate: 0.85, tasks_done: 5, tasks_total: 10 },
     p2: { cost_micros: 6_720_000, task_success_rate: 0.6, tasks_done: 2, tasks_total: 5 },
@@ -842,9 +921,9 @@ const routes = [
     return paged([{ id: 'ap1', project_id: 'p1', capability: 'deploy.production', agent_id: 'a4', task_id: 't3', state: t >= BEAT.decide ? 'granted' : 'pending', request: { service: 'atlas-api', env: 'production', window: '02:00–05:00 UTC' }, created_at: ago(t >= BEAT.decide ? 300 : 60) }]);
   }],
   [/^\/api\/projects\/([^/]+)\/runs$/, (m) => paged(runsOf(m[1]))],
-  [/^\/api\/runs\/([^/]+)$/, (m) => runsOf('p2').concat(RUNS).find((r) => r.id === m[1]) ?? null],
+  [/^\/api\/runs\/([^/]+)$/, (m) => runsOf('p2').concat(RUNS, FOUND.runs).find((r) => r.id === m[1]) ?? null],
   [/^\/api\/projects\/([^/]+)\/leaderboard$/, (m) => paged(
-    (m[1] === 'p2' ? P2_AGENTS : m[1] === 'p3' ? P3_AGENTS : Object.values(agentsNow()))
+    (m[1] === 'p2' ? P2_AGENTS : m[1] === 'p3' ? P3_AGENTS : m[1] === 'p1' ? Object.values(agentsNow()) : [])
       .slice()
       .sort((x, y) => y.score - x.score)
       .map((a) => ({ agent_id: a.id, name: a.name, role: a.role, grade: a.grade, score: a.score,
@@ -854,16 +933,9 @@ const routes = [
     { id: 'rt1', agent_id: 'a3', agent_name: 'Elena Rossi', from_grade: 3, to_grade: 4, kind: 'promotion', rule: 'score > 0.9 sustained across 5 releases', score_after: 0.91, created_at: daysAgo(3) },
     { id: 'rt2', agent_id: 'a4', agent_name: 'Ravi Iyer', from_grade: 2, to_grade: 2, kind: 'probation', rule: 'QA accuracy < 0.6 — the webhook race slipped past twice', score_after: 0.42, created_at: daysAgo(3) },
   ] : [])],
-  [/^\/api\/projects\/([^/]+)\/brains$/, (m) => BRAINS_BY_ID[m[1]] ?? []],
-  [/^\/api\/brains\/([^/]+)\/entries$/, (m) => m[1] === 'b2' ? paged([
-    { id: 'be4', brain_id: 'b2', kind: 'fact', title: 'status.northwind.dev is the only customer-facing status source', body: 'Never narrate incidents in the changelog; point at the status page.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['ops'], source: { run_id: 'r1' }, created_at: daysAgo(2) },
-    { id: 'be5', brain_id: 'b2', kind: 'procedure', title: 'Pager escalation: platform on-call is primary for atlas-api after 19:00 ET', body: 'The rotation lives in Opsgenie; hand off with a written summary, not a vibe.', trust: 0.75, importance: 0.6, use_count: 4, tags: ['ops', 'oncall'], source: { run_id: 'r1' }, created_at: daysAgo(2) },
-  ]) : paged([
-    { id: 'be1', brain_id: 'b1', kind: 'procedure', title: 'Deploy playbook: blue/green first, never in-place', body: 'In-place deploys burned us in March (rollback #112). Every atlas-api release goes blue/green with a <60s rollback path.', trust: 0.9, importance: 0.7, use_count: 6, decay_score: 0.95, tags: ['deploy', 'ops'], source: { run_id: 'r1' }, created_at: daysAgo(4) },
-    { id: 'be2', brain_id: 'b1', kind: 'fact', title: 'atlas-api p95 latency budget: 250 ms', body: 'The SDK team budgets 40 ms for Atlas calls; stay under it or the mobile team pages you.', trust: 0.85, importance: 0.65, use_count: 5, decay_score: 0.9, tags: ['performance'], source: { url: 'https://status.northwind.dev' }, created_at: daysAgo(4) },
-    { id: 'be3', brain_id: 'b1', kind: 'insight', title: 'Zero-downtime migration beats the launch date', body: 'The dual-write window is cheap now and expensive at 3× traffic; the slip buys verification, not comfort.', trust: 0.7, importance: 0.8, use_count: 2, tags: ['migration', 'launch'], source: { run_id: 'r2' }, created_at: daysAgo(0.5) },
-  ])],
-  [/^\/api\/projects\/([^/]+)\/events$/, (m) => paged(m[1] === 'p2' ? p2Events() : m[1] === 'p3' ? p3Events() : buildEvents())],
+  [/^\/api\/projects\/([^/]+)\/brains$/, (m) => paged(BRAINS_BY_ID[m[1]] ?? [])],
+  [/^\/api\/brains\/([^/]+)\/entries$/, (m) => paged(BRAIN_ENTRIES[m[1]] ?? [])],
+  [/^\/api\/projects\/([^/]+)\/events$/, (m) => paged(m[1] === 'p2' ? p2Events() : m[1] === 'p3' ? p3Events() : m[1] === 'p1' ? buildEvents() : [])],
   [/^\/api\/projects\/([^/]+)\/egress$/, () => ({ allow: ['api.deepseek.com', 'registry.npmjs.org', 'docs.python.org', 'status.northwind.dev'], blocked: [] })],
   [/^\/api\/projects\/([^/]+)\/agents\/([^/]+)\/context$/, (m) => CONTEXT(m[2])],
   [/^\/api\/agents\/([^/]+)\/rewards$/, (m) => paged(REWARDS[m[1]] ?? [])],
@@ -1004,12 +1076,123 @@ function BOARD(url) {
   };
 }
 
+// ── Founding/creating helpers (ADR 0015) — the demo writes real rows ────────────
+const CEO_POOL = ['Diane Okafor', 'Samuel Whitfield', 'Priya Raghunathan'];
+const BOARD_POOL = [['Margaret Ellis', 'chair'], ['Devon Price', 'board_member'],
+                    ['Aiko Nakamura', 'board_member']];
+const mockId = (p) => `${p}-${Date.now().toString(36)}${Math.floor(Math.random() * 97)}`;
+const foundHq = (c) => ({
+  company: { id: c.id, name: c.name, mission: c.mission, budget_usd: c.budget_usd,
+             spend_usd: 0, spend_ratio: 0 },
+  ceo: c.ceo, executives: [], board: c.board ?? [],
+  projects: c.projects.map((p) => ({ id: p.id, name: p.name, status: p.status,
+    verdict: 'no_activity', spend_ratio: 0, completed: 0, failed: 0, open_tasks: 0, teams: [] })),
+  activity: [],
+});
+const companyBrainsOverview = (id) => {
+  const co = id === 'co1' ? COMPANY() : FOUND.companies.find((c) => c.id === id) ?? null;
+  if (!co) return null;
+  const memberIds = id === 'co1' ? MEMBERS.map((m) => m.id) : co.projects.map((p) => p.id);
+  const members = memberIds.map((mid) => {
+    const p = projectById(mid);
+    return { project_id: mid, name: p?.name ?? mid,
+             brains: (BRAINS_BY_ID[mid] ?? []).map((b) => ({ id: b.id, scope: b.scope,
+                                                              label: b.label, entries: b.entries })) };
+  });
+  const cb = (BRAINS_BY_ID[id] ?? [])[0] ?? null;
+  return { company_id: id,
+           company_brain: cb ? { id: cb.id, label: cb.label, entries: cb.entries } : null,
+           members };
+};
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS);
     return res.end();
   }
   const url = new URL(req.url, 'http://localhost');
+
+  // Two POSTs must win over the GET-shaped route table (ADR 0015 flows): the leading
+  // demo loop is method-agnostic for legacy reasons, so /api/projects and /api/found
+  // are claimed here, before it.
+  if (/^\/api\/found$/.test(url.pathname) && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* demo */ }
+      const cid = mockId('co');
+      const pid = mockId('np');
+      const name = String(b.name || 'Untitled Company');
+      const mission = String(b.mission || '');
+      const ceoName = CEO_POOL[FOUND.companies.length % CEO_POOL.length];
+      const company = { id: cid, name, mission, status: 'active',
+        budget_usd: Number(b.budget_usd ?? 8), spend_usd: 0, spend_ratio: 0,
+        ceo: { id: `${cid}-ceo`, name: ceoName, grade: 5 },
+        roster: [{ id: `${cid}-ceo`, name: ceoName, role: 'ceo', grade: 5 }],
+        board: BOARD_POOL.map(([n, r], i) => ({ id: `${cid}-b${i}`, name: n, role: r, grade: 5 })),
+        projects: [], last_review: null };
+      const project = { id: pid, name: String(b.project_name || 'First project'),
+        goal: String(b.project_goal || ''), description: '', status: 'active', stage: 'INTAKE',
+        company_id: cid, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        tags: [], budget_cap_micros: Math.round(Number(b.project_budget_usd ?? 5) * 1_000_000),
+        spend_micros: 0, pending_approvals: 0, org_size: 0, tasks_done: 0, tasks_total: 0,
+        settings: BASE_SETTINGS() };
+      const run = b.start_run === false ? null
+        : { id: mockId('fr'), project_id: pid, goal: String(b.project_goal || b.project_name || ''),
+            mode: b.mode === 'interactive' ? 'interactive' : 'autonomous', stage: 'INTAKE',
+            status: 'running', started_at: new Date().toISOString() };
+      company.projects.push({ id: pid, name: project.name, status: 'active', spend_ratio: 0 });
+      FOUND.companies.push(company);
+      FOUND.projects.push(project);
+      const brainId = `b-${cid}`;
+      BRAINS_BY_ID[cid] = [{ id: brainId, project_id: cid, scope: 'company',
+        label: `${name} · company`, owner_name: name, entries: mission ? 1 : 0 }];
+      if (mission) {
+        BRAIN_ENTRIES[brainId] = [{ id: mockId('be'), brain_id: brainId, kind: 'fact',
+          title: 'Mission', body: mission, trust: 1, importance: 0.9, use_count: 0,
+          tags: ['mission'], source: { via: 'company.founding' }, created_at: new Date().toISOString() }];
+      }
+      BRAINS_BY_ID[pid] = [{ id: `b-${pid}`, project_id: pid, scope: 'project',
+        label: 'project', owner_name: project.name, entries: 0 }];
+      if (run) FOUND.runs.push(run);
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify({ company, project: projectMeta(project), run }));
+    });
+    return;
+  }
+  if (/^\/api\/projects$/.test(url.pathname) && req.method === 'POST') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let b = {};
+      try { b = JSON.parse(raw); } catch { /* demo */ }
+      const pid = mockId('np');
+      const companyId = b.company_id || null;
+      const project = { id: pid, name: String(b.name || 'Untitled project'),
+        goal: String(b.goal || ''), description: String(b.description || ''), status: 'active',
+        stage: 'INTAKE', company_id: companyId, created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(), tags: [],
+        budget_cap_micros: Math.round(Number(b.budget_usd ?? 10) * 1_000_000),
+        spend_micros: 0, pending_approvals: 0, org_size: 0, tasks_done: 0, tasks_total: 0,
+        settings: BASE_SETTINGS() };
+      FOUND.projects.push(project);
+      BRAINS_BY_ID[pid] = [{ id: `b-${pid}`, project_id: pid, scope: 'project',
+        label: 'project', owner_name: project.name, entries: 0 }];
+      if (companyId === 'co1') {
+        MEMBERS.push({ id: pid, name: project.name, status: 'active', verdict: 'no_activity',
+          directive: 'new — nothing on the record yet', completed: 0, failed: 0, open_tasks: 0,
+          teams: [] });
+      } else {
+        const c = FOUND.companies.find((x) => x.id === companyId);
+        c?.projects.push({ id: pid, name: project.name, status: 'active', spend_ratio: 0 });
+      }
+      res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
+      res.end(JSON.stringify(projectMeta(project)));
+    });
+    return;
+  }
+
   // project detail last so /org etc. win
   for (const [re, fn] of routes) {
     const m = re.exec(url.pathname);
@@ -1020,22 +1203,52 @@ const server = http.createServer((req, res) => {
   }
   if (/^\/api\/companies$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify({ items: [COMPANY()] }));
+    return res.end(JSON.stringify({ items: [COMPANY(), ...FOUND.companies] }));
+  }
+  if (/^\/api\/companies\/[^/]+\/brains$/.test(url.pathname)) {
+    const page = companyBrainsOverview(url.pathname.split('/')[3]);
+    if (!page) {
+      res.writeHead(404, { 'Content-Type': 'application/problem+json', ...CORS });
+      return res.end(JSON.stringify({ type: 'https://crew/errors/not_found', title: 'Not found', status: 404 }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify(page));
   }
   if (/^\/api\/companies\/[^/]+\/hq$/.test(url.pathname)) {
-    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify(HQ()));
+    const id = url.pathname.split('/')[3];
+    const found = FOUND.companies.find((c) => c.id === id);
+    if (id === 'co1' || found) {
+      res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+      return res.end(JSON.stringify(id === 'co1' ? HQ() : foundHq(found)));
+    }
+    res.writeHead(404, { 'Content-Type': 'application/problem+json', ...CORS });
+    return res.end(JSON.stringify({ type: 'https://crew/errors/not_found', title: 'Not found', status: 404 }));
   }
   if (/^\/api\/companies\/[^/]+\/portfolio$/.test(url.pathname)) {
+    const id = url.pathname.split('/')[3];
+    const found = FOUND.companies.find((c) => c.id === id);
+    if (id !== 'co1' && !found) {
+      res.writeHead(404, { 'Content-Type': 'application/problem+json', ...CORS });
+      return res.end(JSON.stringify({ type: 'https://crew/errors/not_found', title: 'Not found', status: 404 }));
+    }
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify(PORTFOLIO()));
+    return res.end(JSON.stringify(id === 'co1' ? PORTFOLIO()
+      : { company_id: id, projects: [], headroom_micros: 0,
+          method: 'a newly founded company has no members to rank yet' }));
   }
   if (/^\/api\/companies\/[^/]+\/review$/.test(url.pathname) && req.method === 'POST') {
+    const id = url.pathname.split('/')[3];
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify(COMPANY().last_review));
+    return res.end(JSON.stringify(id === 'co1' ? COMPANY().last_review
+      : { ts: new Date().toISOString(), projects: 0, verdicts: [], counts: {} }));
   }
   if (/^\/api\/companies\/[^/]+\/allocate$/.test(url.pathname)) {
+    const id = url.pathname.split('/')[3];
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    if (id !== 'co1') {
+      return res.end(JSON.stringify({ company_id: id, projects: [], headroom_micros: 0,
+                                      method: 'a newly founded company has no members to rank yet' }));
+    }
     const p = PORTFOLIO();
     return res.end(JSON.stringify({ company_id: 'co1', projects: p.projects,
                                     headroom_micros: p.headroom_micros, method: p.method }));
@@ -1059,8 +1272,14 @@ const server = http.createServer((req, res) => {
                                     role: 'board_member', grade: 5 }));
   }
   if (/^\/api\/companies\/[^/]+$/.test(url.pathname)) {
+    const id = url.pathname.split('/')[3];
+    const found = FOUND.companies.find((c) => c.id === id);
+    if (id !== 'co1' && !found) {
+      res.writeHead(404, { 'Content-Type': 'application/problem+json', ...CORS });
+      return res.end(JSON.stringify({ type: 'https://crew/errors/not_found', title: 'Not found', status: 404 }));
+    }
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify(COMPANY()));
+    return res.end(JSON.stringify(id === 'co1' ? COMPANY() : found));
   }
   if (/^\/api\/projects\/[^/]+\/board$/.test(url.pathname)) {
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
@@ -1144,8 +1363,13 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify({ messages: url.pathname.split('/')[3] === 'p1' ? COMMANDS : [] }));
   }
   if (/^\/api\/projects\/[^/]+$/.test(url.pathname)) {
+    const p = projectById(url.pathname.split('/')[3]);
+    if (!p) {
+      res.writeHead(404, { 'Content-Type': 'application/problem+json', ...CORS });
+      return res.end(JSON.stringify({ type: 'https://crew/errors/not_found', title: 'Not found', status: 404 }));
+    }
     res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
-    return res.end(JSON.stringify(PROJECTS_BY_ID[url.pathname.split('/')[3]] ?? null));
+    return res.end(JSON.stringify(projectMeta(p)));
   }
   // The first-run card's save (ADR 0013 revision): session-only, honestly unverified.
   if (/^\/api\/onboarding\/key$/.test(url.pathname) && req.method === 'POST') {

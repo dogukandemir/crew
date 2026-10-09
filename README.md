@@ -81,6 +81,15 @@ model tier at that provider immediately. No `.env` edit, no restart.
 
 ![The provider picker](docs/assets/onboarding.png)
 
+Next comes the **founding wizard**: pick a template (or open *Detailed setup*), name the
+company, and one call (`POST /api/found`) creates the company with its CEO and board, its
+first project **under it**, and starts the first run. The company floor (HQ) then holds
+the portfolio — each member one breadcrumb below, with its own office. Standalone projects
+still work: the new-project dialog's *Company* selector defaults to the first company but
+offers `— standalone —`.
+
+![The company portfolio](docs/assets/portfolio.png)
+
 ### Model providers — one key is enough, if it is the right one
 
 The model tiers default to **DeepSeek V4**: `deepseek/deepseek-flash` for the standard and

@@ -154,16 +154,32 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
   }
 
   const p = project.data;
+  const isCompany = p.kind === 'company';
   const targets = switchTargets(p, companies.data?.items, allProjects.data?.items);
 
   return (
     <div className="border-b border-slate-800/70 px-3 py-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {p.company_id && (
+          <>
+            {/* Up one level (ADR 0015): the company the project reports to. */}
+            <button
+              type="button"
+              onClick={() => openTab(p.company_id as string, 'main', 'hq')}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-800/70 hover:text-emerald-300"
+              title="Up one level — open the company floor"
+            >
+              ⌂ {p.company_name ?? 'Company'}
+            </button>
+            <span className="text-slate-600">›</span>
+          </>
+        )}
         <h1 className="text-sm font-semibold text-slate-100">{p.name}</h1>
         <Badge tone={p.status === 'active' ? 'success' : p.status === 'paused' ? 'warning' : 'muted'}>
           {p.status}
         </Badge>
-        <StageStepper stage={p.stage} />
+        {isCompany && <Badge tone="info">company</Badge>}
+        {!isCompany && <StageStepper stage={p.stage} />}
         <div className="ml-auto flex items-center gap-2">
           <div className="w-28" title={`${formatMicros(p.spend_micros)} of ${formatMicros(p.budget_cap_micros)}`}>
             <ProgressBar
@@ -206,17 +222,19 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
               ]}
             />
           )}
-          <LifecycleControls project={p} />
-          <Button
-            size="xs"
-            variant="secondary"
-            title="The Captain's desk — give orders, float ideas, ask questions"
-            onClick={() => {
-              if (activeTabId) openDrawer(activeTabId, { kind: 'command', id: 'command' });
-            }}
-          >
-            ❯ Command
-          </Button>
+          {!isCompany && <LifecycleControls project={p} />}
+          {!isCompany && (
+            <Button
+              size="xs"
+              variant="secondary"
+              title="The Captain's desk — give orders, float ideas, ask questions"
+              onClick={() => {
+                if (activeTabId) openDrawer(activeTabId, { kind: 'command', id: 'command' });
+              }}
+            >
+              ❯ Command
+            </Button>
+          )}
           <Button
             size="xs"
             variant="ghost"
@@ -228,7 +246,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
         </div>
       </div>
       <div className="mt-1 flex items-center gap-2">
-        <Badge tone="muted">goal</Badge>
+        <Badge tone="muted">{isCompany ? 'mission' : 'goal'}</Badge>
         <GoalEditor project={p} />
       </div>
     </div>

@@ -103,7 +103,7 @@ orchestrator), verdict, components(json), penalties(json), reward(float), score_
 grade_before, grade_after, created_at`
 
 ### brains / brain_entries / brain_links
-`brains: id, project_id, scope(project|department|agent), owner_id, created_at`
+`brains: id, project_id, scope(company|project|department|agent), owner_id, created_at`
 `brain_entries: id, brain_id, kind(fact|procedure|decision|artifact_ref|lesson|glossary),
 title, body, payload(json), source(json: run_id/task_id/agent_id/url), trust, importance,
 tags(json), skill_ids(json), embedding(blob/vector), created_at, last_used_at, use_count,

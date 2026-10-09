@@ -10,8 +10,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { EventQuery } from '../api/types';
 
+/** Every internal tab id. Each scope picks its own subset (ADR 0015): a member
+ * project's views and the company's views are different jobs. */
 export const WORKSPACE_TABS = [
   'hq',
+  'projects',
   'office',
   'overview',
   'org',
@@ -26,8 +29,38 @@ export const WORKSPACE_TABS = [
 
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
+/** A member project's views: no HQ — the company lives one level up, reached by the
+ * breadcrumb; governance stays on the company's floor. */
+export const PROJECT_TABS: readonly WorkspaceTab[] = [
+  'office',
+  'overview',
+  'org',
+  'tasks',
+  'board',
+  'agents',
+  'brains',
+  'rewards',
+  'events',
+  'settings',
+];
+
+/** The company's own views: the floor, the portfolio, the umbrella memory, company
+ * events and settings. Office/Org/Tasks/Brains-of-work/rewards belong to members. */
+export const COMPANY_TABS: readonly WorkspaceTab[] = ['hq', 'projects', 'brains', 'events', 'settings'];
+
+export function workspaceTabsFor(kind: string | null | undefined): readonly WorkspaceTab[] {
+  return kind === 'company' ? COMPANY_TABS : PROJECT_TABS;
+}
+
+/** Where a tab lands when its remembered view is not in scope (ADR 0015) — e.g. a
+ * member project that still has 'hq' persisted from before the restructure. */
+export function defaultWorkspaceTab(kind: string | null | undefined): WorkspaceTab {
+  return kind === 'company' ? 'hq' : 'office';
+}
+
 export const WORKSPACE_TAB_LABEL: Record<WorkspaceTab, string> = {
   hq: 'HQ',
+  projects: 'Projects',
   office: 'Office',
   overview: 'Overview',
   org: 'Org',

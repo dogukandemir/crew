@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   budgetFraction,
+  formatClock,
   formatDuration,
   formatMicros,
   formatMoney,
@@ -9,6 +10,7 @@ import {
   formatTokens,
   formatUsd,
   microsToUsd,
+  parseTs,
   usdToMicros,
 } from './format';
 
@@ -104,5 +106,15 @@ describe('percent, duration, relative time', () => {
     expect(ago(432_000_000)).toBe('5d ago');
     expect(formatRelativeTime(null, now)).toBe('—');
     expect(formatRelativeTime('not-a-date', now)).toBe('—');
+  });
+
+  it('reads naive timestamps as UTC — history must not shift by the local offset', () => {
+    const naive = '2026-10-09T20:40:27.123456';
+    const zoned = '2026-10-09T20:40:27.123456+00:00';
+    const now = Date.parse('2026-10-09T20:40:30.000000Z');
+    expect(formatRelativeTime(naive, now)).toBe('just now');
+    expect(formatRelativeTime(naive, now)).toBe(formatRelativeTime(zoned, now));
+    expect(formatClock(naive)).toBe(formatClock(zoned));
+    expect(parseTs(naive)).toBe(Date.parse(zoned));
   });
 });

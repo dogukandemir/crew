@@ -149,7 +149,7 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
           </div>
         )}
         <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <span title="resume cursor persisted in localStorage (docs/11 §3)">
+          <span title="the resume cursor is remembered on this device">
             since_seq {log.maxSeq}
           </span>
           <Button
@@ -212,11 +212,11 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
                 {e.cost_micros !== undefined && e.cost_micros > 0 && (
                   <span className="shrink-0 tabular-nums text-slate-500">{formatMicros(e.cost_micros)}</span>
                 )}
-                {e.tokens_in !== undefined && (
-                  <span className="shrink-0 tabular-nums text-slate-600">
-                    {e.tokens_in}/{e.tokens_out ?? 0}
+                {(e.tokens_in || e.tokens_out) ? (
+                  <span className="shrink-0 tabular-nums text-slate-600" title="tokens in / out">
+                    {e.tokens_in ?? 0}/{e.tokens_out ?? 0}
                   </span>
-                )}
+                ) : null}
               </button>
             )}
           />

@@ -24,12 +24,23 @@ interface AgentRow {
   score?: number;
   cost?: number;
   successRate?: number;
+  tasksDone?: number;
   skills: number;
   departmentId?: string | null;
   trend?: number[];
   currentTask?: string;
   lastActive?: string | null;
 }
+
+/** Class names for the grade chip — G-numbers mean nothing to a new user. */
+const GRADE_LABEL: Record<number, string> = {
+  0: 'Trainee',
+  1: 'Junior',
+  2: 'Mid',
+  3: 'Senior',
+  4: 'Principal',
+  5: 'Chief',
+};
 
 type View = 'all' | 'top' | 'at-risk';
 
@@ -75,6 +86,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         score: a.score ?? entry?.score,
         cost: a.spend_micros ?? a.cost_micros ?? entry?.cost_micros,
         successRate: a.success_rate ?? entry?.success_rate,
+        tasksDone: a.tasks_done ?? entry?.tasks_done,
         skills: (a as OrgNode & { skills?: unknown[] }).skills?.length ?? 0,
         departmentId: a.department_id,
         trend: entry?.score_trend,
@@ -120,16 +132,30 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         header: 'Grade',
         width: '4rem',
         align: 'center',
-        render: (r) => (r.grade === undefined ? '—' : <Badge tone="accent">G{r.grade}</Badge>),
+        render: (r) =>
+          r.grade === undefined ? '—' : (
+            <Badge tone="accent" title={GRADE_LABEL[r.grade] ?? `grade ${r.grade}`}>
+              {`G${r.grade}`}
+            </Badge>
+          ),
         sortValue: (r) => r.grade ?? -1,
       },
       {
         key: 'score',
-        header: 'Score',
+        header: (
+          <span title="Reputation 0–1, earned from verified work only — it gates model tier, spend limits and seniority.">
+            Score
+          </span>
+        ),
         width: '11rem',
         render: (r) => (
           <span className="flex items-center gap-2">
-            <span className="tabular-nums text-slate-100">{r.score === undefined ? '—' : r.score.toFixed(3)}</span>
+            <span
+              className="tabular-nums text-slate-100"
+              title="Reputation 0–1, earned from verified work only"
+            >
+              {r.score === undefined ? '—' : r.score.toFixed(3)}
+            </span>
             <Sparkline values={r.trend} width={64} height={18} />
           </span>
         ),
@@ -160,10 +186,22 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         header: 'Success',
         width: '5.5rem',
         align: 'right',
-        render: (r) => (
-          <span className="tabular-nums">{r.successRate === undefined ? '—' : formatPercent(r.successRate)}</span>
-        ),
-        sortValue: (r) => r.successRate ?? -1,
+        render: (r) => {
+          if (!r.tasksDone) {
+            // no work yet is not a 0% success rate — say nothing rather than something wrong
+            return (
+              <span className="text-slate-500" title="No completed tasks yet">
+                —
+              </span>
+            );
+          }
+          return (
+            <span className="tabular-nums">
+              {r.successRate === undefined ? '—' : formatPercent(r.successRate)}
+            </span>
+          );
+        },
+        sortValue: (r) => (r.tasksDone ? r.successRate ?? -1 : -1),
       },
     ],
     [],
@@ -232,8 +270,8 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         }
       />
       <p className="text-[11px] text-slate-500">
-        Roster assembled from <code className="font-mono">GET /api/projects/{'{id}'}/org</code>; scores and trends
-        from the leaderboard. Per-day spend and last-active live in the agent drawer.
+        Names, roles and grades come from the live org tree; scores are reputation earned from
+        verified work only. Per-day spend and last-active live in the agent drawer.
       </p>
     </div>
   );

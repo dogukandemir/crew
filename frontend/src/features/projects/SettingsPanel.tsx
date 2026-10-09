@@ -107,7 +107,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
     <div className="max-w-3xl">
       <Card
         title="Budget"
-        subtitle="Hard-enforced server-side: a run physically cannot exceed the cap (docs/08)."
+        subtitle="Hard-enforced server-side: a run physically cannot exceed the cap."
         actions={
           <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate()}>
             Save
@@ -226,7 +226,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           <CommandAllowlist projectId={projectId} />
         </Section>
 
-        <Section title="Model tier mapping" description="Capability tier → provider/model (docs/04).">
+        <Section title="Model tier mapping" description="Which provider and model each capability tier resolves to — providers are connected at onboarding.">
           <div className="grid gap-2 sm:grid-cols-2">
             {TIERS.map((tier) => (
               <Field key={tier} label={tier}>
@@ -264,7 +264,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           </Button>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          Deleting a project is a soft archive server-side: runs stop, nothing is destroyed (docs/10 §3.8).
+          Deleting a project is a soft archive server-side: runs stop, nothing is destroyed.
         </p>
       </Card>
 

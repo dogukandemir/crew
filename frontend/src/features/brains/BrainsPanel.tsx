@@ -133,7 +133,7 @@ export function BrainsPanel({ projectId }: { projectId: string }) {
 
         <div className="space-y-2">
           <div className="flex items-end gap-2">
-            <Field label="search entries" className="w-56" hint="POST /brains/search returns scored hits — this filters the list">
+            <Field label="search entries" className="w-56" hint="Search scored memories — this filters the list below">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}

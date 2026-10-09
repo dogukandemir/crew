@@ -8,7 +8,8 @@ import { Field, Select, Unknown } from '../../components/ui/Field';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatMicros } from '../../lib/format';
-import { useTasks } from '../../app/hooks';
+import { useOrg, useTasks } from '../../app/hooks';
+import { flattenOrg } from '../org/orgUtils';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
 
@@ -50,6 +51,14 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
   const tasks = useTasks(projectId, stateFilter ? { state: stateFilter } : undefined);
   const rows = tasks.data?.items ?? [];
 
+  // the roster turns raw ids into names — a table of agent ids reads like machine output
+  const org = useOrg(projectId);
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of flattenOrg(org.data?.root)) m.set(u.id, u.name);
+    return m;
+  }, [org.data]);
+
   const columns = useMemo<Array<Column<Task>>>(
     () => [
       {
@@ -73,12 +82,25 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         key: 'assignee',
         header: 'Assignee',
         width: '9rem',
-        render: (t) => (
-          <span className="font-mono text-[11px] text-slate-400">
-            {t.assignee_agent_id ? t.assignee_agent_id.slice(0, 8) : t.assignee_squad_id ? 'squad' : '—'}
-          </span>
-        ),
-        sortValue: (t) => t.assignee_agent_id ?? '',
+        render: (t) => {
+          if (t.assignee_agent_id) {
+            const nm = nameById.get(t.assignee_agent_id);
+            return (
+              <span className="text-[11px] text-slate-300" title={t.assignee_agent_id}>
+                {nm ?? `${t.assignee_agent_id.slice(0, 8)}…`}
+              </span>
+            );
+          }
+          if (t.assignee_squad_id) {
+            return (
+              <span className="text-[11px] text-slate-400">
+                {nameById.get(t.assignee_squad_id) ?? 'squad'}
+              </span>
+            );
+          }
+          return <Unknown />;
+        },
+        sortValue: (t) => nameById.get(t.assignee_agent_id ?? '') ?? t.assignee_agent_id ?? '',
       },
       {
         key: 'effort',
@@ -110,10 +132,17 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         key: 'verification',
         header: 'Verification',
         width: '7rem',
-        render: () => <Unknown title="verification is returned by GET /api/tasks/{id}" />,
+        render: (t) =>
+          t.verification?.verdict ? (
+            <Badge tone={t.verification.verdict === 'fail' ? 'danger' : 'success'}>
+              {t.verification.verdict}
+            </Badge>
+          ) : (
+            <Unknown title="Open the task to read its verdict" />
+          ),
       },
     ],
-    [],
+    [nameById],
   );
 
   if (tasks.isError) {

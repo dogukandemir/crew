@@ -222,7 +222,11 @@ export function AgentDrawer({
                       {r.components && (
                         <div className="mt-0.5 font-mono text-[10px] text-slate-500">
                           {Object.entries(r.components)
-                            .map(([k, v]) => `${k}=${Number(v).toFixed(2)}`)
+                            .filter(
+                              (entry): entry is [string, number] =>
+                                typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+                            )
+                            .map(([k, v]) => `${k}=${v.toFixed(2)}`)
                             .join('  ')}
                         </div>
                       )}
@@ -239,7 +243,7 @@ export function AgentDrawer({
               {context.isLoading && <SkeletonRows rows={2} />}
               {context.isError && (
                 <p className="text-[11px] text-slate-500">
-                  No context pack published for this agent yet (docs/07 §3.3).
+                  No context pack published for this agent yet.
                 </p>
               )}
               {context.isSuccess && (
@@ -262,7 +266,7 @@ function SteerBox({ agentId }: { agentId: string }) {
     mutationFn: () => api.messageAgent(agentId, text.trim()),
     onSuccess: () => {
       setText('');
-      setToast({ kind: 'success', message: 'Steering message queued (POST /api/agents/{id}/message).' });
+      setToast({ kind: 'success', message: 'Steering message queued — they read it at their next step.' });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
   });

@@ -164,7 +164,7 @@ export function UnitDrawer({
           <div className="rounded-md border border-slate-700/60 bg-slate-900/50 p-2">
             <Field
               label="Reason (required for promote / demote / fire)"
-              hint="Manual transitions are audited server-side (docs/11 §2)."
+              hint="Manual transitions are audited server-side."
             >
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="why?" />
             </Field>

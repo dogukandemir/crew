@@ -213,7 +213,7 @@ function HireDialog({
         <Field label="Role (required)" hint="e.g. Market Researcher, Backend Engineer, QA Verifier">
           <Input value={role} onChange={(e) => setRole(e.target.value)} autoFocus />
         </Field>
-        <Field label="Grade" hint="0 trainee … 5 principal — gates model tier and spend limits (docs/05).">
+        <Field label="Grade" hint="0 trainee … 5 principal — a higher grade unlocks better models and bigger spend limits.">
           <Select value={grade} onChange={(e) => setGrade(e.target.value)}>
             {[0, 1, 2, 3, 4, 5].map((g) => (
               <option key={g} value={g}>

@@ -123,7 +123,7 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
             />
           )}
           <p className="text-[11px] text-slate-500">
-            Reputation gates model tier, spend limits and seniority (docs/05). Click a row for its full ledger.
+            Reputation gates model tier, spend limits and seniority. Click a row for its full ledger.
           </p>
         </>
       )}

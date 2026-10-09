@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Drawer } from '../../components/ui/Drawer';
@@ -10,7 +10,8 @@ import { JsonView } from '../../components/ui/JsonView';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatDuration, formatMicros, formatPercent, formatTokens } from '../../lib/format';
-import { useTask, useTaskArtifacts } from '../../app/hooks';
+import { useOrg, useTask, useTaskArtifacts } from '../../app/hooks';
+import { flattenOrg } from '../org/orgUtils';
 import { useUi } from '../../stores/ui';
 
 const VERDICT_TONE = {
@@ -32,6 +33,12 @@ export function TaskDrawer({
 }) {
   const task = useTask(taskId);
   const artifacts = useTaskArtifacts(taskId);
+  const org = useOrg(projectId);
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of flattenOrg(org.data?.root)) m.set(u.id, u.name);
+    return m;
+  }, [org.data]);
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
   const [reassignTo, setReassignTo] = useState('');
@@ -118,9 +125,12 @@ export function TaskDrawer({
             pairs={[
               ['id', <code className="font-mono text-[11px]">{t.id}</code>],
               ['state', t.state],
-              ['assignee', t.assignee_agent_id ?? '—'],
-              ['department', t.department_id ?? '—'],
-              ['squad', t.assignee_squad_id ?? '—'],
+              ['assignee', t.assignee_agent_id
+                ? (nameById.get(t.assignee_agent_id) ?? t.assignee_agent_id) : '—'],
+              ['department', t.department_id
+                ? (nameById.get(t.department_id) ?? t.department_id) : '—'],
+              ['squad', t.assignee_squad_id
+                ? (nameById.get(t.assignee_squad_id) ?? t.assignee_squad_id) : '—'],
               ['cost', formatMicros(t.cost_micros)],
               ['tokens', `${formatTokens(t.tokens_in)} in / ${formatTokens(t.tokens_out)} out`],
               ['deliverable', t.deliverable ?? '—'],

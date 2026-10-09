@@ -127,7 +127,7 @@ export function NewProjectDialog() {
         <Field label="Goal" hint="What should the org achieve? The Orchestrator interprets this and forms the org.">
           <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Build a launch plan for the Q3 campaign." />
         </Field>
-        <Field label="Budget cap (USD)" hint="Hard-enforced server-side (docs/11 §4 budget_exceeded).">
+        <Field label="Budget cap (USD)" hint="Hard-enforced server-side — a run cannot exceed the cap.">
           <Input type="number" min="0" step="0.5" value={budget} onChange={(e) => setBudget(e.target.value)} />
         </Field>
         {create.isError && <PanelError error={create.error} label="Create project" />}

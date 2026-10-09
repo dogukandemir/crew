@@ -104,7 +104,7 @@ export function formatRelativeTime(
   now: number = Date.now(),
 ): string {
   if (!iso) return UNKNOWN;
-  const ts = Date.parse(iso);
+  const ts = parseTs(iso);
   if (Number.isNaN(ts)) return UNKNOWN;
   const delta = now - ts;
   if (delta < 0) {
@@ -119,17 +119,29 @@ export function formatRelativeTime(
   return `${Math.floor(delta / 86_400_000)}d ago`;
 }
 
+/**
+ * Parse an API timestamp to epoch ms. The backend sends a UTC offset on every
+ * wire timestamp (core/events.utc_iso), but be defensive about old rows and
+ * hand-made fixtures: a naive string (no `Z`/offset) is UTC by contract —
+ * `Date.parse` alone would read it as LOCAL time and shift history by the
+ * machine's UTC offset (the "fresh event, 2h ago" bug).
+ */
+export function parseTs(iso: string): number {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
+  return Date.parse(hasZone ? iso : `${iso}Z`);
+}
+
 /** Local wall-clock HH:MM:SS from an ISO timestamp. */
 export function formatClock(iso: string | null | undefined): string {
   if (!iso) return UNKNOWN;
-  const d = new Date(iso);
+  const d = new Date(parseTs(iso));
   if (Number.isNaN(d.getTime())) return UNKNOWN;
   return d.toLocaleTimeString('en-GB', { hour12: false });
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return UNKNOWN;
-  const d = new Date(iso);
+  const d = new Date(parseTs(iso));
   if (Number.isNaN(d.getTime())) return UNKNOWN;
   return d.toLocaleString('en-GB', { hour12: false });
 }

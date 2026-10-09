@@ -41,11 +41,14 @@ function ConnectionIndicator() {
   }
   const mismatch = data.contract !== CONTRACT_VERSION;
   return (
-    <span className="flex items-center gap-1.5 text-xs text-slate-300" title={`backend ${data.version} · contract ${data.contract}`}>
+    <span
+      className="flex items-center gap-1.5 text-xs text-slate-300"
+      title={`backend ${data.version} · contract ${data.contract} · live event streams: ${live} of ${total} open tabs`}
+    >
       <StatusDot state={total === 0 || live > 0 ? 'ok' : 'warning'} pulse />
       connected
       {total > 0 && (
-        <span className="text-slate-500">
+        <span className="text-slate-500" title="open project tabs with a live stream">
           {live}/{total}
         </span>
       )}
@@ -62,15 +65,19 @@ function GlobalBudgetMeter() {
   if (projects.length === 0) return null;
   const fraction = budgetFraction(spend, cap);
   return (
-    <div className="hidden min-w-[10rem] items-center gap-2 md:flex" title={`${formatMicros(spend)} of ${formatMicros(cap)}`}>
+    <div
+      className="hidden min-w-[10rem] items-center gap-2 md:flex"
+      title={`all projects — ${formatMicros(spend)} of ${formatMicros(cap)}`}
+    >
       <div className="w-24">
         <ProgressBar
           value={fraction}
           tone={fraction > 0.9 ? 'danger' : fraction > 0.7 ? 'warning' : 'accent'}
-          label="global budget"
+          label="all-projects budget"
         />
       </div>
       <span className="text-[11px] tabular-nums text-slate-400">
+        <span className="text-slate-600">all projects · </span>
         {formatMicros(spend)} <span className="text-slate-600">/ {formatMicros(cap)}</span> · {formatPercent(fraction)}
       </span>
     </div>
@@ -81,7 +88,13 @@ function KillSwitch() {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
   const qc = useQueryClient();
+  const { data } = useProjects();
   const setToast = useUi((s) => s.setToast);
+  // no runs in flight → keep the emergency stop available but quiet (it was the
+  // loudest thing on an empty control room)
+  const active = (data?.items ?? []).some(
+    (p) => !!p.stage && !['IDLE', 'DONE', 'FAILED', ''].includes(p.stage),
+  );
 
   const kill = useMutation({
     mutationFn: () => api.killAll(true),
@@ -101,10 +114,12 @@ function KillSwitch() {
   return (
     <>
       <Button
-        variant="dangerSolid"
+        variant={active ? 'dangerSolid' : 'ghost'}
         size="sm"
         onClick={() => setOpen(true)}
-        title="Stop every run in every project"
+        title={active
+          ? 'Stop every run in every project'
+          : 'Emergency stop — nothing is running right now, but this always stops everything'}
       >
         ⏹ Kill all
       </Button>
@@ -138,9 +153,8 @@ function KillSwitch() {
         }
       >
         <p className="text-sm text-slate-300">
-          This calls <code className="font-mono text-xs">POST /api/system/kill</code> and stops{' '}
-          <strong>every run in every project</strong>. Agents in flight are aborted; queued jobs are cancelled.
-          Work already completed is preserved.
+          This stops <strong>every run in every project</strong>. Agents in flight are aborted; queued
+          jobs are cancelled. Work already completed is preserved.
         </p>
         <label className="mt-3 block">
           <span className="mb-1 block text-xs text-slate-400">

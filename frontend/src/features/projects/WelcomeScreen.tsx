@@ -96,9 +96,6 @@ export function WelcomeScreen() {
             <Button variant="ghost" size="sm" onClick={() => setNewProjectOpen(true)}>
               ＋ Standalone project
             </Button>
-            <Button variant="primary" size="sm" onClick={() => setWizardOpen(true)}>
-              ⌂ Found a company
-            </Button>
           </div>
         )}
       </div>

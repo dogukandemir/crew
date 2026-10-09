@@ -219,6 +219,20 @@ export function HqFloor({ hq }: { hq: Hq }) {
   // headquarters is 3 px tall — a name tag nobody can read is a name tag nobody has.
   const labelScale = clamp(0.9 / cam.scale, 1, 4.5);
 
+  // Board members share one table, so their name tags stack on top of each other at
+  // the fitted zoom. Stagger them by seat order — one readable name per row.
+  // (the translate sits OUTSIDE the label scale, so the step is in world units:
+  //  14 screen px ÷ the camera zoom.)
+  const boardTagDy = useMemo(() => {
+    const dy = new Map<string, number>();
+    const step = 14 / cam.scale;
+    world.people
+      .filter((p) => p.kind === 'board')
+      .sort((a, b) => a.home.x - b.home.x)
+      .forEach((p, i) => dy.set(p.id, i * step));
+    return dy;
+  }, [world, cam.scale]);
+
   const onWheel = (e: RWheelEvent) => {
     e.preventDefault();
     const rect = hostRef.current?.getBoundingClientRect();
@@ -292,6 +306,8 @@ export function HqFloor({ hq }: { hq: Hq }) {
               note={stageOf.get(person.id)?.note}
               offFloor={person.kind === 'board' && !world.inSession && !stagedNow.has(person.id)}
               scale={labelScale}
+              tagDy={boardTagDy.get(person.id) ?? 0}
+              hideTagAtHome={person.kind === 'exec'}
               register={(el) => {
                 if (el) gRefs.current.set(person.id, el);
                 else gRefs.current.delete(person.id);
@@ -307,7 +323,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
         </div>
       )}
 
-      <div className="absolute bottom-3 right-3 flex items-center gap-1 text-xs text-slate-400">
+      <div className="absolute bottom-16 right-3 flex items-center gap-1 text-xs text-slate-400">
         <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1 / 1.25, size.w / 2, size.h / 2)} aria-label="Zoom out">−</button>
         <span className="w-10 text-center tabular-nums">{zoomPct}%</span>
         <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1.25, size.w / 2, size.h / 2)} aria-label="Zoom in">＋</button>
@@ -324,6 +340,8 @@ function Person({
   note,
   offFloor,
   scale,
+  tagDy,
+  hideTagAtHome,
   register,
 }: {
   person: HqPerson;
@@ -332,6 +350,8 @@ function Person({
   note: string | undefined;
   offFloor: boolean;
   scale: number;
+  tagDy: number;
+  hideTagAtHome: boolean;
   register: (el: SVGGElement | null) => void;
 }) {
   if (!walker) return null;
@@ -339,6 +359,9 @@ function Person({
   const atDesk = person.anchors && !staged && !walker.moving
     && walker.pos.x === person.home.x && walker.pos.y === person.home.y;
   const activity = walker.moving ? 'walking' : atDesk ? 'typing' : 'idle';
+  // an executive's office plate carries their name; while seated the floating tag
+  // just collided with it. Show the tag only while they move.
+  const showTag = !(hideTagAtHome && !walker.moving);
   return (
     <g ref={register} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} opacity={offFloor ? 0.35 : 1}>
       <ellipse cx={0} cy={0} rx={16} ry={8} fill="#05070c" opacity={0.35} />
@@ -346,9 +369,11 @@ function Person({
         <SpriteCharacter name={person.id} activity={activity} atDesk={atDesk}
                          motion={walker.motion} faded={offFloor} />
       </g>
-      <g transform={`translate(0 -62) scale(${scale.toFixed(3)})`}>
-        <text y={0} textAnchor="middle" fontSize={10} fill="#9db0c8">{person.name}</text>
-      </g>
+      {showTag && (
+        <g transform={`translate(0 ${-62 + tagDy}) scale(${scale.toFixed(3)})`}>
+          <text y={0} textAnchor="middle" fontSize={10} fill="#9db0c8">{person.name}</text>
+        </g>
+      )}
       {staged && note && (
         <g transform={`translate(0 -84) scale(${scale.toFixed(3)})`} pointerEvents="none">
           <rect x={-noteWidth(note) / 2} y={-12} width={noteWidth(note)} height={17} rx={5}

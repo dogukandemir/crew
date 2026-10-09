@@ -116,6 +116,7 @@ export type ProjectStatus = 'active' | 'paused' | 'archived' | 'failed';
 
 /** INTAKE → PLANNING → STAFFING → EXECUTING → VERIFYING → REWARDING → DONE (docs/03). */
 export type Stage =
+  | 'IDLE'
   | 'INTAKE'
   | 'PLANNING'
   | 'STAFFING'

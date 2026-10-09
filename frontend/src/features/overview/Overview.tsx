@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import { Badge, severityTone } from '../../components/ui/Badge';
 import { Card, StatCard } from '../../components/ui/Card';
+import { Modal } from '../../components/ui/Drawer';
 import { Field, Select, Textarea } from '../../components/ui/Field';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
@@ -118,7 +119,8 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                   <YAxis
                     width={54}
                     tick={{ fill: '#64748b', fontSize: 10 }}
-                    tickFormatter={(v: number) => `$${v.toFixed(2)}`}
+                    tickFormatter={(v: number) =>
+                      v !== 0 && Math.abs(v) < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`}
                   />
                   <Tooltip
                     contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 11 }}
@@ -185,8 +187,18 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
 function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGoal: string }) {
   const [goal, setGoal] = useState(defaultGoal);
   const [mode, setMode] = useState<'interactive' | 'autonomous'>('interactive');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [skipAsk, setSkipAsk] = useState(false);
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
+  const project = useProject(projectId);
+  const tasks = useTasks(projectId);
+  const items = tasks.data?.items ?? [];
+  const done = items.filter((t) => t.state === 'completed').length;
+  const total = tasks.data?.total ?? items.length;
+  const stage = project.data?.stage ?? 'IDLE';
+  const runActive = !['IDLE', 'DONE', ''].includes(stage);
+  const needsConfirm = !skipAsk && (runActive || done > 0);
 
   const start = useMutation({
     mutationFn: () => api.startRun(projectId, { goal: goal.trim() || defaultGoal, mode }),
@@ -198,34 +210,82 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
   });
 
   return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        start.mutate();
-      }}
-    >
-      <Field label="Goal">
-        <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="What should the org achieve?" />
-      </Field>
-      <Field
-        label="Mode"
-        hint={
-          mode === 'autonomous'
-            ? 'Runs without asking you for confirmation.'
-            : 'Pauses for your confirmation at key gates.'
+    <>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (needsConfirm) {
+            setConfirmOpen(true);   // a fresh run re-plans from scratch — say so first
+            return;
+          }
+          start.mutate();
+        }}
+      >
+        <Field label="Goal">
+          <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="What should the org achieve?" />
+        </Field>
+        <Field
+          label="Mode"
+          hint={
+            mode === 'autonomous'
+              ? 'Runs without asking you for confirmation.'
+              : 'Pauses for your confirmation at key gates.'
+          }
+        >
+          <Select value={mode} onChange={(e) => setMode(e.target.value as 'interactive' | 'autonomous')}>
+            <option value="interactive">interactive</option>
+            <option value="autonomous">autonomous</option>
+          </Select>
+        </Field>
+        <Button type="submit" variant="primary" loading={start.isPending} disabled={!(goal.trim() || defaultGoal)}>
+          ▶ Start run
+        </Button>
+        <ProgressHint projectId={projectId} />
+      </form>
+      <Modal
+        open={confirmOpen}
+        title={runActive ? 'A run is already in progress' : 'Start a new run?'}
+        onClose={() => setConfirmOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={start.isPending}
+              onClick={() => {
+                setConfirmOpen(false);
+                start.mutate();
+              }}
+            >
+              Start anyway
+            </Button>
+          </>
         }
       >
-        <Select value={mode} onChange={(e) => setMode(e.target.value as 'interactive' | 'autonomous')}>
-          <option value="interactive">interactive</option>
-          <option value="autonomous">autonomous</option>
-        </Select>
-      </Field>
-      <Button type="submit" variant="primary" loading={start.isPending} disabled={!(goal.trim() || defaultGoal)}>
-        ▶ Start run
-      </Button>
-      <ProgressHint projectId={projectId} />
-    </form>
+        <p className="text-xs text-slate-400">
+          {runActive
+            ? `The project is at stage ${stage}.`
+            : `A previous pass already completed ${done} of ${total} tasks.`}
+        </p>
+        <p className="mt-2 text-sm text-slate-300">
+          A new run <span className="text-slate-100">re-plans the goal from scratch</span> — it does not
+          continue the previous run and will redo (and re-charge) equivalent work. If you want the org to
+          build on what it already made, edit the goal first.
+        </p>
+        <label className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            checked={skipAsk}
+            onChange={(e) => setSkipAsk(e.target.checked)}
+            className="accent-emerald-500"
+          />
+          Don't ask again this session
+        </label>
+      </Modal>
+    </>
   );
 }
 

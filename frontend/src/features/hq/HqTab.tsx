@@ -71,13 +71,28 @@ export function HqTab({ companyId }: { companyId: string }) {
             className="w-44 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200 placeholder:text-slate-600"
             placeholder="Board session topic"
           />
-          <Button size="xs" disabled={!topic.trim() || session.isPending} onClick={() => session.mutate()}>
+          <Button
+            size="xs"
+            disabled={!topic.trim() || session.isPending}
+            onClick={() => session.mutate()}
+            title="Seat the board and debate this topic; the outcome is recorded as a binding decision."
+          >
             Convene board
           </Button>
-          <Button size="xs" disabled={allocate.isPending} onClick={() => allocate.mutate()}>
+          <Button
+            size="xs"
+            disabled={allocate.isPending}
+            onClick={() => allocate.mutate()}
+            title="Re-rank the portfolio and hand each project its budget cap from its verdict."
+          >
             Allocate
           </Button>
-          <Button size="xs" disabled={review.isPending} onClick={() => review.mutate()}>
+          <Button
+            size="xs"
+            disabled={review.isPending}
+            onClick={() => review.mutate()}
+            title="Read every project's books and write one grounded directive into each one."
+          >
             Review
           </Button>
         </div>

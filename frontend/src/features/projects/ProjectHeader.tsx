@@ -18,8 +18,20 @@ import { switchTargets } from './projectSwitch';
 
 function StageStepper({ stage }: { stage: Stage }) {
   const current = STAGES.indexOf(stage);
+  const idle = current < 0;
   return (
     <ol className="flex flex-wrap items-center gap-1" aria-label="Run stage">
+      {idle && (
+        <li className="flex items-center gap-1">
+          <span
+            className="rounded border border-slate-600/60 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300"
+            title="No run in progress — start one from the Overview tab."
+          >
+            {stage}
+          </span>
+          <span className="text-slate-700">›</span>
+        </li>
+      )}
       {STAGES.map((s, i) => {
         const done = current >= 0 && i < current;
         const active = i === current;

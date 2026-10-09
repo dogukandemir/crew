@@ -53,7 +53,7 @@ export function CompaniesSection() {
         <h2 className="text-sm font-medium text-slate-300">Companies</h2>
         <div className="flex items-center gap-2">
           <Button variant="primary" size="sm" onClick={() => setFoundWizardOpen(true)}>
-            ⌂ Found a company
+            {items.length === 0 ? '⌂ Found a company' : '⌂ Found another company'}
           </Button>
         </div>
       </div>

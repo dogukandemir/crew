@@ -211,7 +211,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
                 </h3>
                 <span className="text-[10px] text-slate-500">{col.items.length}</span>
               </header>
-              <ul className="flex flex-col gap-1.5 p-2">
+              <ul className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden p-2">
                 {col.items.length === 0 && <li className="px-1 py-2 text-[10px] text-slate-600">—</li>}
                 {col.items.map((item) => (
                   <Card

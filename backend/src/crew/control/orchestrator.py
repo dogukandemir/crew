@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 
 from sqlalchemy import desc, select, update
@@ -971,7 +972,10 @@ class Orchestrator:
                               payload={"max_runs": cap, "streak": streak},
                               actor="system:orchestrator")
                 return
-            goal = f"Continue: {run.goal} (follow-on pass {streak + 1}/{cap})"
+            base = re.sub(r"\s*\(follow-on pass \d+/\d+\)\s*$", "", run.goal).strip()
+            if base.startswith("Continue: "):
+                base = base[len("Continue: "):]
+            goal = f"Continue: {base} (follow-on pass {streak + 1}/{cap})"
             nxt = await self.start_run(project_id=project.id, goal=goal, mode=run.mode,
                                        actor=CADENCE_ACTOR)
             async with session_scope() as s:

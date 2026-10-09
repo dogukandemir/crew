@@ -51,6 +51,8 @@ async def test_cadence_runs_bounded_follow_ons_then_holds(bound_loop, project):
     assert len(runs) == 3, f"1 manual + exactly 2 follow-on passes, got {len(runs)}"
     goals = [r.goal for r in runs]
     assert "follow-on pass 1/2" in goals[1] and "follow-on pass 2/2" in goals[2]
+    assert "Continue: Continue:" not in goals[2], "a follow-on of a follow-on must not nest its label"
+    assert goals[2].count("ship the release") == 1, "the base goal appears exactly once"
     assert all(r.status in ("completed", "failed") for r in runs), [r.status for r in runs]
 
     started = await _events(project["id"], "run.cadence.started")

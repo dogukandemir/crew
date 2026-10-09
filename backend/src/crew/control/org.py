@@ -209,6 +209,8 @@ async def get_project(project_id: str) -> dict:
         if p is None:
             raise KeyError(project_id)
         d = serialize_project(p)
+        d["runs"] = int(await s.scalar(select(func.count(Run.id)).where(
+            Run.project_id == project_id)) or 0)
         if p.company_id:
             # The breadcrumb's upper half (ADR 0015): the company this project reports to.
             co = await s.get(Project, p.company_id)
@@ -221,7 +223,15 @@ def serialize_project(p: Project) -> dict:
     return {
         "id": p.id, "name": p.name, "slug": p.slug, "goal": p.goal, "status": p.status,
         "stage": p.stage, "description": p.description, "kind": p.kind, "company_id": p.company_id,
+        # The breadcrumb's upper half (ADR 0015): always present, filled by get_project /
+        # list_projects when the project reports to a company — the UI reads `?? null`.
+        "company_name": None,
         "budget_usd": p.budget_usd, "spend_usd": p.spend_usd,
+        # The UI's ledgers read raw micros (audit K2: omitting them rendered "— / —" and
+        # "$0.00 / $0.00" on every budget surface against the real backend, while the mock
+        # masked it). Contract §5 allows additive fields; ship both units.
+        "budget_cap_micros": p.budget_cap_micros, "spend_micros": p.spend_micros,
+        "reserved_micros": p.reserved_micros,
         "spend_ratio": round(p.spend_micros / p.budget_cap_micros, 4) if p.budget_cap_micros else 0.0,
         "reserved_usd": round(p.reserved_micros / 1e6, 6),
         "settings": p.settings or {}, "tags": p.tags or [],
@@ -1031,6 +1041,13 @@ async def revive_blocked(project_id: str, run_id: str) -> int:
 
 
 async def org_tree(project_id: str) -> dict:
+    """The org as the UI renders it (docs/11, ADR 0015 era): one `root` tree —
+    project → orchestrator, departments → squads → agents, unassigned agents at the
+    root — with every node carrying BOTH units (micros for the ledgers, usd for the
+    drawers). The flat keys (project/orchestrator/departments/unassigned) that the
+    command desk's first reader consumed ride along additively: nothing that predates
+    the tree breaks, and `nodes` is the flat index for lookup shortcuts."""
+    open_states = ["assigned", "running", "ready", "pending"]
     async with session_scope() as s:
         project = await s.get(Project, project_id)
         if project is None:
@@ -1040,9 +1057,14 @@ async def org_tree(project_id: str) -> dict:
         agents = (await s.scalars(select(Agent).where(Agent.project_id == project_id))).all()
         task_counts = dict((await s.execute(
             select(Task.assignee_agent_id, func.count(Task.id)).where(
-                Task.project_id == project_id,
-                Task.state.in_(["assigned", "running", "ready", "pending"]))
+                Task.project_id == project_id, Task.state.in_(open_states))
             .group_by(Task.assignee_agent_id))).all())
+        dept_open = dict((await s.execute(
+            select(Task.department_id, func.count(Task.id)).where(
+                Task.project_id == project_id, Task.state.in_(open_states))
+            .group_by(Task.department_id))).all())
+        open_total = int(await s.scalar(select(func.count(Task.id)).where(
+            Task.project_id == project_id, Task.state.in_(open_states))) or 0)
 
     def agent_node(a: Agent) -> dict:
         return {
@@ -1053,28 +1075,83 @@ async def org_tree(project_id: str) -> dict:
             "manager_id": a.manager_id, "department_id": a.department_id, "squad_id": a.squad_id,
             "open_tasks": int(task_counts.get(a.id, 0)),
             "spend_usd": round(a.spend_today_micros / 1e6, 4),
+            "spend_micros": a.spend_today_micros, "cost_micros": a.spend_today_micros,
+            "children": [],
         }
 
+    live = [a for a in agents if a.state != "archived"]
     orch_id = (project.settings or {}).get("orchestrator_id")
-    nodes = []
+    orchestrator = next((a for a in live if a.id == orch_id), None)
+
+    def squad_node(sq: Squad, members: list[Agent]) -> dict:
+        return {"id": sq.id, "kind": "squad", "name": sq.name, "mission": sq.mission,
+                "state": sq.status, "lead_agent_id": sq.lead_agent_id,
+                "spend_usd": round(sq.spend_micros / 1e6, 4),
+                "spend_micros": sq.spend_micros, "cost_micros": sq.spend_micros,
+                "children": [agent_node(a) for a in members]}
+
+    dept_nodes: list[dict] = []
     for d in depts:
+        d_agents = [a for a in live if a.department_id == d.id]
         d_squads = [sq for sq in squads if sq.department_id == d.id]
-        nodes.append({
+        placed: set[str] = set()
+        children: list[dict] = []
+        if d.head_agent_id:
+            head = next((a for a in d_agents if a.id == d.head_agent_id), None)
+            if head:
+                children.append(agent_node(head))
+                placed.add(head.id)
+        for sq in d_squads:
+            members = [a for a in d_agents if a.squad_id == sq.id and a.id not in placed]
+            if not members and sq.lead_agent_id is None:
+                continue
+            children.append(squad_node(sq, members))
+            placed.update(a.id for a in members)
+        children.extend(agent_node(a) for a in d_agents if a.id not in placed)
+        dept_nodes.append({
             "id": d.id, "kind": "department", "name": d.name, "mission": d.mission,
-            "status": d.status, "head_agent_id": d.head_agent_id,
+            "state": d.status, "head_agent_id": d.head_agent_id,
             "budget_usd": round(d.budget_envelope_micros / 1e6, 4),
             "spend_usd": round(d.spend_micros / 1e6, 4),
+            "spend_micros": d.spend_micros, "cost_micros": d.spend_micros,
+            "budget_envelope_micros": d.budget_envelope_micros,
+            "open_tasks": int(dept_open.get(d.id, 0)),
+            "children": children,
+            # legacy flat view, kept additively (contract §5)
             "squads": [{"id": sq.id, "kind": "squad", "name": sq.name, "mission": sq.mission,
-                        "lead_agent_id": sq.lead_agent_id, "status": sq.status} for sq in d_squads],
-            "agents": [agent_node(a) for a in agents if a.department_id == d.id and a.state != "archived"],
+                        "lead_agent_id": sq.lead_agent_id, "status": sq.status,
+                        "spend_micros": sq.spend_micros} for sq in d_squads],
+            "agents": [agent_node(a) for a in d_agents],
         })
+
+    unassigned = [a for a in live if not a.department_id and a is not orchestrator]
+
+    root = {
+        "id": project.id, "kind": "project", "name": project.name, "state": project.status,
+        "spend_usd": project.spend_usd,
+        "spend_micros": project.spend_micros, "cost_micros": project.spend_micros,
+        "budget_envelope_micros": project.budget_cap_micros,
+        "open_tasks": open_total, "score": None,
+        "children": ([agent_node(orchestrator)] if orchestrator else []) + dept_nodes
+                    + [agent_node(a) for a in unassigned],
+    }
+    nodes: list[dict] = []
+
+    def walk(n: dict) -> None:
+        nodes.append(n)
+        for c in n["children"]:
+            walk(c)
+
+    walk(root)
     return {
+        "root": root, "nodes": nodes, "generated_at": datetime.now(UTC).isoformat(),
+        # legacy flat keys (additive): pre-tree readers keep working untouched
         "project": {"id": project.id, "name": project.name, "goal": project.goal,
                     "status": project.status, "stage": project.stage,
                     "budget_usd": project.budget_usd, "spend_usd": project.spend_usd},
-        "orchestrator": agent_node(next((a for a in agents if a.id == orch_id), None)) if orch_id else None,
-        "departments": nodes,
-        "unassigned": [agent_node(a) for a in agents if not a.department_id and a.state != "archived"],
+        "orchestrator": agent_node(orchestrator) if orchestrator else None,
+        "departments": dept_nodes,
+        "unassigned": [agent_node(a) for a in live if not a.department_id],
     }
 
 

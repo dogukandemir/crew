@@ -314,8 +314,53 @@ async def test_found_company_endpoint(client):
     page = r3.json()
     assert page["company_brain"]["entries"] >= 1, "the mission seeds the umbrella"
     assert page["members"][0]["project_id"] == body["project"]["id"]
+    assert all("owner_name" in b for b in page["members"][0]["brains"]), \
+        "the member index resolves names, not ids (audit Ö4)"
 
     # the member is a real project (listed), the company is not
     r4 = await client.get("/api/projects")
     listed = {x["id"] for x in r4.json()["items"]}
     assert body["project"]["id"] in listed and body["company"]["id"] not in listed
+
+
+async def test_ui_contract_shapes(client):
+    """The fields the UI actually reads, asserted against the REAL app (audit Ö1).
+
+    Micros and the org root once vanished from these payloads while the mock kept
+    serving them — the office, the org chart and every budget bar rendered empty
+    against the real backend and nobody noticed. If a field here ever leaves a
+    payload again, this test goes red instead of the product quietly lying."""
+    p = await _create_project(client, "Contract Check", budget=3.0)
+
+    # project list + detail: both units, both breadcrumb halves, the run count
+    row = next(x for x in (await client.get("/api/projects")).json()["items"] if x["id"] == p["id"])
+    for src in (p, row):
+        assert src["budget_cap_micros"] == 3_000_000 and src["spend_micros"] == 0
+        assert src["kind"] == "project" and src["company_id"] is None
+        assert "company_name" in src and src["runs"] == 0
+
+    # org: the tree the renderer walks; nodes carry both units
+    org = (await client.get(f"/api/projects/{p['id']}/org")).json()
+    assert org["root"]["kind"] == "project"
+    assert org["root"]["budget_envelope_micros"] == 3_000_000
+    kinds: set[str] = set()
+    stack = [org["root"]]
+    while stack:
+        n = stack.pop()
+        kinds.add(n["kind"])
+        if n["kind"] == "agent":
+            assert "spend_micros" in n and "grade" in n and "state" in n and "role" in n
+        stack.extend(n.get("children", []))
+    assert "agent" in kinds, "the orchestrator hangs off the root"
+    assert org["orchestrator"] and org["departments"] is not None, "legacy flat keys stay (additive)"
+
+    # brains: the {items} envelope (the client normalizes it) + resolved owner names
+    brains = (await client.get(f"/api/projects/{p['id']}/brains")).json()
+    assert isinstance(brains["items"], list)
+    for b in brains["items"]:
+        assert "owner_name" in b and "entries" in b and "scope" in b
+
+    # tasks: the {items} array is what the UI cannot live without; the envelope tail
+    # (total/next_cursor) is documented-optional and the client backfills it (docs/11 §5)
+    tasks = (await client.get(f"/api/projects/{p['id']}/tasks")).json()
+    assert "items" in tasks and isinstance(tasks["items"], list)

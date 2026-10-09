@@ -98,9 +98,18 @@ async def brains_overview(company_id: str) -> dict:
             counts = {bid: int(n) for bid, n in (await s.execute(
                 select(BrainEntry.brain_id, func.count(BrainEntry.id))
                 .where(BrainEntry.project_id == m.id).group_by(BrainEntry.brain_id))).all()}
+            # Resolve owner names (audit Ö4): "person · personal" is a database, a name
+            # is an org — the same resolution list_brains does, one scope up.
+            dept_names = {d.id: d.name for d in (await s.scalars(
+                select(Department).where(Department.project_id == m.id))).all()}
+            agent_names = {a.id: a.name for a in (await s.scalars(
+                select(Agent).where(Agent.project_id == m.id))).all()}
+
             member_rows.append({
                 "project_id": m.id, "name": m.name,
                 "brains": [{"id": b.id, "scope": b.scope, "label": b.label,
+                            "owner_name": _brain_owner_name(b.scope, b.owner_id, m.name,
+                                                            dept_names, agent_names),
                             "entries": counts.get(b.id, 0)} for b in brains],
             })
     first = co_brains[0] if co_brains else None
@@ -114,6 +123,16 @@ async def brains_overview(company_id: str) -> dict:
 
 def _aware(ts: datetime) -> datetime:
     return ts.replace(tzinfo=UTC) if ts.tzinfo is None else ts
+
+
+def _brain_owner_name(scope: str, owner_id: str, project_name: str,
+                      dept_names: dict[str, str], agent_names: dict[str, str]) -> str:
+    """A brain's human owner (audit Ö4): the same resolution `list_brains` does."""
+    if scope in ("company", "project"):
+        return project_name
+    if scope == "department":
+        return dept_names.get(owner_id, "")
+    return agent_names.get(owner_id, "")
 
 
 async def _review_payload(s, company_id: str) -> dict | None:
@@ -132,9 +151,13 @@ async def _member_stats(s, m: Project, stale_hours: int) -> dict:
         Event.project_id == m.id, Event.type == "task.completed")) or 0)
     failed = int(await s.scalar(select(func.count(Event.id)).where(
         Event.project_id == m.id, Event.type == "task.failed")) or 0)
+    open_tasks = int(await s.scalar(select(func.count(Task.id)).where(
+        Task.project_id == m.id,
+        Task.state.in_(["assigned", "running", "ready", "pending"]))) or 0)
     last = await s.scalar(select(Event.ts).where(Event.project_id == m.id)
                           .order_by(Event.seq.desc()).limit(1))
     return {"id": m.id, "name": m.name, "completed": completed, "failed": failed,
+            "open_tasks": open_tasks,
             "ratio": (m.spend_micros / m.budget_cap_micros) if m.budget_cap_micros else 0.0,
             "cap_micros": m.budget_cap_micros, "spend_micros": m.spend_micros,
             "last_ts": last, "stale_hours": stale_hours}
@@ -157,6 +180,14 @@ def _verdict_of(st: dict, now: datetime) -> tuple[str, str, str, dict]:
         verdict, severity = "at_risk", "warning"
         line = (f"tighten: {st['ratio']:.0%} of the budget is used — shrink reservations and "
                 f"cheap models until the run lands")
+    elif st["completed"] == 0 and st["failed"] == 0:
+        # Nothing has EVER finished here (audit Ö6): "on track" is a guess with no
+        # completed work to stand on. If a run is in flight, say that; if nothing is,
+        # say THAT — both sentences cite the record.
+        verdict, severity = "no_activity", "notice"
+        line = (f"first run in flight: {st['open_tasks']} task(s) underway, nothing completed yet"
+                if st["open_tasks"] else
+                "nothing on the record yet — start a run, or archive it if the goal moved on")
     elif st["last_ts"] is None or (now - _aware(st["last_ts"])) > timedelta(hours=st["stale_hours"]):
         verdict, severity = "no_activity", "notice"
         line = (f"status check: nothing on the record for {st['stale_hours'] // 24}d — "
@@ -167,6 +198,7 @@ def _verdict_of(st: dict, now: datetime) -> tuple[str, str, str, dict]:
                 f"so far")
     basis = {"spend_ratio": round(st["ratio"], 4), "completed": st["completed"],
              "failed": st["failed"], "attempted": attempted,
+             "open_tasks": st.get("open_tasks", 0),
              "cap_micros": st["cap_micros"], "stale_hours": st["stale_hours"]}
     return verdict, severity, line, basis
 

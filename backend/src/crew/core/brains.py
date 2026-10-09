@@ -121,7 +121,7 @@ class BrainService:
                 owner_name = agent_names.get(b.owner_id, "")
             out.append({"id": b.id, "scope": b.scope, "owner_id": b.owner_id, "label": b.label,
                         "owner_name": owner_name,
-                        "entries": counts.get(b.id, 0), "created_at": b.created_at.isoformat()})
+                        "entries": counts.get(b.id, 0), "created_at": ev.utc_iso(b.created_at)})
         return out
 
     # ── read/write rights ─────────────────────────────────────────────────────────
@@ -307,7 +307,7 @@ class BrainService:
             "id": e.id, "brain_id": e.brain_id, "kind": e.kind, "title": e.title, "body": e.body,
             "payload": e.payload or {}, "source": e.source or {}, "trust": e.trust,
             "importance": e.importance, "tags": e.tags or [], "skill_ids": e.skill_ids or [],
-            "use_count": e.use_count, "created_at": e.created_at.isoformat() if e.created_at else None,
+            "use_count": e.use_count, "created_at": ev.utc_iso(e.created_at) if e.created_at else None,
             "superseded_by": e.superseded_by, "human_edited": e.human_edited,
             "created_by": e.created_by,
         }

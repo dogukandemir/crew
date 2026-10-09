@@ -241,7 +241,7 @@ def serialize_project(p: Project) -> dict:
         "spend_ratio": round(p.spend_micros / p.budget_cap_micros, 4) if p.budget_cap_micros else 0.0,
         "reserved_usd": round(p.reserved_micros / 1e6, 6),
         "settings": p.settings or {}, "tags": p.tags or [],
-        "created_at": p.created_at.isoformat(), "archived_at": p.archived_at.isoformat() if p.archived_at else None,
+        "created_at": ev.utc_iso(p.created_at), "archived_at": ev.utc_iso(p.archived_at) if p.archived_at else None,
     }
 
 
@@ -1012,7 +1012,10 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
     """Match each ready task to the best available agent in its department (docs/03 §5)."""
     assigned = 0
     async with session_scope() as s:
-        tasks = (await s.scalars(select(Task).where(Task.run_id == run_id))).all()
+        # standalone tasks (run_id NULL) are matched too: the Captain assigned them from
+        # the command desk and a wave must be able to hand them to an owner.
+        tasks = (await s.scalars(select(Task).where(Task.project_id == project_id,
+                                                    (Task.run_id == run_id) | (Task.run_id.is_(None))))).all()
         agents = (await s.scalars(select(Agent).where(Agent.project_id == project_id,
                                                       Agent.state != "archived"))).all()
         skills_by_agent: dict[str, dict[str, float]] = {}
@@ -1086,7 +1089,10 @@ async def ready_tasks(project_id: str, run_id: str | None = None) -> list[Task]:
     async with session_scope() as s:
         stmt = select(Task).where(Task.project_id == project_id)
         if run_id:
-            stmt = stmt.where(Task.run_id == run_id)
+            # a wave works the project's ready work: its own plan PLUS standalone tasks
+            # (created by the command desk / manual assignment, run_id NULL). Without
+            # this the Captain's orders sat assigned forever — no wave ever saw them.
+            stmt = stmt.where((Task.run_id == run_id) | (Task.run_id.is_(None)))
         tasks = (await s.scalars(stmt.order_by(Task.priority, Task.created_at))).all()
         done = {t.id for t in tasks if t.state == TaskState.COMPLETED.value}
         out: list[Task] = []
@@ -1241,7 +1247,7 @@ async def recent_lessons(project_id: str, limit: int = 5) -> list[dict]:
         rows = (await s.scalars(select(BrainEntry).where(BrainEntry.project_id == project_id,
                                                          BrainEntry.kind == "lesson")
                                 .order_by(desc(BrainEntry.created_at)).limit(limit))).all()
-    return [{"title": r.title, "body": r.body, "created_at": r.created_at.isoformat()} for r in rows]
+    return [{"title": r.title, "body": r.body, "created_at": ev.utc_iso(r.created_at)} for r in rows]
 
 
 @dataclass

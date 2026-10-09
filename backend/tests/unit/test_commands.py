@@ -84,6 +84,9 @@ async def test_assign_creates_a_task_and_ties_it_to_the_named_agent(bound_loop, 
                             "task.assigned"))))).all()
     task = next(x for x in t if x.assignee_agent_id == ada_id)
     assert task.state == TaskState.ASSIGNED.value and task.run_id is None
+    assert task.title == "prepare the monthly summary", "the addressee name must not stick to the title"
+    assert "It is queued" in out["reply"]["text"], \
+        "no open run → the reply says queued, it does not promise an unreachable wave"
     assert {e.type for e in evs} >= {"command.message", "command.reply", "task.created",
                                      "task.assigned"}
 

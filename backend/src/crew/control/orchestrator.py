@@ -377,6 +377,10 @@ class Orchestrator:
                 task.started_at = datetime.now(UTC)
                 task.attempts += 1
                 attempts = task.attempts
+                if task.run_id is None:
+                    # a standalone order (command desk / manual) adopted by this wave:
+                    # it belongs to the run from here, so run accounting counts it
+                    task.run_id = run.id
                 s.add(task)
 
             trace_id = run.trace_id

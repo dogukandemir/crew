@@ -244,8 +244,8 @@ async def board(*, project_id: str, department_id: str | None = None,
                     "attempts": t.attempts if t else 0,
                     "helpers": list(t.helpers or []) if t else [],
                     "acceptance": i.acceptance, "tags": i.tags,
-                    "created_at": i.created_at.isoformat() if i.created_at else None,
-                    "updated_at": i.updated_at.isoformat() if i.updated_at else None})
+                    "created_at": ev.utc_iso(i.created_at) if i.created_at else None,
+                    "updated_at": ev.utc_iso(i.updated_at) if i.updated_at else None})
     return {"project_id": project_id,
             "columns": [{"key": k, "title": COLUMN_TITLES[k],
                          "items": [x for x in out if x["state"] == k]} for k in COLUMNS],

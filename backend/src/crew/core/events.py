@@ -80,12 +80,25 @@ async def next_seq(project_id: str) -> int:
         return _seq_cache[project_id]
 
 
+def utc_iso(dt: datetime) -> str:
+    """Serialize a timestamp WITH the UTC offset.
+
+    SQLite drops tzinfo on the way in, so every datetime read back from the DB is
+    naive — and a naive ISO string makes browsers parse it as LOCAL time. That is
+    how the Events feed showed "2h ago" on rows emitted seconds earlier (UTC+2
+    host). Every API/WS timestamp goes through this helper instead.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
+
+
 def event_to_dict(e: Event) -> dict[str, Any]:
     return {
         "id": e.id,
         "project_id": e.project_id,
         "seq": e.seq,
-        "ts": (e.ts or datetime.now(UTC)).isoformat(),
+        "ts": utc_iso(e.ts or datetime.now(UTC)),
         "type": e.type,
         "severity": e.severity,
         "title": e.title,

@@ -171,3 +171,27 @@ async def test_antithrash_has_a_window(bound_loop, project):
     third = await org.hire_agent(project_id=project["id"],
                                  spec=RoleSpec.from_template(Role.SPECIALIST), rationale="")
     assert third["id"] not in (first["id"], second["id"]), "the window expires the rule"
+
+
+@pytest.mark.asyncio
+async def test_a_standalone_order_is_adopted_by_the_next_wave(bound_loop, project):
+    """The command desk's promise: a task created outside any run (run_id NULL) must be
+    picked up and executed by the next wave. It used to sit `assigned` forever — every
+    wave only ever looked at tasks clamped to its own run."""
+    async with session_scope() as s:
+        a = await _agent(s, project["id"], name="Ordered", grade=3)
+        t = Task(project_id=project["id"], run_id=None, title="prepare a launch summary",
+                 description="the Captain's order", deliverable="a summary",
+                 acceptance_criteria=["delivered and verified"], output_contract={},
+                 effort="M", state=TaskState.ASSIGNED.value, assignee_agent_id=a.id)
+        s.add(t)
+        await s.flush()
+        tid = t.id
+
+    run = await orchestrator.start_run(project_id=project["id"], goal="deliver the order")
+    result = await orchestrator.advance(run["id"])
+    assert result["status"] == "completed", result
+    async with session_scope() as s:
+        t = await s.get(Task, tid)
+    assert t.state == TaskState.COMPLETED.value, f"standalone order state: {t.state}"
+    assert t.run_id == run["id"], "the wave adopts the standalone task into its run"

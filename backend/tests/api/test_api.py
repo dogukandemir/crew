@@ -122,6 +122,14 @@ async def test_run_produces_events_and_reward_ledger(client):
     events = (await client.get(f"/api/projects/{p['id']}/events?limit=2000")).json()["items"]
     assert events, "the event stream must carry the run"
     assert all({"seq", "type", "ts", "payload"} <= set(e) for e in events)
+    # every wire timestamp carries the UTC offset: a naive string makes browsers read
+    # it as LOCAL time and shifts history by the machine's offset (the "2h ago" bug)
+    assert all(e["ts"].endswith("+00:00") for e in events), events[0]["ts"]
+    org = (await client.get(f"/api/projects/{p['id']}/org")).json()
+    agent = (await client.get(f"/api/agents/{org['orchestrator']['id']}")).json()
+    assert agent["created_at"].endswith("+00:00")
+    assert agent["last_active_at"] is None or agent["last_active_at"].endswith("+00:00"), \
+        "agent timestamps carry the offset too"
     types = {e["type"] for e in events}
     assert {"run.started", "run.stage.changed", "task.created", "verify.verdict"} <= types
 

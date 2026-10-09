@@ -298,9 +298,9 @@ def task_dict(t: Task) -> dict:
         "assignee_squad_id": t.assignee_squad_id, "attempts": t.attempts,
         "cost_usd": micros_to_usd(t.cost_micros), "tokens_in": t.tokens_in, "tokens_out": t.tokens_out,
         "escalated_to": t.escalated_to, "escalation_reason": t.escalation_reason,
-        "created_at": t.created_at.isoformat(),
-        "started_at": t.started_at.isoformat() if t.started_at else None,
-        "ended_at": t.ended_at.isoformat() if t.ended_at else None,
+        "created_at": ev.utc_iso(t.created_at),
+        "started_at": ev.utc_iso(t.started_at) if t.started_at else None,
+        "ended_at": ev.utc_iso(t.ended_at) if t.ended_at else None,
     }
 
 
@@ -356,9 +356,9 @@ async def agent_dict(a: Agent) -> dict:
         "spend_today_usd": micros_to_usd(a.spend_today_micros),
         "spend_cap_per_run_usd": micros_to_usd(a.spend_cap_per_run_micros),
         "spend_cap_per_day_usd": micros_to_usd(a.spend_cap_per_day_micros),
-        "created_at": a.created_at.isoformat(),
-        "archived_at": a.archived_at.isoformat() if a.archived_at else None,
-        "last_active_at": a.last_active_at.isoformat() if a.last_active_at else None,
+        "created_at": ev.utc_iso(a.created_at),
+        "archived_at": ev.utc_iso(a.archived_at) if a.archived_at else None,
+        "last_active_at": ev.utc_iso(a.last_active_at) if a.last_active_at else None,
     }
 
 
@@ -369,8 +369,8 @@ def run_dict(r: Run) -> dict:
         "plan": r.plan or {}, "pending_questions": r.pending_questions or [],
         "cost_usd": micros_to_usd(r.cost_micros), "tokens_in": r.tokens_in, "tokens_out": r.tokens_out,
         "report": r.report or {}, "error": r.error,
-        "started_at": r.started_at.isoformat(),
-        "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+        "started_at": ev.utc_iso(r.started_at),
+        "ended_at": ev.utc_iso(r.ended_at) if r.ended_at else None,
     }
 
 
@@ -1198,7 +1198,7 @@ async def get_task(task_id: str) -> dict:
         out["result_text"] = t.result_text
         out["verification"] = ([{"verdict": v.verdict, "method": v.method, "checks": v.checks,
                                  "rubric": v.rubric, "confidence": v.confidence,
-                                 "created_at": v.created_at.isoformat()} for v in ver] or [None])[0]
+                                 "created_at": ev.utc_iso(v.created_at)} for v in ver] or [None])[0]
         out["rewards"] = [{"agent_id": r.agent_id, "role": r.role_in_task, "reward": r.reward,
                            "verdict": r.verdict, "components": r.components} for r in rewards]
         out["artifacts"] = [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256,
@@ -1331,7 +1331,7 @@ async def list_decisions(project_id: str = Query(...)) -> dict:
                        "reversibility": d.reversibility, "follow_ups": d.follow_ups,
                        "decider_agent_id": d.decider_agent_id,
                        "overridden_by": d.overridden_by, "override_reason": d.override_reason,
-                       "created_at": d.created_at.isoformat()} for d in rows]}
+                       "created_at": ev.utc_iso(d.created_at)} for d in rows]}
 
 
 @api.post("/decisions/{decision_id}/override")
@@ -1456,7 +1456,7 @@ async def agent_rewards(agent_id: str, limit: int = Query(100, le=1000)) -> dict
     return {"items": [{"id": r.id, "task_id": r.task_id, "role": r.role_in_task, "verdict": r.verdict,
                        "reward": r.reward, "score_after": r.score_after, "components": r.components,
                        "penalties": r.penalties, "note": r.note,
-                       "created_at": r.created_at.isoformat()} for r in rows],
+                       "created_at": ev.utc_iso(r.created_at)} for r in rows],
             "score": a.score if a else None,
             "recomputed": await reward_engine.recompute(project_id=a.project_id, agent_id=agent_id) if a else None}
 
@@ -1468,7 +1468,7 @@ async def reward_transitions(project_id: str) -> dict:
                                                           RewardEvent.grade_after != RewardEvent.grade_before)
                                 .order_by(desc(RewardEvent.created_at)).limit(100))).all()
     return {"items": [{"agent_id": r.agent_id, "grade_before": r.grade_before, "grade_after": r.grade_after,
-                       "reward": r.reward, "verdict": r.verdict, "created_at": r.created_at.isoformat()}
+                       "reward": r.reward, "verdict": r.verdict, "created_at": ev.utc_iso(r.created_at)}
                       for r in rows]}
 
 
@@ -1540,7 +1540,7 @@ async def get_trace(trace_id: str) -> dict:
         rows = (await s.scalars(select(Event).where(Event.trace_id == trace_id)
                                 .order_by(Event.seq).limit(5000))).all()
     return {"trace_id": trace_id, "spans": [
-        {"seq": e.seq, "type": e.type, "ts": e.ts.isoformat(), "span_id": e.span_id,
+        {"seq": e.seq, "type": e.type, "ts": ev.utc_iso(e.ts), "span_id": e.span_id,
          "parent_span_id": e.parent_span_id, "title": e.title, "agent_id": e.agent_id,
          "task_id": e.task_id, "cost_micros": e.cost_micros, "duration_ms": e.duration_ms}
         for e in rows]}
@@ -1573,9 +1573,9 @@ async def list_approvals(project_id: str, state: str | None = None) -> dict:
         rows = (await s.scalars(stmt.order_by(desc(Approval.created_at)).limit(200))).all()
     return {"items": [{"id": a.id, "capability": a.capability, "state": a.state,
                        "agent_id": a.agent_id, "task_id": a.task_id, "request": a.request,
-                       "reason": a.reason, "created_at": a.created_at.isoformat(),
-                       "decided_at": a.decided_at.isoformat() if a.decided_at else None,
-                       "expires_at": a.expires_at.isoformat() if a.expires_at else None} for a in rows]}
+                       "reason": a.reason, "created_at": ev.utc_iso(a.created_at),
+                       "decided_at": ev.utc_iso(a.decided_at) if a.decided_at else None,
+                       "expires_at": ev.utc_iso(a.expires_at) if a.expires_at else None} for a in rows]}
 
 
 @api.post("/approvals/{approval_id}/grant")
@@ -1632,7 +1632,7 @@ async def revoke_command_allow(allow_id: str, body: AllowRevoke | None = None,
 async def get_audit(project_id: str, limit: int = Query(200, le=1000)) -> dict:
     async with session_scope() as s:
         rows = (await s.scalars(select(AuditLog).order_by(desc(AuditLog.seq)).limit(limit))).all()
-    return {"items": [{"seq": r.seq, "ts": r.ts.isoformat(), "actor_kind": r.actor_kind,
+    return {"items": [{"seq": r.seq, "ts": ev.utc_iso(r.ts), "actor_kind": r.actor_kind,
                        "actor_id": r.actor_id, "action": r.action, "resource_kind": r.resource_kind,
                        "resource_id": r.resource_id, "outcome": r.outcome, "reason": r.reason,
                        "hash": r.hash[:16]} for r in rows]}
@@ -1659,7 +1659,7 @@ async def get_egress(project_id: str) -> dict:
                                    .order_by(desc(Event.seq)).limit(50))).all()
     return {"allowlist": policy.allowed_egress(p),
             "extra": p.setting("egress_allow", []),
-            "blocked_attempts": [{"ts": e.ts.isoformat(), "payload": e.payload} for e in blocked]}
+            "blocked_attempts": [{"ts": ev.utc_iso(e.ts), "payload": e.payload} for e in blocked]}
 
 
 @api.get("/projects/{project_id}/budget/ledger")

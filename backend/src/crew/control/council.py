@@ -288,7 +288,7 @@ class CouncilService:
         return {"id": sess.id, "question": sess.question, "options": sess.options,
                 "criteria": sess.criteria, "constraints": sess.constraints, "panel": sess.panel,
                 "status": sess.status, "rounds": sess.rounds, "decision_id": sess.decision_id,
-                "convened_by": sess.convened_by, "created_at": sess.created_at.isoformat(),
+                "convened_by": sess.convened_by, "created_at": ev.utc_iso(sess.created_at),
                 "positions": await self.positions(project_id=sess.project_id, session_id=session_id)}
 
     async def decision_constraints(self, *, project_id: str) -> list[str]:

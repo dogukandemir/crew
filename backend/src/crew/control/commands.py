@@ -23,9 +23,9 @@ from sqlalchemy import desc, select
 from crew.control import org
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Event, Project, Task
+from crew.core.models import Agent, Event, Project, Run, Task
 from crew.domain.catalog import RoleSpec
-from crew.domain.enums import Role, TaskState
+from crew.domain.enums import Role, RunStatus, TaskState
 
 log = logging.getLogger(__name__)
 
@@ -223,7 +223,7 @@ async def handle_command(*, project_id: str, text: str, actor: str = "user") -> 
         agents = (await s.scalars(select(Agent).where(Agent.project_id == project_id,
                                                       Agent.state != "archived"))).all()
         roster = [{"id": a.id, "name": a.name, "role": a.role, "state": a.state,
-                   "break_until": a.break_until.isoformat() if a.break_until else None}
+                   "break_until": ev.utc_iso(a.break_until) if a.break_until else None}
                   for a in agents]
 
     parsed = parse_command(text, roster)
@@ -332,6 +332,13 @@ async def _assign(project_id: str, parsed: Command, roster: list[dict], raw: str
     title = parsed.text[:200] or "Assignment from the command desk"
     async with session_scope() as s:
         agent = await s.get(Agent, target) if target else None
+        if agent:
+            # the mention marker is stripped by the parser but the NAME stays in the
+            # sentence: "@Lena Schreiber, draft the checklist" → "draft the checklist"
+            for alias in (agent.name, agent.name.split()[0]):
+                if alias and title.lower().startswith(alias.lower()):
+                    title = title[len(alias):].lstrip(" ,:—-·").strip() or title
+                    break
         task = Task(project_id=project_id, run_id=None,
                     department_id=agent.department_id if agent else None,
                     squad_id=agent.squad_id if agent else None,
@@ -365,8 +372,14 @@ async def _assign(project_id: str, parsed: Command, roster: list[dict], raw: str
                 else agent.break_until
             if bu > datetime.now(UTC):
                 extra = f" (heads-up: {agent.name} is on a break until {bu:%H:%M} UTC)"
-        return (f"On it: “{title[:80]}” is assigned to @{agent.name}. "
-                f"It runs with the next wave.{extra}", actions, True)
+        async with session_scope() as s:
+            open_run = await s.scalar(select(Run).where(
+                Run.project_id == project_id,
+                Run.status.notin_([RunStatus.COMPLETED.value, RunStatus.FAILED.value,
+                                   RunStatus.ABORTED.value])))
+        tail = ("It runs with the next wave." if open_run else
+                "It is queued — press Start run (or send `goal: …`) and the next wave picks it up.")
+        return (f"On it: “{title[:80]}” is assigned to @{agent.name}. {tail}{extra}", actions, True)
     return (f"Noted: “{title[:80]}” is on the board. The engine will match the best "
             f"owner when a run is active — tag an agent to name one directly.", actions, True)
 
@@ -469,7 +482,7 @@ async def _break(project_id: str, parsed: Command, roster: list[dict],
             event = await ev.emit("agent.break.started", project_id=project_id,
                                   agent_id=a["id"], severity="notice",
                                   title=f"{a['name']} is on a break until {until:%H:%M} UTC",
-                                  payload={"agent_id": a["id"], "until": until.isoformat(),
+                                  payload={"agent_id": a["id"], "until": ev.utc_iso(until),
                                            "minutes": minutes},
                                   actor=actor)
             actions.append({"kind": "agent.break.started", "event_id": _emit_id(event),
@@ -548,5 +561,5 @@ async def transcript(*, project_id: str, limit: int = 60) -> dict:
                     else "orchestrator", "text": str(p.get("text", "")),
                     "mode": p.get("mode"), "ok": p.get("ok"),
                     "actions": p.get("actions") or [], "mentions": p.get("mentions") or [],
-                    "at": ts.isoformat() if ts else None})
+                    "at": ev.utc_iso(ts) if ts else None})
     return {"messages": out}

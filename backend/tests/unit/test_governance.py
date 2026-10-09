@@ -69,6 +69,25 @@ async def test_allocation_ranks_the_portfolio_and_freezes_a_stop(bound_loop):
 
 
 @pytest.mark.asyncio
+async def test_a_member_with_no_finished_work_is_never_on_track(bound_loop):
+    """Audit Ö6: zero completed and zero failed work reads truthfully — a brand-new
+    project says 'nothing on the record yet'; it never poses as 'on track'."""
+    co = await company.create_company(name="Fresh Co", mission="x", budget_usd=10.0)
+    fresh = await org.create_project(name="Greenfield", goal="g", budget_usd=2.0)
+    await company.attach_project(company_id=co["id"], project_id=fresh["id"])
+
+    view = await company.portfolio(company_id=co["id"])
+    row = view["projects"][0]
+    assert row["verdict"] == "no_activity"
+    assert row["directive"].startswith("nothing on the record yet")
+    assert row["basis"]["open_tasks"] == 0
+
+    out = await company.review(company_id=co["id"])
+    v = next(x for x in out["verdicts"] if x["project_id"] == fresh["id"])
+    assert "nothing on the record" in v["directive"]
+
+
+@pytest.mark.asyncio
 async def test_a_board_session_convenes_the_directors_on_the_company_ledger(bound_loop):
     co = await company.create_company(name="Sessions Inc", mission="x", budget_usd=12.0)
     out = await company.board_session(company_id=co["id"], topic="Approve the Q3 plan")

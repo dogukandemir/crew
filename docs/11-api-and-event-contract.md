@@ -27,6 +27,24 @@ POST body: {"payload":{...}, "reason":"optional", "idempotency_key":"optional"}
 response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 ```
 
+### 1a. Fields the UI binds to (asserted by `test_ui_contract_shapes`)
+
+These left the payloads once while the mock kept serving them — the office, the org
+chart and every budget bar rendered empty against the real backend (audit K1/K2). Each
+row now has a guard: change it and the test goes red, not the product quiet.
+
+| Surface | Endpoint | Fields the UI reads |
+|---------|----------|---------------------|
+| Every budget bar & meter | `/api/projects*`, `/api/companies*` | `budget_cap_micros`, `spend_micros` (raw ints, alongside the `*_usd` floats) |
+| Breadcrumb upper half | `/api/projects*` rows/detail | `company_id`, `company_name` (always present; `null` when standalone) |
+| Getting-started checklist | `/api/projects` rows | `runs` |
+| Office floor, Org chart, Agents roster | `/api/projects/{id}/org` | `root` — a tree of `{kind: project\|department\|squad\|agent, id, name, children[]}`, every node carrying `spend_micros` (usd on agents too) |
+| Org node drawers | `/api/projects/{id}/org` | agent nodes: `role`, `grade`, `grade_label`, `state`, `score`, `success_rate`, `open_tasks`; dept nodes: `mission`, `head_agent_id`, `budget_envelope_micros`, `open_tasks` |
+| Company Brains member index | `/api/companies/{id}/brains` | per-brain `owner_name` (a human name, not an id) |
+
+The flat keys (`project`, `orchestrator`, `departments`, `unassigned`) ride along
+additively for pre-tree readers; `nodes` is the flat index of `root`.
+
 ## 2. REST endpoints
 
 ### System & auth

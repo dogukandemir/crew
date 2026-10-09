@@ -302,18 +302,19 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
       className="max-w-2xl"
       footer={
         row && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <div className="flex w-full min-w-0 items-center gap-x-3 text-[11px] text-slate-500">
             <a
               href={fileDownloadUrl(row.id)}
               download
-              className="rounded border border-slate-700/70 px-2 py-0.5 text-slate-200 hover:bg-slate-800/60"
+              className="shrink-0 rounded border border-slate-700/70 px-2 py-0.5 text-slate-200 hover:bg-slate-800/60"
             >
               ↓ Download file
             </a>
-            <span>sha256 {row.sha256.slice(0, 12)}…</span>
+            <span className="shrink-0">sha256 {row.sha256.slice(0, 12)}…</span>
             <span className="min-w-0 flex-1 truncate" title={row.path}>
               {row.path}
             </span>
+            <CopyPathButton path={row.path} />
           </div>
         )
       }
@@ -361,5 +362,58 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
         </div>
       )}
     </Modal>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+/** Copies the full path; the button turns into a check for a moment. */
+function CopyPathButton({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label="Copy path"
+      title={copied ? 'Copied' : 'Copy path'}
+      className="shrink-0 rounded border border-slate-700/70 p-1 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+      onClick={(e) => {
+        e.stopPropagation();
+        const done = () => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        };
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(path).then(done).catch(() => {
+            // older/insecure contexts: the textarea fallback still copies
+            const ta = document.createElement('textarea');
+            ta.value = path;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+            done();
+          });
+        }
+      }}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
   );
 }

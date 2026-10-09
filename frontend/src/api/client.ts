@@ -17,6 +17,7 @@ import type {
   BrainEntry,
   BrainSearchHit,
   CommandAck,
+  CommandAllow,
   CommandBody,
   CommandMessage,
   CommandPostResult,
@@ -488,14 +489,26 @@ export const api = {
   // ── Approvals, policy, admin ───────────────────────────────────────────────
   listApprovals: (id: string, state?: string) =>
     request<Paged<Approval>>(`/api/projects/${id}/approvals`, { query: { state } }),
-  grantApproval: (approvalId: string, reason?: string, ttlMinutes?: number) =>
-    request<CommandAck>(`/api/approvals/${approvalId}/grant`, {
-      method: 'POST',
-      body: cmdBody({ reason, ttl_minutes: ttlMinutes }),
-    }),
+  /** Grant an approval. `always` (command reviews only, ADR 0017) also writes the
+   * normalized command to the project's allowlist — it never asks again. */
+  grantApproval: (approvalId: string, reason?: string, opts?: { ttlMinutes?: number; always?: boolean }) =>
+    request<{ approval_id: string; state: string; allow_id?: string | null }>(
+      `/api/approvals/${approvalId}/grant`,
+      {
+        method: 'POST',
+        body: cmdBody({ reason, ttl_minutes: opts?.ttlMinutes, always: opts?.always || undefined }),
+      },
+    ),
   denyApproval: (approvalId: string, reason?: string) =>
     request<CommandAck>(`/api/approvals/${approvalId}/deny`, {
       method: 'POST',
+      body: cmdBody({ reason }),
+    }),
+  listCommandAllows: (id: string) =>
+    request<{ items: CommandAllow[] }>(`/api/projects/${id}/command-allows`),
+  revokeCommandAllow: (allowId: string, reason?: string) =>
+    request<{ allow_id: string; state: string }>(`/api/command-allows/${allowId}`, {
+      method: 'DELETE',
       body: cmdBody({ reason }),
     }),
   listAudit: (id: string, cursor?: string) =>

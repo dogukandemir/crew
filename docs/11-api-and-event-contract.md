@@ -127,7 +127,7 @@ Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `
 | POST | `/api/companies/{id}/board-session` | convene the board of directors `{topic, options?}` (council machinery; `board.convened`) |
 | POST | `/api/companies/{id}/board` | seat another director `{role: chair\|board_member}` |
 | GET | `/api/companies/{id}/brains` | the umbrella memory page (ADR 0015): the company brain (+ entry count) and a per-member index of where memory lives — read-only; entries open on `GET /api/brains/{id}/entries` |
-| POST | `/api/found` | **found a company** `{name, mission, budget_usd, project_name, project_goal, project_budget_usd, mode, start_run}` → the company, its first project born under it, and (optionally) its first run, in one call; seeds the company brain with the mission (ADR 0015) |
+| POST | `/api/found` | **found a company** `{name, mission, budget_usd, project_name, project_goal, project_budget_usd, workspace_path, mode, start_run}` → the company, its first project born under it, and (optionally) its first run, in one call; seeds the company brain with the mission (ADR 0015). `workspace_path` (absolute) picks the company's workspace root — empty → the default `~/crew/workspace/{company}/{project}` tree (ADR 0017) |
 
 Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 `company.allocation.decided` (`company_id`, `allocations`, `headroom_micros`, `method`).
@@ -204,7 +204,9 @@ Events: `reward.settled` (`agent_id`, `task_id`, `reward`); growth is its own ev
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects/{id}/approvals` | pending/all |
-| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?}` |
+| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}` — `always: true` on a command review also writes the always-allow entry (audited, revocable) |
+| GET | `/api/projects/{id}/command-allows` | the owner's always-allow list (ADR 0017) |
+| DELETE | `/api/command-allows/{id}` | revoke an allow entry (audited) |
 | GET | `/api/projects/{id}/audit` | audit entries (paginated) |
 | POST | `/api/system/audit/verify` | verify hash chain |
 | GET | `/api/secrets` | handles + metadata (never values) |

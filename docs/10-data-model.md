@@ -146,7 +146,15 @@ cap_change), amount_micros, ref(job_id|llm_event_id), ts, note, idempotency_key(
 
 ### approvals
 `id, project_id, task_id, agent_id, capability, request(json), state(pending|granted|denied|
-expired), decided_by, decided_at, expires_at, reason`
+expired), decided_by, decided_at, expires_at, reason, created_at`
+The `request` of a review gate carries `kind: command_review` (cmd, norm, reasons, note) or
+`kind: content_review` (url, sha256, quarantine path, preview, reasons) so the human decides on
+what they can see (ADR 0017).
+
+### command_allows
+`id, project_id, command_norm, sample_cmd, note, created_by, source_approval_id, created_at,
+revoked_at, revoke_reason` — the owner's standing "always allow" list (ADR 0017). Rows exist
+only through an explicit human grant; every add/revoke is audited.
 
 ### audit_log
 `id, seq, ts, actor_kind(user|agent|system), actor_id, action, resource_kind, resource_id,

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import desc, select, update
 
-from crew.control import backlog, gossip, inbox, org
+from crew.control import backlog, gossip, inbox, org, workspaces
 from crew.control.council import council
 from crew.control.verify import verifier
 from crew.core import events as ev
@@ -427,7 +427,7 @@ class Orchestrator:
             req = ExecutionRequest(
                 project_id=project.id, run_id=run.id, trace_id=trace_id, agent=snapshot, task=task_spec,
                 system_prompt=bundle.system, user_prompt=user_prompt,
-                workspace=settings.workspace_dir(project.id),
+                workspace=workspaces.resolve_workspace(project),
                 artifacts=settings.artifacts_dir(project.id),
                 escalate=attempts - 1,
             )

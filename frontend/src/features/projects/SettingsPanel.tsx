@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ProjectSettings } from '../../api/types';
 import { Button } from '../../components/ui/Button';
@@ -219,6 +219,13 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           />
         </Section>
 
+        <Section
+          title="Command allowlist"
+          description="Standing approvals (ADR 0017): risky commands you chose to “Always allow” run without asking. Revoking closes the door again — every change is audited."
+        >
+          <CommandAllowlist projectId={projectId} />
+        </Section>
+
         <Section title="Model tier mapping" description="Capability tier → provider/model (docs/04).">
           <div className="grid gap-2 sm:grid-cols-2">
             {TIERS.map((tier) => (
@@ -295,5 +302,54 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
         </label>
       </Modal>
     </div>
+  );
+}
+
+/** The owner's standing permissions (ADR 0017): every entry here was approved by a
+ * human with "Always allow"; revoking closes the gate again immediately. */
+function CommandAllowlist({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const setToast = useUi((s) => s.setToast);
+  const allows = useQuery({
+    queryKey: ['project', projectId, 'command-allows'],
+    queryFn: () => api.listCommandAllows(projectId),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.revokeCommandAllow(id, 'revoked from settings'),
+    onSuccess: () => {
+      setToast({ kind: 'success', message: 'Allow entry revoked — the command will ask again.' });
+      void qc.invalidateQueries({ queryKey: ['project', projectId, 'command-allows'] });
+    },
+    onError: (err) => setToast({ kind: 'error', message: String(err) }),
+  });
+
+  if (allows.isLoading) return <p className="text-xs text-slate-500">Loading…</p>;
+  if (allows.isError) return <PanelError error={allows.error} label="Command allowlist" />;
+  const items = allows.data?.items ?? [];
+  if (items.length === 0) {
+    return (
+      <p className="text-xs text-slate-500">
+        Nothing on the list. When a risky command is approved with “Always allow”, it lands here —
+        audited and revocable.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-1.5">
+      {items.map((a) => (
+        <li
+          key={a.id}
+          className="flex items-center gap-2 rounded border border-slate-700/60 bg-slate-900/50 px-2 py-1.5"
+        >
+          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-slate-300" title={a.command}>
+            {a.command}
+          </code>
+          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? '—'}</span>
+          <Button size="xs" variant="danger" loading={revoke.isPending} onClick={() => revoke.mutate(a.id)}>
+            Revoke
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }

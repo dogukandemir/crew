@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     port: int = Field(8787, validation_alias=_a("CREW_PORT", "port"))
     log_level: str = Field("info", validation_alias=_a("CREW_LOG_LEVEL", "log_level"))
     data_dir: Path = Field(Path("../data"), validation_alias=_a("CREW_DATA_DIR", "data_dir"))
+    # Company workspace root (ADR 0017). Empty → ~/crew/workspace, resolved lazily so
+    # tests can point CREW_WORKSPACE_ROOT at a tmp dir and never touch a real home dir.
+    workspace_root: str = Field("", validation_alias=_a("CREW_WORKSPACE_ROOT", "workspace_root"))
     cors_origins: str = Field("http://localhost:5173,http://127.0.0.1:5173",
                               validation_alias=_a("CREW_CORS_ORIGINS", "cors_origins"))
     validate_events: bool = Field(True, validation_alias=_a("CREW_VALIDATE_EVENTS", "validate_events"))
@@ -83,8 +86,13 @@ class Settings(BaseSettings):
     @field_validator("tool_sandbox")
     @classmethod
     def _sandbox(cls, v: str) -> str:
-        if v not in ("docker", "subprocess", "none"):
-            raise ValueError("CREW_TOOL_SANDBOX must be one of docker|subprocess|none")
+        # Host execution was removed (ADR 0017): commands run in the container or not at
+        # all. `subprocess` (and the old "none") are legacy spellings and resolve to
+        # `docker`; the field is informational now, not a switch.
+        if v in ("subprocess", "none"):
+            return "docker"
+        if v != "docker":
+            raise ValueError("CREW_TOOL_SANDBOX must be docker (legacy: subprocess→docker)")
         return v
 
     @field_validator("reasoning_effort")
@@ -124,6 +132,17 @@ class Settings(BaseSettings):
 
     def artifacts_dir(self, project_id: str) -> Path:
         return self.projects_dir / project_id / "artifacts"
+
+    @property
+    def default_workspace_root(self) -> Path:
+        """`~/crew/workspace` unless CREW_WORKSPACE_ROOT overrides it (ADR 0017)."""
+        if self.workspace_root.strip():
+            return Path(self.workspace_root.strip()).expanduser().resolve()
+        return (Path.home() / "crew" / "workspace").resolve()
+
+    def quarantine_dir(self, project_id: str) -> Path:
+        """Where reviewed-risky web content waits for a human decision (ADR 0017)."""
+        return self.projects_dir / project_id / "quarantine"
 
     @property
     def cors_list(self) -> list[str]:

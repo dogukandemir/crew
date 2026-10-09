@@ -12,7 +12,8 @@ os.environ.update({
     "CREW_DATA_DIR": str(TMP_DATA),
     "CREW_OFFLINE_LLM": "true",          # no network in tests (ADR 0002)
     "CREW_AUTH_MODE": "local",
-    "CREW_TOOL_SANDBOX": "subprocess",
+    # Company workspaces must NEVER land in a real home dir during tests (ADR 0017).
+    "CREW_WORKSPACE_ROOT": str(TMP_DATA / "workspaces"),
     "CREW_DEFAULT_PROJECT_BUDGET_USD": "5",
     "CREW_VALIDATE_EVENTS": "true",
     "CREW_JWT_SECRET": "test-secret-that-is-long-enough-0123456789",

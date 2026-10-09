@@ -296,6 +296,9 @@ export interface FoundInput {
   project_name: string;
   project_goal?: string;
   project_budget_usd?: number;
+  /** Optional workspace root chosen at founding (ADR 0017): absolute path. Empty →
+   * the default ~/crew/workspace/{company}/{project} tree. Agents never leave it. */
+  workspace_path?: string;
   mode?: 'autonomous' | 'interactive';
   start_run?: boolean;
 }
@@ -864,6 +867,20 @@ export interface Approval {
   expires_at?: string | null;
   reason?: string | null;
   created_at?: string;
+}
+
+/** A standing "always allow" grant (ADR 0017): an approved risky command that runs
+ * without re-asking. Created only by a human grant; revocable. */
+export interface CommandAllow {
+  id: string;
+  command: string;
+  command_norm: string;
+  note?: string;
+  created_by?: string;
+  created_at?: string;
+  source_approval_id?: string | null;
+  revoked_at?: string | null;
+  revoke_reason?: string;
 }
 
 export interface AuditEntry {

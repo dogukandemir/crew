@@ -76,6 +76,11 @@ INJECTION_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"execute (this )?(command|code|script)", "command-injection"),
     (r"base64[,:]\s*[A-Za-z0-9+/]{40,}", "encoded-payload"),
     (r"[\u200b-\u200f\u202a-\u202e\ufeff]", "invisible-unicode"),
+    (r"<!--[^>]{0,600}\b(ignore|instruction|system prompt|you are)\b[^>]{0,600}-->", "hidden-html-instructions"),
+    (r"eval\s*\(\s*(atob|unescape|decodeURIComponent)", "js-obfuscation"),
+    (r"(enter|provide|send|share|paste)\s+(your\s+)?(password|api[-_ ]?key|secret|token|credit card)", "credential-bait"),
+    (r"(download|install|run|execute)\s+[^.\n]{0,60}\.(exe|scr|bat|cmd|ps1|msi)\b", "download-and-run"),
+    (r"(this is|i am|message from)\s+(your|the)\s+(ceo|boss|administrator|admin|it department)", "fake-authority"),
 )
 
 

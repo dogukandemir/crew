@@ -27,6 +27,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
   const [goal, setGoal] = useState('');
   const [companyBudget, setCompanyBudget] = useState('');
   const [projectBudget, setProjectBudget] = useState('');
+  const [workspacePath, setWorkspacePath] = useState('');
   const [runMode, setRunMode] = useState<'autonomous' | 'interactive'>('autonomous');
 
   const openTab = useTabs((s) => s.openTab);
@@ -50,6 +51,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
     if (open) {
       setMode('quick');
       setRunMode('autonomous');
+      setWorkspacePath('');
       applyTemplate(FOUND_TEMPLATES[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,6 +66,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
         project_name: projectName.trim(),
         project_goal: goal.trim(),
         project_budget_usd: Number.parseFloat(projectBudget) || undefined,
+        workspace_path: workspacePath.trim() || undefined,
         mode: runMode,
         start_run: true,
       }),
@@ -173,6 +176,17 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
                 onChange={(e) => setProjectBudget(e.target.value)}
               />
             </Field>
+            <Field
+              label="Workspace root"
+              hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree — they can never touch anything outside it. Empty → ~/crew/workspace/{company}/{project}."
+            >
+              <Input
+                value={workspacePath}
+                onChange={(e) => setWorkspacePath(e.target.value)}
+                placeholder="Absolute path, e.g. D:\\crew-work or /srv/crew"
+                className="font-mono text-xs"
+              />
+            </Field>
           </>
         )}
 
@@ -202,7 +216,11 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
         <p className="rounded border border-slate-800 bg-slate-950/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
           Will create: <span className="text-slate-300">{name.trim() || '—'}</span> (company, CEO +
           board), <span className="text-slate-300">{projectName.trim() || '—'}</span> under it, and
-          start its first run{runMode === 'autonomous' ? '' : ' (interactive)'}.
+          start its first run{runMode === 'autonomous' ? '' : ' (interactive)'}. Agents work inside{' '}
+          <span className="font-mono text-slate-400">
+            {workspacePath.trim() || '~/crew/workspace/… (default tree)'}
+          </span>{' '}
+          — never outside it.
         </p>
 
         {found.isError && <PanelError error={found.error} label="Found the company" />}

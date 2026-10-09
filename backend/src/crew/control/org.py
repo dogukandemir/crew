@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, select
 
+from crew.control import workspaces
 from crew.core import events as ev
 from crew.core.brains import brain_service
 from crew.core.db import session_scope
@@ -136,7 +137,11 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
         else:
             row.settings = {**row.settings, "project_brain_id": project_brain}
         s.add(row)
-    settings.workspace_dir(pid).mkdir(parents=True, exist_ok=True)
+    if kind != "company":
+        # A company holds no workspace of its own — its projects do (ADR 0017). This
+        # materializes the folder now (company tree or internal) and records the path
+        # once on the project; every later resolver reads it from there.
+        await workspaces.allocate_project_workspace(pid, company_id=company_id)
     settings.artifacts_dir(pid).mkdir(parents=True, exist_ok=True)
     if kind == "company":
         # a company is a headquarters project whose executive is the CEO, not an

@@ -97,12 +97,12 @@ directly (docs/08 §4 has the enforcement detail).
 |-----------|------------------|---------------|
 | `brain.read` / `brain.write` | memory search/write over permitted scopes | all agents |
 | `comms.*` | `ask_colleague`, `escalate`, `request_decision`, `report_to_head` | all agents |
-| `net.search` | web search (allowlisted provider) | analyst, worker (read-only roles) |
-| `net.fetch` | HTTP GET through egress proxy, untrusted-content marking | analyst, worker |
+| `net.search` | web search (allowlisted provider); results pass the security review gate (ADR 0017) | analyst, worker (read-only roles) |
+| `net.fetch` | HTTP GET through egress proxy, untrusted-content marking; results pass the security review gate (ADR 0017) | analyst, worker |
 | `net.post` | outbound writes (forms, APIs) | ❌ default; needs approval |
 | `fs.workspace` | read/write inside the project workspace (jailed) | worker, lead |
-| `shell.sandbox` | command execution in sandbox (docker) | engineering workers, lead |
-| `code.python` | sandboxed Python eval | engineering, data |
+| `shell.sandbox` | command execution in the sandbox (docker only); risky commands gated by the security review / always-allow list (ADR 0017) | engineering workers, lead |
+| `code.python` | sandboxed Python eval (same container; reviewed like a command) | engineering, data |
 | `git.local` | init/add/commit/branch in workspace | engineering |
 | `git.push` | push to a remote branch (never main) | ❌ default → approval |
 | `data.sql` | read-only query on project DBs | data, analyst |

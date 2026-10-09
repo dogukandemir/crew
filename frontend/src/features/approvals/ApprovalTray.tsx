@@ -94,16 +94,39 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
 
+  // Review approvals carry their context in `request` (ADR 0017): a held command's
+  // text + reasons, or a quarantined page's URL + preview. The human decides on what
+  // they can actually see — everything else falls back to the raw view.
+  const req = approval.request ?? {};
+  const kind = typeof req.kind === 'string' ? req.kind : 'generic';
+  const isCommand = kind === 'command_review';
+  const isContent = kind === 'content_review';
+  const cmd = typeof req.cmd === 'string' ? req.cmd : '';
+  const url = typeof req.url === 'string' ? req.url : '';
+  const preview = typeof req.preview === 'string' ? req.preview : '';
+  const note = typeof req.note === 'string' ? req.note : '';
+  const reasons = Array.isArray(req.reasons) ? (req.reasons as string[]) : [];
+
   const decide = useMutation({
-    mutationFn: (kind: 'grant' | 'deny') =>
-      kind === 'grant'
-        ? api.grantApproval(approval.id, reason || undefined)
-        : api.denyApproval(approval.id, reason || undefined),
-    onSuccess: (_r, kind) => {
-      setToast({ kind: 'success', message: `Approval ${kind === 'grant' ? 'granted' : 'denied'}.` });
+    mutationFn: (action: 'grant' | 'always' | 'deny'): Promise<unknown> =>
+      action === 'deny'
+        ? api.denyApproval(approval.id, reason || undefined)
+        : api.grantApproval(approval.id, reason || undefined,
+            action === 'always' ? { always: true } : undefined),
+    onSuccess: (_r, action) => {
+      setToast({
+        kind: 'success',
+        message:
+          action === 'deny'
+            ? 'Approval denied.'
+            : action === 'always'
+              ? 'Always allowed — it will not ask again until revoked (Settings → Command allowlist).'
+              : 'Approval granted.',
+      });
       setReason('');
       setOpenForReason(false);
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'approvals'] });
+      void qc.invalidateQueries({ queryKey: ['project', projectId, 'command-allows'] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
   });
@@ -111,17 +134,55 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
   return (
     <div className="rounded border border-slate-700/60 bg-slate-900/60 p-1.5">
       <div className="flex items-center gap-2">
-        <Badge tone="warning">{approval.capability}</Badge>
+        {isCommand ? (
+          <Badge tone="warning">command review</Badge>
+        ) : isContent ? (
+          <Badge tone="warning">content review</Badge>
+        ) : (
+          <Badge tone="warning">{approval.capability}</Badge>
+        )}
         <span className="ml-auto text-[10px] text-slate-500">{formatRelativeTime(approval.created_at)}</span>
       </div>
       <div className="mt-1 font-mono text-[10px] text-slate-500">
         {approval.agent_id ? `agent ${approval.agent_id.slice(0, 8)}` : 'agent —'}
         {approval.task_id ? ` · task ${approval.task_id.slice(0, 8)}` : ''}
+        {isCommand && typeof req.tool === 'string' ? ` · ${req.tool}` : ''}
       </div>
-      {approval.request && (
+
+      {isCommand && (
+        <>
+          <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded bg-slate-950/70 p-1 font-mono text-[10px] text-amber-200/90">
+            {cmd || '—'}
+          </pre>
+          {note && <p className="mt-1 text-[10px] italic leading-snug text-slate-400">{note}</p>}
+        </>
+      )}
+
+      {isContent && (
+        <>
+          <div className="mt-1 break-all font-mono text-[10px] text-slate-400">{url || '—'}</div>
+          {preview && (
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-slate-950/70 p-1 font-mono text-[10px] text-slate-400">
+              {preview}
+            </pre>
+          )}
+        </>
+      )}
+
+      {!isCommand && !isContent && approval.request && (
         <pre className="mt-1 max-h-20 overflow-auto rounded bg-slate-950/70 p-1 font-mono text-[10px] text-slate-400">
           {JSON.stringify(approval.request, null, 1)}
         </pre>
+      )}
+
+      {reasons.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {reasons.slice(0, 6).map((r) => (
+            <span key={r} className="rounded bg-amber-950/50 px-1 py-0.5 text-[9px] text-amber-300/80">
+              {r}
+            </span>
+          ))}
+        </div>
       )}
       {openForReason && (
         <Input
@@ -131,10 +192,15 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
           className="mt-1 h-6 text-[11px]"
         />
       )}
-      <div className="mt-1.5 flex items-center gap-1.5">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Button size="xs" variant="primary" loading={decide.isPending} onClick={() => decide.mutate('grant')}>
-          Grant
+          {isContent ? 'Release' : 'Grant once'}
         </Button>
+        {isCommand && (
+          <Button size="xs" variant="secondary" loading={decide.isPending} onClick={() => decide.mutate('always')}>
+            ⚡ Always allow
+          </Button>
+        )}
         <Button size="xs" variant="danger" onClick={() => (openForReason ? decide.mutate('deny') : setOpenForReason(true))}>
           {openForReason ? 'Confirm deny' : 'Deny'}
         </Button>

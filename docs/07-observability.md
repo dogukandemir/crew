@@ -34,7 +34,7 @@ Types are namespaced so the UI can filter and the replay can reconstruct:
 | `brain.*` | `brain.written`, `brain.promoted`, `brain.superseded` |
 | `verify.*` | `verify.started`, `verify.check`, `verify.verdict` |
 | `policy.*` | `policy.allowed`, `policy.denied`, `policy.approval.requested`, `policy.approval.granted` |
-| `security.*` | `security.injection.detected`, `security.egress.blocked`, `security.secret.leased` |
+| `security.*` | `security.injection.detected`, `security.egress.blocked`, `security.content.reviewed`, `security.content.quarantined`, `security.content.released`, `security.command.reviewed`, `security.command.allowed`, `security.allow.added`, `security.allow.removed`, `security.sandbox.unavailable`, `security.secret.redaction` — the review gate's trail (ADR 0017); quarantines and releases are audited too |
 | `budget.*` | `budget.reserved`, `budget.spent`, `budget.exceeded`, `budget.circuit_open` |
 | `user.*` | `user.steering`, `user.approval`, `user.command`, `user.message` |
 

@@ -540,6 +540,25 @@ class Approval(Base):
     created_at: Mapped[datetime] = mapped_column(default=now)
 
 
+class CommandAllow(Base):
+    """The owner's "always allow" list (ADR 0017): an approved risky command that runs
+    without re-asking. Revocable, per project, every change audited. A row is created
+    only by a human grant (`always: true`) — never by an agent."""
+
+    __tablename__ = "command_allows"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    command_norm: Mapped[str] = mapped_column(Text)
+    sample_cmd: Mapped[str] = mapped_column(Text, default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(40), default="user")
+    source_approval_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    revoke_reason: Mapped[str] = mapped_column(Text, default="")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

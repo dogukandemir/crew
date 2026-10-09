@@ -25,11 +25,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import desc, func, select
 
-from crew.control import org
+from crew.control import org, workspaces
 from crew.core import events as ev
 from crew.core.brains import brain_service
 from crew.core.db import session_scope
 from crew.core.models import Agent, Brain, BrainEntry, Department, Event, Project, Task
+from crew.core.security import audit
 from crew.domain.catalog import RoleSpec
 from crew.domain.enums import BrainScope, Role
 
@@ -52,22 +53,37 @@ VERDICT_WEIGHT: dict[str, float] = {
 
 
 async def create_company(*, name: str, mission: str = "", budget_usd: float | None = None,
-                         owner_id: str | None = None) -> dict:
-    """Create the company (a kind='company' project) and hire its CEO."""
-    return await org.create_project(name=name, goal=mission, budget_usd=budget_usd,
-                                    owner_id=owner_id, kind="company")
+                         owner_id: str | None = None, workspace_root: str | None = None) -> dict:
+    """Create the company (a kind='company' project), hire its CEO, and fix its workspace
+    root (ADR 0017): the owner-chosen path if given, else the default tree — the exact
+    root is written to the audit log either way."""
+    patch: dict | None = None
+    if workspace_root and str(workspace_root).strip():
+        patch = {"workspace_root": workspaces.validate_company_path(str(workspace_root))}
+    company = await org.create_project(name=name, goal=mission, budget_usd=budget_usd,
+                                       owner_id=owner_id, kind="company", settings_patch=patch)
+    async with session_scope() as s:
+        row = await s.get(Project, company["id"])
+        effective = str(workspaces.company_root(row)) if row is not None else ""
+    await audit(actor_kind="user", actor_id=owner_id or "local", action="workspace.selected",
+                resource_kind="company", resource_id=company["id"],
+                reason=effective or "(unresolved)")
+    return company
 
 
 async def found_company(*, name: str, mission: str = "", budget_usd: float | None = None,
                         owner_id: str | None = None, project_name: str, project_goal: str = "",
-                        project_budget_usd: float | None = None) -> dict:
+                        project_budget_usd: float | None = None,
+                        workspace_path: str | None = None) -> dict:
     """One breath (ADR 0015): the company, then its first project born UNDER it.
 
-    The wizard's single call. The first run is started by the API layer (it owns the
-    background driving), so this returns the rows that now exist — nothing is claimed
-    that was not written."""
+    The wizard's single call. `workspace_path` is the optional workspace root chosen at
+    founding (ADR 0017); when absent the default `{root}/{company}/{project}` tree is
+    materialized. The first run is started by the API layer (it owns the background
+    driving), so this returns the rows that now exist — nothing is claimed that was not
+    written."""
     company = await create_company(name=name, mission=mission, budget_usd=budget_usd,
-                                   owner_id=owner_id)
+                                   owner_id=owner_id, workspace_root=workspace_path)
     project = await org.create_project(name=project_name, goal=project_goal,
                                        budget_usd=project_budget_usd, owner_id=owner_id,
                                        company_id=company["id"])

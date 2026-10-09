@@ -12,7 +12,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,11 +20,11 @@ from typing import Any
 from sqlalchemy import select
 
 from crew.control import backlog, inbox
+from crew.control import security_review as sreview
 from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import Agent, Project, Task, WorkItem
-from crew.core.security import approval_granted, policy, redactor, request_approval, scan_injection
-from crew.core.settings import settings
+from crew.core.security import approval_granted, audit, policy, redactor, request_approval, scan_injection
 from crew.domain.enums import Capability, PolicyOutcome
 
 log = logging.getLogger("crew.tools")
@@ -81,33 +80,112 @@ def _truncate(data: Any) -> Any:
 
 
 # ── handlers ─────────────────────────────────────────────────────────────────────────
-def h_web_search(ctx: ToolContext, args: dict) -> dict:
+def _search_page(query: str) -> str:
+    """The raw DuckDuckGo SERP. Factored out so tests can fake the network (ADR 0017)."""
     import httpx
 
+    with httpx.Client(timeout=20, follow_redirects=True) as c:
+        r = c.get("https://html.duckduckgo.com/html/", params={"q": query},
+                  headers={"User-Agent": "crew-agent/0.1"})
+    return r.text
+
+
+def _fetch_url(url: str) -> tuple[int, str, str]:
+    """One GET, no redirect tail-chasing beyond 5 hops. Factored out for tests."""
+    import httpx
+
+    with httpx.Client(timeout=20, follow_redirects=True, max_redirects=5) as c:
+        r = c.get(url, headers={"User-Agent": "crew-agent/0.1"})
+    return r.status_code, r.text, str(r.url)
+
+
+def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict:
+    """The security review gate for fetched web content (ADR 0017).
+
+    → {"outcome": "clean"|"released"|"gated", "review": Verdict, "body": str|None,
+       "response": dict|None}. Risky content is quarantined and an approval is filed —
+    the agent never sees it before a human releases it.
+    """
+    review = sreview.review_content(text, url=url, kind=kind)
+    run_on_loop(ev.emit("security.content.reviewed", project_id=ctx.project_id,
+                        severity="warning" if review.risky else "info",
+                        title=f"content reviewed ({review.verdict}): {url[:70]}",
+                        payload={"url": url, "verdict": review.verdict, "kind": kind,
+                                 "score": review.score, "method": review.method,
+                                 "reasons": review.reasons[:6]},
+                        agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+    if not review.risky:
+        return {"outcome": "clean", "review": review, "body": None, "response": None}
+    released = run_on_loop(sreview.release_for_content(
+        ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, url=url,
+        task_id=ctx.task_id))
+    if released:
+        body = sreview.load_quarantined(released)
+        if body is not None:
+            run_on_loop(ev.emit("security.content.released", project_id=ctx.project_id,
+                                severity="notice", title=f"content released after review: {url[:70]}",
+                                payload={"url": url, "approval_id": released["approval_id"]},
+                                agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+            run_on_loop(audit(actor_kind="agent", actor_id=ctx.agent.id if ctx.agent else "",
+                              action="security.content.released", resource_kind="approval",
+                              resource_id=released["approval_id"], reason=url))
+            return {"outcome": "released", "review": review, "body": body, "response": None}
+        # The quarantine file vanished (cleaned up, tampered): gate afresh rather than
+        # serving something unverified.
+    meta = sreview.quarantine_content(ctx.project_id, url=url, text=text, review=review)
+    response = run_on_loop(sreview.gate_content(
+        ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
+        url=url, kind=kind, review=review, meta=meta))
+    return {"outcome": "gated", "review": review, "body": None, "response": response}
+
+
+def h_web_search(ctx: ToolContext, args: dict) -> dict:
     query = str(args.get("query", ""))[:300]
     if not query:
         return {"ok": False, "error": "query is required"}
+    # Search is internet access too — it obeys egress, same as http_get (ADR 0017).
+    decision = policy.check_egress("html.duckduckgo.com", ctx.project)
+    if not decision.allowed:
+        run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
+                            severity="warning", title="egress blocked: web search",
+                            payload={"url": "https://html.duckduckgo.com/html/",
+                                     "host": "html.duckduckgo.com", "reason": decision.reason},
+                            agent_id=ctx.agent.id if ctx.agent else None))
+        return {"ok": False, "error": f"egress_denied: {decision.reason}"}
     try:
-        with httpx.Client(timeout=20, follow_redirects=True) as c:
-            r = c.get("https://html.duckduckgo.com/html/", params={"q": query},
-                      headers={"User-Agent": "crew-agent/0.1"})
-        hits = []
-        import re
-        for m in re.finditer(r'<a rel="nofollow" class="result__a" href="([^"]+)">(.*?)</a>', r.text, re.S):
-            hits.append({"url": m.group(1), "title": re.sub(r"<[^>]+>", "", m.group(2)).strip()})
-            if len(hits) >= 5:
-                break
-        return {"ok": True, "data": hits, "untrusted": True, "meta": {"provider": "duckduckgo"}}
+        page = _search_page(query)
     except Exception as e:  # network is optional; report honestly
         return {"ok": False, "error": f"search failed: {type(e).__name__}: {e}"}
+    hits = []
+    import re
+    for m in re.finditer(r'<a rel="nofollow" class="result__a" href="([^"]+)">(.*?)</a>', page, re.S):
+        hits.append({"url": m.group(1), "title": re.sub(r"<[^>]+>", "", m.group(2)).strip()})
+        if len(hits) >= 5:
+            break
+    scr = _screen_fetched(ctx, url=f"search:{query}", kind="search",
+                          text=json.dumps(hits, ensure_ascii=False))
+    if scr["outcome"] == "gated":
+        return scr["response"]
+    if scr["outcome"] == "released":
+        try:
+            released_hits = json.loads(scr["body"])
+        except json.JSONDecodeError:
+            released_hits = hits
+        return {"ok": True, "data": released_hits, "untrusted": True, "released": "approved",
+                "review": {"verdict": "review", "method": "human", "score": scr["review"].score},
+                "meta": {"provider": "duckduckgo"}}
+    return {"ok": True, "data": hits, "untrusted": True,
+            "review": {"verdict": "clean", "method": scr["review"].method,
+                       "score": scr["review"].score},
+            "meta": {"provider": "duckduckgo"}}
 
 
 def h_http_get(ctx: ToolContext, args: dict) -> dict:
-    import httpx
-
     url = str(args.get("url", ""))
     if not url:
         return {"ok": False, "error": "url is required"}
+    import httpx
+
     host = httpx.URL(url).host or ""
     decision = policy.check_egress(host, ctx.project)
     if not decision.allowed:
@@ -117,19 +195,27 @@ def h_http_get(ctx: ToolContext, args: dict) -> dict:
                             agent_id=ctx.agent.id if ctx.agent else None))
         return {"ok": False, "error": f"egress_denied: {decision.reason}"}
     try:
-        with httpx.Client(timeout=20, follow_redirects=True, max_redirects=5) as c:
-            r = c.get(url, headers={"User-Agent": "crew-agent/0.1"})
-        body = r.text[:MAX_BYTES]
-        labels = scan_injection(body)
-        if labels:
-            run_on_loop(ev.emit("security.injection.detected", project_id=ctx.project_id,
-                                severity="warning", title=f"injection pattern in {host}",
-                                payload={"where": url, "labels": labels},
-                                agent_id=ctx.agent.id if ctx.agent else None))
-        return {"ok": True, "data": body, "untrusted": True,
-                "meta": {"status": r.status_code, "url": str(r.url), "injection_labels": labels}}
+        status, raw, final_url = _fetch_url(url)
     except Exception as e:
         return {"ok": False, "error": f"fetch failed: {type(e).__name__}: {e}"}
+    body = raw[:MAX_BYTES]
+    labels = scan_injection(body)
+    if labels:
+        run_on_loop(ev.emit("security.injection.detected", project_id=ctx.project_id,
+                            severity="warning", title=f"injection pattern in {host}",
+                            payload={"where": url, "labels": labels},
+                            agent_id=ctx.agent.id if ctx.agent else None))
+    scr = _screen_fetched(ctx, url=url, kind="page", text=body)
+    if scr["outcome"] == "gated":
+        return scr["response"]
+    if scr["outcome"] == "released":
+        return {"ok": True, "data": scr["body"], "untrusted": True, "released": "approved",
+                "review": {"verdict": "review", "method": "human", "score": scr["review"].score},
+                "meta": {"status": status, "url": final_url}}
+    return {"ok": True, "data": body, "untrusted": True,
+            "review": {"verdict": "clean", "method": scr["review"].method,
+                       "score": scr["review"].score},
+            "meta": {"status": status, "url": final_url, "injection_labels": labels}}
 
 
 def h_fs_write(ctx: ToolContext, args: dict) -> dict:
@@ -170,12 +256,53 @@ def h_fs_delete(ctx: ToolContext, args: dict) -> dict:
     return {"ok": True, "data": {"deleted": rel}}
 
 
-def _sandbox_mode() -> str:
-    if settings.tool_sandbox == "docker" and shutil.which("docker"):
-        return "docker"
-    if settings.tool_sandbox == "docker" and not settings.is_dev:
-        raise RuntimeError("docker sandbox required in prod but docker is unavailable")
-    return "subprocess"
+def _sandbox_available() -> bool:
+    """Execution happens in the container or not at all (ADR 0017)."""
+    return bool(shutil.which("docker"))
+
+
+def _run_in_container(*, workspace: Path, argv: list[str], timeout: int) -> subprocess.CompletedProcess:
+    """The one way a command runs: no network, read-only root, tmpfs /tmp, capped,
+    the project workspace at /work and nothing else mounted. Factored out so tests
+    can stub the execution while still exercising the gate."""
+    name = f"crew-{os.urandom(4).hex()}"
+    full = ["docker", "run", "--rm", "--name", name, "--network", "none",
+            "--read-only", "--tmpfs", "/tmp", "--memory", "1g", "--cpus", "1",
+            "--pids-limit", "256", "-v", f"{workspace}:/work", "-w", "/work",
+            SANDBOX_IMAGE] + argv
+    return subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+
+
+def _command_gate(ctx: ToolContext, *, tool: str, capability: str, cmd: str) -> dict | None:
+    """The command security review gate (ADR 0017).
+
+    Order: the owner's always-allow list first (no re-query), then the deterministic
+    review. A risky command runs only with a granted approval on file for exactly this
+    normalized command — otherwise the approval is filed and the command is held.
+    Returns a gating response dict, or None when the command may run.
+    """
+    norm = sreview.normalize_command(cmd)
+    allowed_via = None
+    if run_on_loop(sreview.allowlist_hit(ctx.project_id, norm)):
+        allowed_via = "allowlist"
+    else:
+        review = sreview.review_command(cmd)
+        if review.risky:
+            released = run_on_loop(sreview.release_for_command(
+                ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, norm=norm,
+                capability=capability, task_id=ctx.task_id))
+            if released is not None:
+                allowed_via = "approval"
+            else:
+                return run_on_loop(sreview.gate_command(
+                    ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None,
+                    task_id=ctx.task_id, tool=tool, capability=capability, cmd=cmd, review=review))
+    if allowed_via:
+        run_on_loop(ev.emit("security.command.allowed", project_id=ctx.project_id,
+                            severity="notice", title=f"command allowed via {allowed_via}",
+                            payload={"cmd": cmd[:2000], "via": allowed_via, "tool": tool},
+                            agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+    return None
 
 
 def h_shell_run(ctx: ToolContext, args: dict) -> dict:
@@ -183,26 +310,24 @@ def h_shell_run(ctx: ToolContext, args: dict) -> dict:
     timeout = int(args.get("timeout_s", 60))
     if not cmd:
         return {"ok": False, "error": "cmd is required"}
+    gate = _command_gate(ctx, tool="shell_run", capability="shell.sandbox", cmd=cmd)
+    if gate is not None:
+        return gate
+    if not _sandbox_available():
+        run_on_loop(ev.emit("security.sandbox.unavailable", project_id=ctx.project_id,
+                            severity="error", title="shell sandbox unavailable",
+                            payload={"tool": "shell_run"},
+                            agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+        return {"ok": False, "error": "sandbox_unavailable: Docker is required — "
+                                      "commands never run on the host"}
     workspace = (ctx.workspace or Path.cwd()).resolve()
-    mode = _sandbox_mode()
     try:
-        if mode == "docker":
-            name = f"crew-{ctx.project_id[:8]}-{(ctx.task_id or 'task')[:8]}"
-            argv = ["docker", "run", "--rm", "--name", name, "--network", "none",
-                    "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
-                    "-v", f"{workspace}:/work", "-w", "/work", SANDBOX_IMAGE,
-                    "sh", "-lc", cmd]
-        else:
-            argv = ["sh", "-lc", cmd]
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
-                              cwd=str(workspace), env={"PATH": os.environ.get("PATH", "")},
-                              shell=False)
-        out = (proc.stdout or "")[-8000:]
-        err = (proc.stderr or "")[-4000:]
-        return {"ok": proc.returncode == 0, "data": {"stdout": out, "stderr": err,
-                                                     "exit_code": proc.returncode, "mode": mode}}
+        proc = _run_in_container(workspace=workspace, argv=["sh", "-lc", cmd], timeout=timeout)
+        return {"ok": proc.returncode == 0,
+                "data": {"stdout": (proc.stdout or "")[-8000:], "stderr": (proc.stderr or "")[-4000:],
+                         "exit_code": proc.returncode, "mode": "docker"}}
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"timed out after {timeout}s ({mode})"}
+        return {"ok": False, "error": f"timed out after {timeout}s (docker)"}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
@@ -211,19 +336,33 @@ def h_python_eval(ctx: ToolContext, args: dict) -> dict:
     code = str(args.get("code", ""))
     if not code:
         return {"ok": False, "error": "code is required"}
+    gate = _command_gate(ctx, tool="python_eval", capability="code.python", cmd=code)
+    if gate is not None:
+        return gate
+    if not _sandbox_available():
+        run_on_loop(ev.emit("security.sandbox.unavailable", project_id=ctx.project_id,
+                            severity="error", title="python sandbox unavailable",
+                            payload={"tool": "python_eval"},
+                            agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+        return {"ok": False, "error": "sandbox_unavailable: Docker is required — "
+                                      "code never runs on the host"}
     workspace = (ctx.workspace or Path.cwd()).resolve()
-    script = workspace / f"_eval_{os.urandom(4).hex()}.py"
+    name = f"_eval_{os.urandom(4).hex()}.py"
+    script = workspace / name
     script.write_text(code, encoding="utf-8")
     try:
-        proc = subprocess.run([sys.executable, "-I", "-S", str(script)], capture_output=True,
-                              text=True, timeout=int(args.get("timeout_s", 45)), cwd=str(workspace))
+        proc = _run_in_container(workspace=workspace, argv=["python", "-I", "-S", f"/work/{name}"],
+                                 timeout=int(args.get("timeout_s", 45)))
         return {"ok": proc.returncode == 0,
                 "data": {"stdout": (proc.stdout or "")[-8000:], "stderr": (proc.stderr or "")[-4000:],
-                         "exit_code": proc.returncode}}
+                         "exit_code": proc.returncode, "mode": "docker"}}
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "python eval timed out"}
+        return {"ok": False, "error": "python eval timed out (docker)"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     finally:
         script.unlink(missing_ok=True)
+
 
 
 def h_brain_search(ctx: ToolContext, args: dict) -> dict:

@@ -107,8 +107,10 @@ company creation path, command-desk examples are English, and vitest 3 → 5 cle
 1. **Alembic migrations** are not generated; dev uses `create_all`. Prod requires a revision.
 2. **Embeddings/vector search**: retrieval is lexical + recency + importance + trust. The scoring
    function is one place (`brains.score_entry`) so a vector index drops in behind it.
-3. **Docker sandbox** path is implemented but untested here (falls back to `subprocess` in dev;
-   prod refuses to run without docker).
+3. **Docker sandbox**: shell/python run in the container or not at all (ADR 0017) — the dev
+   `subprocess` fallback was removed and docker-less environments refuse loudly. Gate logic is
+   unit-tested with a stubbed runner; the container path itself is exercised on the dev host
+   (docker present) — no CI job pins it yet.
 4. **`token` auth mode** is implemented and unit-level, but no integration test drives the
    login → bearer → WS handshake flow yet. `local` mode is the tested default.
 5. **Replay** exists server-side (`GET /events?from_seq&to_seq`, dossier export); the UI scrubber

@@ -15,6 +15,13 @@ Execution of individual AI work is delegated to [CrewAI](https://crewai.com) (ag
 crews, flows). Crew adds the layers above it: the **organization**, the **command chain**,
 the **reward system**, the **memory hierarchy**, **security governance** and **observability**.
 
+Security posture (ADR 0017): every company picks a **workspace root** at founding (default
+`~/crew/workspace/{company}/{project}`) and agents are jailed to that tree — file tools
+contained, shell/Python container-only with no network, egress allowlisted. Fetched content and
+executed commands pass a **security review** before use: risky findings go to a human approval
+(the risky content or command shown as-is), and an approved command can be kept on an
+**always-allow list** — audited and revocable.
+
 ![The office floor](docs/assets/office.png)
 
 <p>

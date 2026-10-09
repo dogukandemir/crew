@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, select
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
-from crew.control import backlog, commands, company, onboarding, org
+from crew.control import backlog, commands, company, onboarding, org, security_review
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
 from crew.core import events as ev
@@ -92,6 +92,9 @@ class FoundBody(BaseModel):
     project_name: str = Field(min_length=1, max_length=200)
     project_goal: str = ""
     project_budget_usd: float | None = None
+    # Optional workspace root chosen at founding (ADR 0017) — absolute path; empty
+    # means the default `{workspace_root}/{company}/{project}` tree.
+    workspace_path: str = ""
     mode: str = "autonomous"
     start_run: bool = True
 
@@ -239,6 +242,9 @@ class OverrideBody(BaseModel):
 class ApprovalDecision(BaseModel):
     reason: str = ""
     ttl_minutes: int = 120
+    # Command approvals only (ADR 0017): "always allow" writes the normalized command
+    # to the project's allowlist so it never asks again — recorded and revocable.
+    always: bool = False
 
 
 class SecretCreate(BaseModel):
@@ -465,8 +471,11 @@ async def get_companies() -> dict:
 
 @api.post("/companies", status_code=201)
 async def post_company(body: CompanyCreate, user: dict = Depends(require_user)) -> dict:
-    return await company.create_company(name=body.name, mission=body.mission,
-                                        budget_usd=body.budget_usd, owner_id=user["id"])
+    try:
+        return await company.create_company(name=body.name, mission=body.mission,
+                                            budget_usd=body.budget_usd, owner_id=user["id"])
+    except ValueError as e:
+        raise _problem(400, str(e)) from e
 
 
 @api.post("/found", status_code=201)
@@ -474,11 +483,16 @@ async def post_found(body: FoundBody, user: dict = Depends(require_user)) -> dic
     """Company + its first project in one transaction-shaped call, then the first run
     is started and driven in the background — the wizard lands on a company already
     working, not a shell to fill in (ADR 0015)."""
-    found = await company.found_company(name=body.name, mission=body.mission,
-                                        budget_usd=body.budget_usd, owner_id=user["id"],
-                                        project_name=body.project_name,
-                                        project_goal=body.project_goal,
-                                        project_budget_usd=body.project_budget_usd)
+    try:
+        found = await company.found_company(name=body.name, mission=body.mission,
+                                            budget_usd=body.budget_usd, owner_id=user["id"],
+                                            project_name=body.project_name,
+                                            project_goal=body.project_goal,
+                                            project_budget_usd=body.project_budget_usd,
+                                            workspace_path=body.workspace_path or None)
+    except ValueError as e:
+        # e.g. a relative workspace path: refuse loudly, found nothing (ADR 0017).
+        raise _problem(400, str(e)) from e
     run: dict | None = None
     if body.start_run:
         goal = (body.project_goal or body.project_name).strip()
@@ -1502,7 +1516,15 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
     await ev.emit("policy.approval.granted", project_id=row.project_id, agent_id=row.agent_id,
                   task_id=row.task_id, severity="notice", title=f"approved: {row.capability}",
                   payload={"capability": row.capability, "approval_id": approval_id}, actor=user["id"])
-    return {"approval_id": approval_id, "state": "granted"}
+    allow_id: str | None = None
+    req = row.request or {}
+    if body.always and req.get("kind") == "command_review" and req.get("norm"):
+        # "Always allow" (ADR 0017): a standing human permission — audited, listed,
+        # revocable. Only a human grant can ever write here; agents cannot.
+        allow_id = await security_review.allow_command(
+            row.project_id, norm=str(req.get("norm")), sample_cmd=str(req.get("cmd") or ""),
+            note=body.reason, decided_by=user["id"], source_approval_id=approval_id)
+    return {"approval_id": approval_id, "state": "granted", "allow_id": allow_id}
 
 
 @api.post("/approvals/{approval_id}/deny")
@@ -1515,6 +1537,25 @@ async def deny_approval(approval_id: str, body: ApprovalDecision, user: dict = D
                   payload={"capability": row.capability, "approval_id": approval_id},
                   actor=user["id"])
     return {"approval_id": approval_id, "state": "denied"}
+
+
+@api.get("/projects/{project_id}/command-allows")
+async def list_command_allows(project_id: str, include_revoked: bool = False) -> dict:
+    return {"items": await security_review.list_command_allows(project_id, include_revoked=include_revoked)}
+
+
+class AllowRevoke(BaseModel):
+    reason: str = ""
+
+
+@api.delete("/command-allows/{allow_id}")
+async def revoke_command_allow(allow_id: str, body: AllowRevoke | None = None,
+                               user: dict = Depends(require_user)) -> dict:
+    ok = await security_review.revoke_command_allow(
+        allow_id, decided_by=user["id"], reason=(body.reason if body else ""))
+    if not ok:
+        raise _problem(409, "allow entry not found or already revoked", allow_id)
+    return {"allow_id": allow_id, "state": "revoked"}
 
 
 @api.get("/projects/{project_id}/audit")

@@ -25,6 +25,8 @@ const DEFAULT_SETTINGS: ProjectSettings = {
   budget_warning_pct: 0.8,
   egress_allow: [],
   model_tiers: {},
+  cadence_enabled: false,
+  cadence_max_runs: 3,
 };
 
 const TIERS = ['reasoning', 'standard', 'fast', 'embed'];
@@ -151,6 +153,37 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             checked={settings.require_human_verification}
             onChange={(v) => setSettings((s) => ({ ...s, require_human_verification: v }))}
           />
+        </Section>
+
+        <Section
+          title="Operating cadence"
+          description="Let the company keep working after a run finishes — the answer to a floor that goes idle."
+        >
+          <Toggle
+            label="Continue automatically"
+            hint="when a run completes, start the next pass without waiting for you"
+            checked={!!settings.cadence_enabled}
+            onChange={(v) => setSettings((s) => ({ ...s, cadence_enabled: v }))}
+          />
+          <div className="mt-1 max-w-xs">
+            <Field
+              label="Max consecutive follow-on passes"
+              hint="A run you start by hand resets the streak; failures and pauses never continue."
+            >
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={settings.cadence_max_runs ?? 3}
+                onChange={(e) =>
+                  setSettings((s) => ({
+                    ...s,
+                    cadence_max_runs: Math.max(1, Math.min(10, Number.parseInt(e.target.value, 10) || 1)),
+                  }))
+                }
+              />
+            </Field>
+          </div>
         </Section>
 
         <Section title="Org limits" description="Bounds on the shape of the organization.">

@@ -33,6 +33,10 @@ from crew.execution.tools import tools_for_agent
 
 log = logging.getLogger("crew.orchestrator")
 
+# The actor id of engine-driven follow-on runs (operating cadence). A run started
+# under this actor never resets the cadence streak; any other actor does.
+CADENCE_ACTOR = "system:cadence"
+
 MAX_WAVES = 60
 MAX_TASK_ATTEMPTS = 3
 
@@ -71,6 +75,15 @@ class Orchestrator:
                       payload={"run_id": run.id, "goal": goal, "mode": mode}, actor=actor)
         await audit(actor_kind="user", actor_id=actor, action="run.started", resource_kind="run",
                     resource_id=run.id, reason=goal[:200])
+        if actor != CADENCE_ACTOR:
+            # a person's run restarts the cadence streak (the cap counts follow-ons)
+            async with session_scope() as s:
+                p2 = await s.get(Project, project_id)
+                st = dict(p2.settings or {}) if p2 else {}
+                if st.get("cadence_streak"):
+                    st["cadence_streak"] = 0
+                    p2.settings = st
+                    s.add(p2)
         return {"id": run.id, "goal": goal, "stage": run.stage, "status": run.status}
 
     async def advance(self, run_id: str) -> dict:
@@ -929,7 +942,61 @@ class Orchestrator:
         await audit(actor_kind="system", actor_id="orchestrator", action="run.completed",
                     resource_kind="run", resource_id=run.id,
                     reason=f"{len(done)}/{len(tasks)} tasks, ${summary['cost_usd']:.4f}")
+        if done:
+            await self._maybe_cadence(project, run)
         return RunStage.DONE
+
+    # ── operating cadence ─────────────────────────────────────────────────────
+    async def _maybe_cadence(self, project: Project, run: Run) -> None:
+        """After a COMPLETED run, keep the floor moving: 'operating cadence' starts a
+        follow-on pass while the consecutive-follow-on cap has not been hit.
+
+        Conservative by design — off unless the project turned it on; the streak counts
+        consecutive follow-on passes and resets whenever a person starts a run. A failed
+        or paused run never kicks one.
+        """
+        try:
+            async with session_scope() as s:
+                p = await s.get(Project, project.id)
+                st = dict(p.settings or {}) if p else {}
+            if not st.get("cadence_enabled"):
+                return
+            cap = max(1, min(int(st.get("cadence_max_runs", 3) or 3), 10))
+            streak = max(0, int(st.get("cadence_streak", 0) or 0))
+            if streak >= cap:
+                await ev.emit("run.cadence.held", project_id=project.id, run_id=run.id,
+                              severity="info",
+                              title=f"cadence stopped — {cap} follow-on pass{'es' if cap > 1 else ''} done",
+                              summary="Start a run by hand to continue.",
+                              payload={"max_runs": cap, "streak": streak},
+                              actor="system:orchestrator")
+                return
+            goal = f"Continue: {run.goal} (follow-on pass {streak + 1}/{cap})"
+            nxt = await self.start_run(project_id=project.id, goal=goal, mode=run.mode,
+                                       actor=CADENCE_ACTOR)
+            async with session_scope() as s:
+                p = await s.get(Project, project.id)
+                st = dict(p.settings or {})
+                st["cadence_streak"] = streak + 1
+                p.settings = st
+                s.add(p)
+            await ev.emit("run.cadence.started", project_id=project.id, run_id=nxt["id"],
+                          severity="notice",
+                          title=f"cadence: follow-on pass {streak + 1}/{cap} started",
+                          summary=goal[:200],
+                          payload={"from_run": run.id, "pass": streak + 1, "max_runs": cap},
+                          actor=CADENCE_ACTOR)
+            asyncio.create_task(self.advance(nxt["id"]))
+        except Exception as e:  # cadence must never take the finished run down
+            log.warning("cadence kick failed: %s", e)
+            try:
+                await ev.emit("run.cadence.failed", project_id=project.id, run_id=run.id,
+                              severity="error", title="cadence follow-on could not start",
+                              summary=str(e)[:200],
+                              payload={"error": f"{type(e).__name__}: {e}"},
+                              actor="system:orchestrator")
+            except Exception:
+                pass
 
     # ── controls ───────────────────────────────────────────────────────────────
     async def pause_project(self, project_id: str, *, actor: str = "user") -> dict:

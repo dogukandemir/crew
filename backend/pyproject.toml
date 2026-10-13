@@ -49,7 +49,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-gremlins>=1.11.3",
-    "ruff>=0.16.10",
+    "ruff>=0.17.0",
 ]
 
 [tool.pytest-gremlins]

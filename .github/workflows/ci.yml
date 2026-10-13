@@ -54,8 +54,8 @@ jobs:
         with:
           version: '0.13.0'
           enable-cache: true
-      - run: uv python install 3.12
-      - run: uv sync --frozen --python 3.12
+      - run: uv python install 3.13
+      - run: uv sync --frozen --python 3.13
       - run: uv run ruff check .
       - run: uv run pytest
 

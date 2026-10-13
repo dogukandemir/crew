@@ -6,7 +6,7 @@ COPY . .
 ARG VITE_API_BASE=http://127.0.0.1:8787
 ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
-FROM nginx:1.30-alpine
+FROM nginx:1.31-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 5173

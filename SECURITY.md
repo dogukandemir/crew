@@ -32,4 +32,4 @@ Caps are application estimates based on configured prices. Unknown failed/interr
 
 Use GitHub's private vulnerability reporting for this repository when enabled: **Security → Advisories → Report a vulnerability**. If private reporting is unavailable, open a minimal issue asking for a private contact without publishing the exploit or secrets. Include affected revision, reproduction steps, expected boundary and impact. Do not test against someone else's deployment.
 
-There is no promised response SLA yet. Track unresolved dependency advisories in [dependency notes](docs/DEPENDENCIES.md).
+There is no promised response SLA yet. Track unresolved dependency advisories in [dependency notes](docs/DEPENDENCIES.md); the four open Chroma advisories are a reviewed, version-bounded exception in the dependency workflow (excepted by ID, with the raw scan still preserved as an artifact).

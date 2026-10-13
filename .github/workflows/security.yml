@@ -37,10 +37,31 @@ jobs:
         if: always()
         working-directory: backend
         run: uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements-audit.txt
-      - name: Backend audit (known unresolved advisories are not suppressed)
+      # Reviewed, version-bounded exception (docs/DEPENDENCIES.md §Outstanding Chroma
+      # advisories). CrewAI imports Chroma eagerly — `crewai.agent.core` →
+      # `rag.embeddings.providers.openai.openai_provider` → `chromadb.utils…` — so the
+      # package cannot be removed, and all four advisories are still unpatched upstream.
+      # They are excepted BY ID, on the record: anything else still fails this gate, and
+      # the guard below expires the exception the moment the pinned Chroma moves.
+      - name: Known-advisory exception is still current
         if: always()
         working-directory: backend
-        run: uvx pip-audit --disable-pip --require-hashes -r requirements-audit.txt --format json --output pip-audit.json
+        run: |
+          grep -q '^chromadb==1.5.9' requirements-audit.txt || {
+            echo "::error::chromadb is no longer pinned at 1.5.9 — re-review the four Chroma advisories in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
+      - name: Backend audit — raw record (evidence; never fails the gate)
+        if: always()
+        continue-on-error: true
+        working-directory: backend
+        run: uvx pip-audit --disable-pip --require-hashes -r requirements-audit.txt --format json --output pip-audit-raw.json
+      - name: Backend audit (four reviewed Chroma advisories excepted, listed by ID)
+        if: always()
+        working-directory: backend
+        run: >
+          uvx pip-audit --disable-pip --require-hashes -r requirements-audit.txt
+          --format json --output pip-audit.json
+          --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813
+          --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
       - name: Preserve audit evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -49,5 +70,6 @@ jobs:
           path: |
             frontend/npm-audit.json
             backend/pip-audit.json
+            backend/pip-audit-raw.json
             backend/requirements-audit.txt
           retention-days: 30

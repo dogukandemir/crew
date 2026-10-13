@@ -7,6 +7,7 @@ import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,7 +29,7 @@ class Settings(BaseSettings):
     # ── server ────────────────────────────────────────────────────────────────
     env: str = Field("dev", validation_alias=_a("CREW_ENV", "env"))
     host: str = Field("127.0.0.1", validation_alias=_a("CREW_HOST", "host"))
-    port: int = Field(8787, validation_alias=_a("CREW_PORT", "port"))
+    port: int = Field(8787, ge=1, le=65535, validation_alias=_a("CREW_PORT", "port"))
     log_level: str = Field("info", validation_alias=_a("CREW_LOG_LEVEL", "log_level"))
     data_dir: Path = Field(Path("../data"), validation_alias=_a("CREW_DATA_DIR", "data_dir"))
     # Company workspace root (ADR 0017). Empty → ~/crew/workspace, resolved lazily so
@@ -40,8 +41,9 @@ class Settings(BaseSettings):
 
     # ── auth ──────────────────────────────────────────────────────────────────
     auth_mode: str = Field("local", validation_alias=_a("CREW_AUTH_MODE", "auth_mode"))
+    container_local_auth: bool = Field(False, validation_alias=_a("CREW_CONTAINER_LOCAL_AUTH", "container_local_auth"))
     jwt_secret: str = Field("", validation_alias=_a("CREW_JWT_SECRET", "jwt_secret"))
-    access_token_ttl_min: int = Field(720, validation_alias=_a("CREW_ACCESS_TOKEN_TTL_MIN", "access_token_ttl_min"))
+    access_token_ttl_min: int = Field(720, ge=1, le=10080, validation_alias=_a("CREW_ACCESS_TOKEN_TTL_MIN", "access_token_ttl_min"))
     vault_key: str = Field("", validation_alias=_a("CREW_VAULT_KEY", "vault_key"))
 
     # ── model providers ───────────────────────────────────────────────────────
@@ -61,19 +63,24 @@ class Settings(BaseSettings):
     tier_embed: str = Field("openai/text-embedding-3-small", validation_alias=_a("CREW_TIER_EMBED", "tier_embed"))
     # DeepSeek V4 made thinking a request parameter: reasoning_effort (low|high|max).
     # Applied to DeepSeek models at LLM construction; other providers never see it.
-    reasoning_effort: str = Field("high", validation_alias=_a("CREW_REASONING_EFFORT", "reasoning_effort"))
+    reasoning_effort: str = Field("low", validation_alias=_a("CREW_REASONING_EFFORT", "reasoning_effort"))
+    model_prices: dict[str, tuple[Annotated[float, Field(ge=0, allow_inf_nan=False)],
+                                  Annotated[float, Field(ge=0, allow_inf_nan=False)]]] = Field(
+        default_factory=dict, validation_alias=_a("CREW_MODEL_PRICES", "model_prices"))
 
     # ── safety rails ──────────────────────────────────────────────────────────
-    max_concurrent_crews: int = Field(2, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
-    max_agents_per_project: int = Field(24, validation_alias=_a("CREW_MAX_AGENTS_PER_PROJECT", "max_agents_per_project"))
-    max_departments_per_project: int = Field(6, validation_alias=_a("CREW_MAX_DEPARTMENTS_PER_PROJECT", "max_departments_per_project"))
-    default_project_budget_usd: float = Field(10.0, validation_alias=_a("CREW_DEFAULT_PROJECT_BUDGET_USD", "default_project_budget_usd"))
-    hard_budget_usd: float = Field(50.0, validation_alias=_a("CREW_HARD_BUDGET_USD", "hard_budget_usd"))
+    max_concurrent_crews: int = Field(2, ge=1, le=64, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
+    max_agents_per_project: int = Field(24, ge=1, le=1000, validation_alias=_a("CREW_MAX_AGENTS_PER_PROJECT", "max_agents_per_project"))
+    max_departments_per_project: int = Field(6, ge=1, le=100, validation_alias=_a("CREW_MAX_DEPARTMENTS_PER_PROJECT", "max_departments_per_project"))
+    default_project_budget_usd: float = Field(10.0, gt=0, allow_inf_nan=False, validation_alias=_a("CREW_DEFAULT_PROJECT_BUDGET_USD", "default_project_budget_usd"))
+    hard_budget_usd: float = Field(50.0, gt=0, allow_inf_nan=False, validation_alias=_a("CREW_HARD_BUDGET_USD", "hard_budget_usd"))
     tool_sandbox: str = Field("docker", validation_alias=_a("CREW_TOOL_SANDBOX", "tool_sandbox"))
+    sandbox_url: str = Field("", validation_alias=_a("CREW_SANDBOX_URL", "sandbox_url"))
+    sandbox_token_file: str = Field("/sandbox-auth/token", validation_alias=_a("CREW_SANDBOX_TOKEN_FILE", "sandbox_token_file"))
     egress_allowlist: str = Field("", validation_alias=_a("CREW_EGRESS_ALLOWLIST", "egress_allowlist"))
-    require_approval_above_usd: float = Field(2.0, validation_alias=_a("CREW_REQUIRE_APPROVAL_ABOVE_USD", "require_approval_above_usd"))
+    require_approval_above_usd: float = Field(2.0, ge=0, allow_inf_nan=False, validation_alias=_a("CREW_REQUIRE_APPROVAL_ABOVE_USD", "require_approval_above_usd"))
     auto_hire_default: bool = Field(True, validation_alias=_a("CREW_AUTO_HIRE_DEFAULT", "auto_hire_default"))
-    offline_llm: bool = Field(False, validation_alias=_a("CREW_OFFLINE_LLM", "offline_llm"))
+    offline_llm: bool = Field(True, validation_alias=_a("CREW_OFFLINE_LLM", "offline_llm"))
 
     # ── validation ────────────────────────────────────────────────────────────
     @field_validator("auth_mode")
@@ -103,10 +110,14 @@ class Settings(BaseSettings):
         return v
 
     def model_post_init(self, __context) -> None:  # noqa: D105
+        if self.default_project_budget_usd > self.hard_budget_usd:
+            raise ValueError("default project budget cannot exceed the hard budget")
         # Fail loudly rather than run an unauthenticated service on a public interface.
-        if self.auth_mode == "local" and self.env != "dev" and self.host not in ("127.0.0.1", "localhost", "::1"):
+        if self.auth_mode == "token" and len(self.jwt_secret) < 32:
+            raise ValueError("token mode requires CREW_JWT_SECRET with at least 32 characters")
+        if self.auth_mode == "local" and self.host not in ("127.0.0.1", "localhost", "::1") and not self.container_local_auth:
             raise RuntimeError(
-                "refusing to bind a non-loopback address with CREW_AUTH_MODE=local outside dev"
+                "local authentication requires a loopback listener; container-only opt-in requires loopback port publishing"
             )
 
     # ── derived ───────────────────────────────────────────────────────────────
@@ -186,7 +197,10 @@ def get_settings() -> Settings:
             s.vault_key = key_file.read_text(encoding="utf-8").strip()
         else:
             s.vault_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
-            key_file.write_text(s.vault_key, encoding="utf-8")
+            with key_file.open("x", encoding="utf-8") as stream:
+                os.chmod(key_file, 0o600)
+                stream.write(s.vault_key)
+        os.chmod(key_file, 0o600)
     return s
 
 

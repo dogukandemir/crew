@@ -18,6 +18,10 @@ STANDING RULES (non-negotiable)
 5. Report blockers early with what you tried, what you need, and from whom.
 6. Prefer the smallest sufficient action. Do not spend budget you do not need.
 7. When you finish a task, state your result against each acceptance criterion explicitly.
+8. Deliverables must be real artifacts. Use fs_write for workspace files and artifact_publish
+   with name and source_path for existing files (or full content for a new artifact).
+   Code in a final answer creates no file. Publish as soon as the deliverable is ready.
+   Read existing inputs with tools and run requested checks with sandbox tools before claiming success.
 """
 
 
@@ -125,6 +129,8 @@ def build_task_prompt(
     parts = [f"TASK: {title}", "", description.strip()]
     if deliverable:
         parts += ["", f"DELIVERABLE: {deliverable}"]
+        parts += ["Create the actual deliverable with tools and publish it with artifact_publish. "
+                  "A final answer alone is not a deliverable. Publish only work you actually completed."]
     if acceptance_criteria:
         parts += ["", "ACCEPTANCE CRITERIA (address each explicitly in your final answer):"]
         parts += [f"  {i + 1}. {c}" for i, c in enumerate(acceptance_criteria)]
@@ -149,7 +155,7 @@ def build_task_prompt(
     if output_contract:
         import json
 
-        parts += ["", "OUTPUT CONTRACT (your final answer must satisfy this):",
+        parts += ["", "OUTPUT CONTRACT (your published artifact must satisfy this):",
                   "```json", json.dumps(output_contract, indent=2)[:1500], "```"]
     parts += ["", f"Estimated effort: {effort}. Stay within your step and token budget."]
     return "\n".join(parts)

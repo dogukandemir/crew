@@ -4,10 +4,11 @@ Run these only with a real key and a small budget:
 
     cd backend
     # backend/.env must contain e.g. DEEPSEEK_API_KEY=...
-    uv run pytest -m live -s
+    # Explicit spending opt-in is required, even when a key is configured:
+    CREW_RUN_LIVE_TESTS=1 uv run pytest tests/live -m live -s
 
-They spend real money (a few cents) and they are the only tests that prove the CrewAI path
-against a real provider end to end.
+They spend real money, with the test project's $5 estimated-usage cap. This is a
+provider/harness integration check; independent acceptance of a deliverable is separate.
 """
 
 from __future__ import annotations
@@ -35,12 +36,17 @@ def _has_provider() -> bool:
 
 
 @pytest.mark.skipif(not _has_provider(), reason="no model provider key configured")
-async def test_real_crewai_run_completes_and_is_verified(bound_loop, project):
+@pytest.mark.skipif(os.environ.get("CREW_RUN_LIVE_TESTS") != "1", reason="explicit paid-test opt-in required")
+async def test_real_crewai_run_records_provider_usage(bound_loop, project, monkeypatch):
     from crew.control.orchestrator import orchestrator
     from crew.core.db import init_db
+    from crew.execution.runner import CrewAICrewRunner
 
     await init_db()
-    assert settings.offline_llm is False, "unset CREW_OFFLINE_LLM to run the live test"
+    # The default fixture deliberately forces Demo. Opt in only for this test,
+    # restoring settings afterward so other tests cannot accidentally spend.
+    monkeypatch.setattr(settings, "offline_llm", False)
+    monkeypatch.setattr(orchestrator, "runner", CrewAICrewRunner())
 
     run = await orchestrator.start_run(project_id=project["id"], goal=GOAL)
     result = await orchestrator.advance(run["id"])

@@ -46,7 +46,13 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!project.data) return;
     setBudgetUsd(String(microsToUsd(project.data.budget_cap_micros)));
-    const s = { ...DEFAULT_SETTINGS, ...(project.data.settings ?? {}) };
+    // API responses also contain server-owned workspace and lifecycle fields.
+    // Only copy the controls this form edits into its mutation payload.
+    const stored: Partial<ProjectSettings> = project.data.settings ?? {};
+    const editable = Object.fromEntries(Object.keys(DEFAULT_SETTINGS)
+      .filter(key => stored[key as keyof ProjectSettings] !== undefined)
+      .map(key => [key, stored[key as keyof ProjectSettings]]));
+    const s = { ...DEFAULT_SETTINGS, ...editable };
     setSettings(s);
     setEgressText((s.egress_allow ?? []).join('\n'));
   }, [project.data]);
@@ -54,9 +60,11 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
   const tiers = useMemo(() => settings.model_tiers ?? {}, [settings.model_tiers]);
 
   const save = useMutation({
-    mutationFn: () =>
-      api.patchProject(projectId, {
-        budget_cap_micros: usdToMicros(Number.parseFloat(budgetUsd) || 0),
+    mutationFn: () => {
+      const amount = Number(budgetUsd);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a positive budget amount.');
+      return api.patchProject(projectId, {
+        budget_cap_micros: usdToMicros(amount),
         settings: {
           ...settings,
           egress_allow: egressText
@@ -64,7 +72,8 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             .map((l) => l.trim())
             .filter(Boolean),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       setToast({ kind: 'success', message: 'Settings saved.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId] });
@@ -109,7 +118,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
     <div className="max-w-3xl">
       <Card
         title="Budget"
-        subtitle="Hard-enforced server-side: a run physically cannot exceed the cap."
+          subtitle="New requests reserve estimated usage against this cap. Also set billing limits with your provider."
         actions={
           <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate()}>
             Save

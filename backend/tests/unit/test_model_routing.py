@@ -25,8 +25,21 @@ def test_prices_follow_the_provider_page():
     # peak, cache-miss rates — the budget guard errs conservative
     assert router.price("deepseek/deepseek-flash") == (0.30, 1.20)
     assert router.price("deepseek/deepseek-v4-pro") == (1.32, 3.96)
-    # an unknown DeepSeek id (e.g. a retired alias) bills as Flash, not the generic default
-    assert router.price("deepseek/something-retired") == (0.30, 1.20)
+    with pytest.raises(ValueError, match="No price configured"):
+        router.price("deepseek/something-retired")
+
+
+def test_price_matching_cannot_confuse_provider_or_model_variants(monkeypatch):
+    from crew.core.settings import settings
+
+    for model in ("openai/gpt-4.1-mini", "unknown/gpt-4o", "hosted/ollama/llama", "openai/gpt-4o-more-expensive"):
+        with pytest.raises(ValueError, match="No price configured"):
+            router.price(model)
+    monkeypatch.setattr(settings, "model_prices", {"custom/expensive": (20.0, 100.0)})
+    assert router.cost_micros("custom/expensive", 100, 10) == 3000
+    for price in ((-1, 2), (1, float("inf")), (float("nan"), 1)):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, model_prices={"custom/invalid": price})
 
 
 def test_reasoning_effort_is_validated():
@@ -54,7 +67,7 @@ def test_reasoning_effort_reaches_deepseek_llms_only(monkeypatch):
 
     router.build_llm(_Agent())  # type: ignore[arg-type]
     assert captured["model"].startswith("deepseek/")
-    assert captured["reasoning_effort"] == "high"
+    assert captured["reasoning_effort"] == "low"
 
     class _OpenAIAgent(_Agent):
         model_id = "gpt-4o-mini"

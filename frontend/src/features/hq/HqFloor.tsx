@@ -1,3 +1,4 @@
+import { animateFrames } from '../../app/animation';
 /**
  * The HQ floor (ADR 0011): the whole company drawn on one isometric plate.
  *
@@ -149,14 +150,17 @@ export function HqFloor({ hq }: { hq: Hq }) {
 
   // The one rAF loop: advance walkers, write transforms straight to the DOM.
   useEffect(() => {
-    let raf = 0;
     let last = performance.now();
-    const tick = (now: number) => {
+    const tick = (now: number, reducedMotion: boolean) => {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       for (const person of world.people) {
         const w = walkersRef.current.get(person.id);
         if (!w) continue;
+        if (reducedMotion && w.moving && w.path.length) {
+          w.pos = { ...w.path[w.path.length - 1] };
+          w.path = []; w.idx = 0; w.moving = false;
+        }
         if (w.moving && w.path.length) {
           const t = w.path[Math.min(w.idx, w.path.length - 1)];
           const dx = t.x - w.pos.x;
@@ -187,10 +191,8 @@ export function HqFloor({ hq }: { hq: Hq }) {
           el.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
         }
       }
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return animateFrames(tick);
   }, [world]);
 
   const stagedNow = useMemo(() => new Set(world.stages.map((s) => s.personId)), [world]);

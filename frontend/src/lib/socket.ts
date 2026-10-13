@@ -2,7 +2,7 @@
  * WebSocket client for the Crew event firehose (docs/11 §3).
  *
  * Responsibilities:
- *  - connect to `ws://…/ws/projects/{id}?token=…&since_seq=N`,
+ *  - connect to `ws://…/ws/projects/{id}?since_seq=N`,
  *  - coalesce high-frequency frames into ~100 ms batches,
  *  - persist the highest seen `seq` per project in localStorage and resume
  *    with `since_seq` on reconnect,
@@ -198,7 +198,7 @@ export class CrewSocket {
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(api.wsUrl(this.projectId, this.highestSeq));
+      ws = new WebSocket(api.wsUrl(this.projectId, this.highestSeq), api.wsProtocols());
     } catch (err) {
       this.scheduleReconnect(err instanceof Error ? err.message : 'socket construction failed');
       return;
@@ -253,8 +253,7 @@ export class CrewSocket {
         break;
       }
       case 'gap': {
-        // A gap means the server dropped events: advance the cursor and tell the UI.
-        if (frame.to > this.highestSeq) this.bumpSeq(frame.to);
+        // The server replays the missing interval from durable storage. Do not skip it.
         this.emit('onGap', frame);
         break;
       }

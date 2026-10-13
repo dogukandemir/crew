@@ -241,6 +241,7 @@ async def test_assign_strips_a_two_word_addressee_from_the_title(bound_loop, pro
     """The parser eats the '@' token, not the whole name: a two-word addressee left the
     surname stuck to the title ('Schreiber, draft …')."""
     async with session_scope() as s:
+        await _agent(s, project["id"], "Grace Tan")
         b = await _agent(s, project["id"], "Grace Hopper")
         bid = b.id
     out = await commands.handle_command(project_id=project["id"],
@@ -250,6 +251,17 @@ async def test_assign_strips_a_two_word_addressee_from_the_title(bound_loop, pro
     async with session_scope() as s:
         rows = (await s.scalars(select(Task).where(Task.assignee_agent_id == bid))).all()
     assert rows and rows[0].title == "write the spec", f"title: {rows[0].title if rows else None}"
+
+
+def test_ambiguous_first_name_does_not_choose_a_random_recipient():
+    roster = [{"id": "one", "name": "Grace Tan", "role": "worker"},
+              {"id": "two", "name": "Grace Hopper", "role": "worker"}]
+    parsed = commands.parse_command("@Grace, write the spec", roster)
+    assert parsed.mentions == [] and "ambiguous" in parsed.note
+    parsed = commands.parse_command("@Grace Hopper, write the spec", roster)
+    assert parsed.mentions == ["two"]
+    parsed = commands.parse_command("Reassign @Grace Tan's task to @Grace Hopper", roster)
+    assert parsed.mentions == ["one", "two"]
 
 
 def test_parse_qa_verb_and_comma_mention_assign():

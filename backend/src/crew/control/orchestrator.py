@@ -4,6 +4,7 @@ rewarding → learning → done (docs/03). Resumable, cancelable, event-emitting
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from datetime import UTC, datetime
@@ -15,10 +16,10 @@ from crew.control.council import council
 from crew.control.verify import verifier
 from crew.core import events as ev
 from crew.core.brains import brain_service, render_context_pack, summarize_working_set
-from crew.core.db import session_scope
+from crew.core.db import after_commit, atomic_scope, session_scope, transactional
 from crew.core.models import Agent, AgentSkill, Event, Project, Run, Task
 from crew.core.reward import reward_engine
-from crew.core.security import BudgetExceeded, audit, budget
+from crew.core.security import BudgetExceeded, audit, budget, expire_inactive_approvals
 from crew.core.settings import settings
 from crew.domain.enums import Effort, Role, RunStage, RunStatus, TaskState
 from crew.execution.models import router
@@ -57,19 +58,26 @@ class Orchestrator:
     def __init__(self) -> None:
         self.runner = select_runner()
         self._running: set[str] = set()
+        self._idle: dict[str, asyncio.Event] = {}
+        self._worker_semaphore = None
+        self._worker_loop = None
 
     # ── public API ─────────────────────────────────────────────────────────────
+    @transactional
     async def start_run(self, *, project_id: str, goal: str, mode: str = "autonomous",
                         actor: str = "user") -> dict:
-        async with session_scope() as s:
+        async with session_scope(write_lock=True) as s:
             project = await s.get(Project, project_id)
             if project is None:
                 raise KeyError(project_id)
-            if project.status == "paused":
-                raise ValueError("project is paused")
-        run = Run(project_id=project_id, goal=goal, mode=mode, stage=RunStage.INTAKE.value,
-                  status=RunStatus.RUNNING.value)
-        async with session_scope() as s:
+            if project.status != "active":
+                raise ValueError("project must be active before starting a run")
+            active = await s.scalar(select(Run.id).where(Run.project_id == project_id,
+                Run.status.notin_(["completed", "failed", "aborted"])).limit(1))
+            if active:
+                raise ValueError("project already has an active run; resume or cancel it first")
+            run = Run(project_id=project_id, goal=goal, mode=mode, stage=RunStage.INTAKE.value,
+                      status=RunStatus.RUNNING.value)
             s.add(run)
         await ev.emit("run.started", project_id=project_id, run_id=run.id, severity="notice",
                       title=f"run started: {goal[:70]}", summary=goal,
@@ -92,10 +100,17 @@ class Orchestrator:
         if run_id in self._running:
             return {"run_id": run_id, "status": "already_running"}
         self._running.add(run_id)
+        idle = self._idle[run_id] = asyncio.Event()
         try:
             return await self._advance(run_id)
         finally:
             self._running.discard(run_id)
+            self._idle.pop(run_id, None)
+            idle.set()
+
+    async def wait_idle(self, run_id: str) -> None:
+        while run_id in self._running:
+            await self._idle[run_id].wait()
 
     async def _advance(self, run_id: str) -> dict:
         while True:
@@ -130,9 +145,11 @@ class Orchestrator:
 
     async def _set_run(self, run_id: str, *, stage: str | None = None, status: str | None = None,
                        report: dict | None = None, error: str | None = None) -> None:
-        async with session_scope() as s:
+        async with session_scope(write_lock=True) as s:
             run = await s.get(Run, run_id)
             if run is None:
+                return
+            if run.status in (RunStatus.COMPLETED.value, RunStatus.FAILED.value, RunStatus.ABORTED.value):
                 return
             if stage is not None:
                 run.stage = stage
@@ -145,6 +162,8 @@ class Orchestrator:
             if error is not None:
                 run.error = error
             s.add(run)
+        if status in ("completed", "failed", "aborted"):
+            await expire_inactive_approvals(run_id=run_id)
 
     # ── stages ─────────────────────────────────────────────────────────────────
     async def _intake(self, run: Run, project: Project) -> RunStage:
@@ -239,14 +258,19 @@ class Orchestrator:
         return RunStage.EXECUTING
 
     async def _execute(self, run: Run, project: Project) -> RunStage:
-        sem = asyncio.Semaphore(max(1, settings.max_concurrent_crews))
+        loop = asyncio.get_running_loop()
+        if self._worker_loop is not loop:
+            self._worker_semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_crews))
+            self._worker_loop = loop
+        sem = self._worker_semaphore
         for _wave in range(MAX_WAVES):
             if budget.breaker_open(project.id):
                 await self._set_run(run.id, status=RunStatus.PAUSED_BUDGET.value)
                 return RunStage.EXECUTING
             async with session_scope() as s:
                 r = await s.get(Run, run.id)
-                if r.status == RunStatus.PAUSED.value or r.stage == RunStage.DONE.value:
+                p = await s.get(Project, project.id)
+                if r.status != RunStatus.RUNNING.value or p.status != "active" or r.stage == RunStage.DONE.value:
                     return RunStage(r.stage)
             # heal any stale `busy` from a crashed task before scheduling this wave
             await self._reap_occupancy(project.id)
@@ -270,8 +294,16 @@ class Orchestrator:
             await self._requeue_retries(run)
             # and the office talks about what actually happened (docs/17 batch 2)
             await gossip.office_chatter(project.id)
-        async with session_scope() as s:
+        async with session_scope(write_lock=True) as s:
             tasks = (await s.scalars(select(Task).where(Task.run_id == run.id))).all()
+            awaiting = [t for t in tasks if t.state == TaskState.BLOCKED.value
+                        and (t.escalation_reason or "").startswith("approval_required:")]
+            if awaiting:
+                current = await s.get(Run, run.id)
+                if current.status == RunStatus.RUNNING.value:
+                    current.status = RunStatus.PAUSED.value
+                    current.error = "Waiting for operator approval"
+                return RunStage.EXECUTING
         pending = [t for t in tasks if t.state not in (TaskState.COMPLETED.value, TaskState.FAILED.value,
                                                       TaskState.ABORTED.value)]
         for t in pending:
@@ -449,11 +481,13 @@ class Orchestrator:
                 artifacts=settings.artifacts_dir(project.id),
                 escalate=attempts - 1,
             )
-            reservation = router.estimate_step_reservation(snapshot)  # type: ignore[arg-type]
+            # Live calls reserve and settle individually inside the model gateway.
+            reservation = 0  # Demo makes no provider calls; live calls reserve in the gateway.
             try:
-                await budget.reserve(project.id, amount_micros=reservation, scope_kind="agent",
-                                     scope_id=snapshot.id, ref=task_id,
-                                     idempotency_key=f"reserve:{task_id}:{attempts}")
+                if settings.offline_llm:
+                    await budget.reserve(project.id, amount_micros=reservation, scope_kind="agent",
+                                         scope_id=snapshot.id, ref=task_id,
+                                         idempotency_key=f"reserve:{task_id}:{attempts}")
             except BudgetExceeded as e:
                 async with session_scope() as s:
                     row = await s.get(Task, task_id)
@@ -473,13 +507,73 @@ class Orchestrator:
             started = asyncio.get_event_loop().time()
             result = await asyncio.to_thread(self.runner.run_task, req)
             elapsed_ms = int((asyncio.get_event_loop().time() - started) * 1000)
-            await budget.settle(project.id, reserved_micros=reservation, actual_micros=result.cost_micros,
-                                scope_kind="agent", scope_id=snapshot.id, ref=task_id,
-                                idempotency_key=f"settle:{task_id}:{attempts}")
+            if settings.offline_llm:
+                await budget.settle(project.id, reserved_micros=reservation, actual_micros=result.cost_micros,
+                                    scope_kind="agent", scope_id=snapshot.id, ref=task_id,
+                                    idempotency_key=f"settle:{task_id}:{attempts}")
             await self._record_task_result(run, project, task_id, snapshot, result, elapsed_ms,
                                            route=router.choice_for_agent(snapshot).model, attempts=attempts)  # type: ignore[arg-type]
+            if result.escalation == "approval_required":
+                await self._park_for_approval(run.id, task_id, result.error)
+                await self._free_agent(snapshot.id)
+                return
             await self._verify_and_reward(run, project, task_id, result, attempts)
             await self._free_agent(snapshot.id)
+
+    async def _park_for_approval(self, run_id: str, task_id: str, approval_id: str) -> None:
+        from crew.core.models import Approval
+
+        async with session_scope(write_lock=True) as s:
+            run, task = await s.get(Run, run_id), await s.get(Task, task_id)
+            approval = await s.get(Approval, approval_id)
+            if not run or not task or run.status in ("completed", "failed", "aborted") or task.state == "aborted":
+                return
+            # Waiting for an operator is not a failed attempt or a performance penalty.
+            task.attempts = max(0, task.attempts - 1)
+            task.ended_at = None
+            task.state = "blocked"
+            task.escalation_reason = f"approval_required:{approval_id}"
+            if approval and approval.state == "granted" and (not approval.expires_at or
+                    approval.expires_at.replace(tzinfo=UTC) > datetime.now(UTC)):
+                task.state, task.escalation_reason = "assigned", ""
+            elif approval and approval.state in ("denied", "expired"):
+                task.state = "aborted"
+                task.escalation_reason = f"Operator approval {approval.state}"
+
+    async def approval_decided(self, approval_id: str, *, granted: bool) -> tuple[str, str] | None:
+        """Release only the worker parked for this exact operator decision."""
+        from crew.core.models import Approval
+
+        async with session_scope(write_lock=True) as s:
+            approval = await s.get(Approval, approval_id)
+            if not approval or not approval.task_id:
+                return None
+            if approval.state != ("granted" if granted else "denied"):
+                return None
+            task = await s.get(Task, approval.task_id)
+            if (not task or task.state != "blocked" or task.escalation_reason != f"approval_required:{approval_id}"
+                    or task.project_id != approval.project_id or task.assignee_agent_id != approval.agent_id):
+                return None
+            run = await s.get(Run, task.run_id)
+            project = await s.get(Project, task.project_id)
+            if not run or run.status in ("completed", "failed", "aborted"):
+                return None
+            if (approval.request or {}).get("run_id") != run.id:
+                return None
+            task.state = "assigned" if granted else "aborted"
+            task.escalation_reason = "" if granted else "Operator denied requested tool approval"
+            continuation = None
+            if project.status == "active" and (run.status == "running" or
+                    (run.status == "paused" and run.error == "Waiting for operator approval")):
+                run.status, run.error = "running", ""
+                continuation = (project.id, run.id)
+        if granted and (approval.request or {}).get("tool"):
+            await self.steer(project_id=task.project_id, target_kind="task", target_id=task.id,
+                text="An operator approved this exact tool invocation. Execute it before other work; "
+                     "the existing permission is scoped to these exact arguments: "
+                     + json.dumps({"tool": approval.request["tool"], "args": approval.request.get("args", {})}),
+                actor=approval.decided_by or "user")
+        return continuation
 
     async def _inbox_notes(self, project_id: str, agent_id: str) -> list[str]:
         """Colleague traffic for this agent's prompt: open questions to answer and answers
@@ -596,17 +690,16 @@ class Orchestrator:
                 s.add(a)
 
     async def recover_interrupted(self) -> list[tuple[str, str]]:
-        """Boot-time honesty: a process restart cannot keep a run in flight. Every
-        RUNNING run's in-flight tasks are settled as interrupted on the record, then
-        the runs are handed back to be re-driven — the stage machine resumes where it
-        stopped, and the retry ladder takes the interrupted tasks from there."""
+        """Pause interrupted runs for explicit review before any repeated side effects."""
         async with session_scope() as s:
             runs = (await s.scalars(select(Run).where(
                 Run.status == RunStatus.RUNNING.value))).all()
             runinfo = [(r.id, r.project_id) for r in runs]
         resumed: list[tuple[str, str]] = []
         for run_id, project_id in runinfo:
-            async with session_scope() as s:
+            async with session_scope(write_lock=True) as s:
+                interrupted = await s.get(Run, run_id)
+                interrupted.status = RunStatus.PAUSED.value
                 stuck = (await s.scalars(select(Task).where(
                     Task.run_id == run_id, Task.state == TaskState.RUNNING.value))).all()
                 tids = [t.id for t in stuck]
@@ -622,10 +715,10 @@ class Orchestrator:
                               actor="system:orchestrator")
             await ev.emit("run.recovered", project_id=project_id, run_id=run_id,
                           severity="notice",
-                          title="run resumed after a server restart",
-                          payload={"run_id": run_id, "interrupted_tasks": len(tids)},
+                          title="run paused after a server restart; review before resuming",
+                          payload={"run_id": run_id, "interrupted_tasks": len(tids), "requires_resume": True},
                           actor="system:orchestrator")
-            resumed.append((run_id, project_id))
+            await self._reap_occupancy(project_id)
         return resumed
 
     async def _reap_occupancy(self, project_id: str) -> None:
@@ -652,8 +745,13 @@ class Orchestrator:
                                   result, elapsed_ms: int, route: str, attempts: int) -> None:
         text = result.text or ""
         clean, redactions = _redact(text)
-        async with session_scope() as s:
+        async with session_scope(write_lock=True) as s:
             row = await s.get(Task, task_id)
+            current_run = await s.get(Run, run.id)
+            if row is None or current_run is None or row.state in (
+                TaskState.ABORTED.value, TaskState.COMPLETED.value, TaskState.VERIFYING.value
+            ) or current_run.status in (RunStatus.ABORTED.value, RunStatus.FAILED.value, RunStatus.COMPLETED.value):
+                return
             row.cost_micros += result.cost_micros
             row.tokens_in += result.tokens_in
             row.tokens_out += result.tokens_out
@@ -670,21 +768,17 @@ class Orchestrator:
             r.tokens_in += result.tokens_in
             r.tokens_out += result.tokens_out
             s.add(r)
-        await ev.emit("llm.response", project_id=project.id, run_id=run.id, task_id=task_id,
-                      agent_id=snapshot.id, trace_id=run.trace_id,
-                      title=f"{route} · {result.tokens_in}+{result.tokens_out} tokens",
-                      summary=f"${result.cost_micros / 1e6:.4f} · {elapsed_ms} ms · {result.steps} steps",
-                      payload={"model": route, "tokens_in": result.tokens_in, "tokens_out": result.tokens_out,
-                               "steps": result.steps, "tool_calls": result.tool_calls},
-                      cost_micros=result.cost_micros, tokens_in=result.tokens_in,
-                      tokens_out=result.tokens_out, duration_ms=elapsed_ms,
-                      actor=f"agent:{snapshot.id}")
+        # Each provider generation is already emitted by the accounting gateway.
+        # A task summary must not duplicate billable usage in the event stream.
         if redactions:
             log.warning("redacted %s secret occurrence(s) from task %s output", redactions, task_id)
 
     async def _verify_and_reward(self, run: Run, project: Project, task_id: str, result, attempts: int) -> None:
         async with session_scope() as s:
             task = await s.get(Task, task_id)
+            current_run = await s.get(Run, run.id)
+            if task.state == TaskState.ABORTED.value or current_run.status == RunStatus.ABORTED.value:
+                return
             producer = await s.get(Agent, task.assignee_agent_id) if task.assignee_agent_id else None
             lead = await s.get(Agent, producer.manager_id) if producer and producer.manager_id else None
             head = await s.get(Agent, lead.manager_id) if lead and lead.manager_id else None
@@ -699,8 +793,11 @@ class Orchestrator:
             outcome = await verifier.verify_task(project_id=project.id, task=task,
                                                  result_text=task.result_text, verifier=verifier_agent)
 
-        async with session_scope() as s:
+        async with atomic_scope() as s:
             row = await s.get(Task, task_id)
+            current_run = await s.get(Run, run.id)
+            if row.state in (TaskState.ABORTED.value, TaskState.COMPLETED.value) or current_run.status in (RunStatus.ABORTED.value, RunStatus.FAILED.value):
+                return
             if outcome.passed:
                 row.state = TaskState.COMPLETED.value
                 row.ended_at = datetime.now(UTC)
@@ -710,35 +807,35 @@ class Orchestrator:
                 row.ended_at = datetime.now(UTC)
             s.add(row)
 
-        settled = await reward_engine.settle_task(
-            project_id=project.id, task=task, verdict=outcome.verdict.value, quality=outcome.quality,
-            retries=max(0, attempts_n - 1), est_cost_micros=estimated_cost_micros(effort, "fast"),
-            verifier_id=outcome.verifier_agent_id, lead_id=lead.id if lead else None,
-            head_id=head.id if head else None, orchestrator_id=orchestrator_id,
-            weights=(project.setting("reward_weights", {}) or {}),
-            verifier_contradiction=outcome.contradiction,
-            tool_error_rate=result.tool_error_rate,
-        )
-        if producer is not None and outcome.passed:
-            async with session_scope() as s:
-                t = await s.get(Task, task_id)
-                skill_ids = [r.get("skill") for r in (t.required_skills or []) if r.get("skill")]
-            await reward_engine.grow(agent_id=producer.id, skill_ids=skill_ids,
-                                     reward=_producer_reward(settled),
-                                     effort_weight=Effort(task.effort).weight if task.effort else 1.6,
-                                     task_id=task_id)
+            settled = await reward_engine.settle_task(
+                project_id=project.id, task=task, verdict=outcome.verdict.value, quality=outcome.quality,
+                retries=max(0, attempts_n - 1), est_cost_micros=estimated_cost_micros(effort, "fast"),
+                verifier_id=outcome.verifier_agent_id, lead_id=lead.id if lead else None,
+                head_id=head.id if head else None, orchestrator_id=orchestrator_id,
+                weights=(project.setting("reward_weights", {}) or {}),
+                verifier_contradiction=outcome.contradiction,
+                tool_error_rate=result.tool_error_rate,
+            )
+            if producer is not None and outcome.passed:
+                async with session_scope() as s:
+                    t = await s.get(Task, task_id)
+                    skill_ids = [r.get("skill") for r in (t.required_skills or []) if r.get("skill")]
+                await reward_engine.grow(agent_id=producer.id, skill_ids=skill_ids,
+                                         reward=_producer_reward(settled),
+                                         effort_weight=Effort(task.effort).weight if task.effort else 1.6,
+                                         task_id=task_id)
 
-        await ev.emit("task.completed" if outcome.passed else "task.failed",
-                      project_id=project.id, run_id=run.id, task_id=task_id,
-                      agent_id=producer.id if producer else None, department_id=task.department_id,
-                      squad_id=task.squad_id, severity="info" if outcome.passed else "warning",
-                      title=("completed: " if outcome.passed else "failed: ") + task.title[:60],
-                      summary=f"verdict={outcome.verdict.value} quality={outcome.quality:.2f} "
-                              f"rewards={len(settled)}",
-                      payload={"task_id": task_id, "verdict": outcome.verdict.value,
-                               "quality": outcome.quality, "verifier": outcome.verifier_agent_id,
-                               "rewards": settled},
-                      cost_micros=0, actor=f"agent:{producer.id}" if producer else "system")
+            await ev.emit("task.completed" if outcome.passed else "task.failed",
+                          project_id=project.id, run_id=run.id, task_id=task_id,
+                          agent_id=producer.id if producer else None, department_id=task.department_id,
+                          squad_id=task.squad_id, severity="info" if outcome.passed else "warning",
+                          title=("completed: " if outcome.passed else "failed: ") + task.title[:60],
+                          summary=f"verdict={outcome.verdict.value} quality={outcome.quality:.2f} "
+                                  f"rewards={len(settled)}",
+                          payload={"task_id": task_id, "verdict": outcome.verdict.value,
+                                   "quality": outcome.quality, "verifier": outcome.verifier_agent_id,
+                                   "rewards": settled},
+                          cost_micros=0, actor=f"agent:{producer.id}" if producer else "system")
 
         # failure escalation ladder (docs/03 §5)
         if not outcome.passed:
@@ -769,17 +866,17 @@ class Orchestrator:
         )
         await council.run_round(project_id=project.id, session_id=session["session_id"])
         outcome = await council.decide(project=project, session_id=session["session_id"])
-        async with session_scope() as s:
+        async with session_scope(write_lock=True) as s:
             row = await s.get(Task, task_id)
+            current_run = await s.get(Run, run.id)
+            if current_run.status != RunStatus.RUNNING.value or row.state == TaskState.ABORTED.value:
+                return
             if outcome.chosen_option == "retry_more_budget":
-                row.state = TaskState.ASSIGNED.value
-                row.attempts = 0
-                row.escalation_reason = "council: retry with more budget"
+                row.state = TaskState.ABORTED.value
+                row.escalation_reason = "Attempt limit reached; operator may start a new run after reviewing council advice"
             elif outcome.chosen_option == "reduce_scope":
-                row.acceptance_criteria = (row.acceptance_criteria or [])[:1] or ["A partial deliverable exists"]
-                row.state = TaskState.ASSIGNED.value
-                row.attempts = 0
-                row.escalation_reason = "council: scope reduced"
+                row.state = TaskState.ABORTED.value
+                row.escalation_reason = "Attempt limit reached; operator must approve any reduction in acceptance criteria"
             else:
                 row.state = TaskState.ABORTED.value
                 row.escalation_reason = f"council: {outcome.chosen_option}"
@@ -864,6 +961,7 @@ class Orchestrator:
             r = await s.get(Run, run.id)
         done = [t for t in tasks if t.state == TaskState.COMPLETED.value]
         failed = [t for t in tasks if t.state in (TaskState.FAILED.value, TaskState.ABORTED.value)]
+        success = bool(tasks) and len(done) == len(tasks)
         summary = {
             "goal": run.goal,
             "delivered": [{"task": t.title, "deliverable": t.deliverable,
@@ -887,7 +985,7 @@ class Orchestrator:
                 continue
             if t.state == TaskState.COMPLETED.value:
                 lessons.append({
-                    "agent_id": a.id, "department_id": a.department_id,
+                    "agent_id": a.id, "department_id": a.department_id, "task_id": t.id,
                     "title": f"Worked: {t.title[:60]}",
                     "body": f"Approach that passed verification for '{t.title}'. "
                             f"Effort {t.effort}; cost ${t.cost_micros / 1e6:.4f}. "
@@ -897,7 +995,7 @@ class Orchestrator:
                 })
             elif t.escalation_reason:
                 lessons.append({
-                    "agent_id": a.id, "department_id": a.department_id,
+                    "agent_id": a.id, "department_id": a.department_id, "task_id": t.id,
                     "title": f"Pitfall: {t.title[:60]}",
                     "body": f"Task failed verification: {t.escalation_reason}. "
                             f"Check this before repeating the same approach.",
@@ -916,35 +1014,51 @@ class Orchestrator:
                     brain_id = (project.settings or {}).get("project_brain_id")
                 if not brain_id:
                     continue
-                entry = await brain_service.write(
-                    project_id=project.id, brain_id=brain_id, title=lesson["title"],
-                    body=lesson["body"], kind="lesson",
-                    source={"run_id": run.id, "agent_id": lesson["agent_id"]},
-                    actor=None, importance=lesson["importance"], tags=["learned", run.id[:8]],
-                )
-                summary["lessons"].append(entry["title"])
+                async with atomic_scope():
+                    from crew.core.models import BrainEntry
+
+                    async with session_scope() as s:
+                        current = await s.get(Run, run.id)
+                        if current.status != RunStatus.RUNNING.value:
+                            return RunStage(current.stage)
+                        prior = await s.scalar(select(BrainEntry.id).where(BrainEntry.project_id == project.id,
+                            BrainEntry.brain_id == brain_id, BrainEntry.source["run_id"].as_string() == run.id,
+                            BrainEntry.source["task_id"].as_string() == lesson["task_id"]))
+                    if not prior:
+                        await brain_service.write(
+                            project_id=project.id, brain_id=brain_id, title=lesson["title"],
+                            body=lesson["body"], kind="lesson",
+                            source={"run_id": run.id, "agent_id": lesson["agent_id"], "task_id": lesson["task_id"]},
+                            actor=None, importance=lesson["importance"], tags=["learned", run.id[:8]],
+                        )
+                    summary["lessons"].append(lesson["title"])
             except Exception as e:  # learning must never break a run
                 log.warning("lesson write failed: %s", e)
 
-        async with session_scope() as s:
-            r = await s.get(Run, run.id)
-            r.report = summary
-            r.status = RunStatus.COMPLETED.value if done else RunStatus.FAILED.value
-            r.stage = RunStage.DONE.value
-            r.ended_at = datetime.now(UTC)
-            s.add(r)
-        await ev.emit("run.completed", project_id=project.id, run_id=run.id,
-                      severity="notice" if done else "error",
-                      title=f"run {'completed' if done else 'failed'}: {len(done)}/{len(tasks)} tasks",
-                      summary=f"${summary['cost_usd']:.4f} spent",
-                      payload={"run_id": run.id, "tasks_done": len(done), "tasks_failed": len(failed),
-                               "cost_usd": summary["cost_usd"], "lessons": len(summary["lessons"])},
-                      actor="system:orchestrator")
-        await audit(actor_kind="system", actor_id="orchestrator", action="run.completed",
-                    resource_kind="run", resource_id=run.id,
-                    reason=f"{len(done)}/{len(tasks)} tasks, ${summary['cost_usd']:.4f}")
-        if done:
-            await self._maybe_cadence(project, run)
+        async with atomic_scope():
+            async with session_scope() as s:
+                r = await s.get(Run, run.id)
+                if r.status != RunStatus.RUNNING.value:
+                    return RunStage(r.stage)
+                r.report = summary
+                r.status = RunStatus.COMPLETED.value if success else RunStatus.FAILED.value
+                r.stage = RunStage.DONE.value
+                r.ended_at = datetime.now(UTC)
+            await expire_inactive_approvals(run_id=run.id)
+            await ev.emit("run.completed", project_id=project.id, run_id=run.id,
+                          severity="notice" if success else "error",
+                          title=f"run {'completed' if success else 'failed'}: {len(done)}/{len(tasks)} tasks",
+                          summary=f"${summary['cost_usd']:.4f} spent",
+                          payload={"run_id": run.id, "tasks_done": len(done), "tasks_failed": len(failed),
+                                   "cost_usd": summary["cost_usd"], "lessons": len(summary["lessons"])},
+                          actor="system:orchestrator")
+            await audit(actor_kind="system", actor_id="orchestrator", action="run.completed",
+                        resource_kind="run", resource_id=run.id,
+                        reason=f"{len(done)}/{len(tasks)} tasks, ${summary['cost_usd']:.4f}")
+            if success:
+                async def follow_on():
+                    await self._maybe_cadence(project, run)
+                await after_commit(follow_on)
         return RunStage.DONE
 
     # ── operating cadence ─────────────────────────────────────────────────────
@@ -1003,12 +1117,15 @@ class Orchestrator:
                 pass
 
     # ── controls ───────────────────────────────────────────────────────────────
+    @transactional
     async def pause_project(self, project_id: str, *, actor: str = "user") -> dict:
         async with session_scope() as s:
             p = await s.get(Project, project_id)
             if p is None:
                 raise KeyError(project_id)
             p.status = "paused"
+            await s.execute(update(Run).where(Run.project_id == project_id, Run.status == RunStatus.RUNNING.value)
+                            .values(status=RunStatus.PAUSED.value))
             s.add(p)
         await ev.emit("project.paused", project_id=project_id, severity="notice",
                       title="project paused", payload={"project_id": project_id}, actor=actor)
@@ -1016,33 +1133,87 @@ class Orchestrator:
                     resource_kind="project", resource_id=project_id)
         return {"project_id": project_id, "status": "paused"}
 
+    @transactional
     async def resume_project(self, project_id: str, *, actor: str = "user") -> dict:
         async with session_scope() as s:
             p = await s.get(Project, project_id)
             if p is None:
                 raise KeyError(project_id)
             p.status = "active"
+            runs = (await s.scalars(select(Run).where(Run.project_id == project_id,
+                Run.status.in_([RunStatus.PAUSED.value, RunStatus.PAUSED_BUDGET.value])))).all()
+            for run in runs:
+                run.status = RunStatus.RUNNING.value
+                from crew.core.models import Approval
+
+                waiting = (await s.scalars(select(Task).where(Task.run_id == run.id,
+                    Task.state == "blocked", Task.escalation_reason.like("approval_required:%")))).all()
+                for task in waiting:
+                    approval = await s.get(Approval, task.escalation_reason.split(":", 1)[1])
+                    if approval and approval.state == "expired":
+                        task.state = "assigned" if task.assignee_agent_id else "pending"
+                        task.escalation_reason = ""  # Explicit resume requests a fresh scoped decision.
             s.add(p)
-        budget.close_breaker(project_id)
+        async def resume_after_commit():
+            budget.close_breaker(project_id)
+            for run in runs:
+                if run.id not in self._running:
+                    asyncio.create_task(self.advance(run.id))
+        await after_commit(resume_after_commit)
         await ev.emit("project.resumed", project_id=project_id, severity="notice",
                       title="project resumed", payload={"project_id": project_id}, actor=actor)
         return {"project_id": project_id, "status": "active"}
 
+    @transactional
     async def kill(self, project_id: str, *, actor: str = "user") -> dict:
         budget.open_breaker(project_id)
         async with session_scope() as s:
             runs = (await s.scalars(select(Run).where(Run.project_id == project_id,
-                                                      Run.status == RunStatus.RUNNING.value))).all()
+                                                      Run.status.notin_([RunStatus.COMPLETED.value,
+                                                                         RunStatus.FAILED.value,
+                                                                         RunStatus.ABORTED.value])))).all()
             for r in runs:
                 r.status = RunStatus.ABORTED.value
                 r.ended_at = datetime.now(UTC)
                 s.add(r)
+            await s.execute(update(Task).where(Task.project_id == project_id,
+                Task.state.notin_([TaskState.COMPLETED.value, TaskState.FAILED.value, TaskState.ABORTED.value]))
+                .values(state=TaskState.ABORTED.value, ended_at=datetime.now(UTC)))
         for r in runs:
+            await expire_inactive_approvals(run_id=r.id)
+            from crew.execution.lifecycle import cancel
+
+            async def stop_after_commit(run_id=r.id):
+                await asyncio.to_thread(cancel, run_id)
+            await after_commit(stop_after_commit)
             await ev.emit("run.aborted", project_id=project_id, run_id=r.id, severity="critical",
                           title="run aborted by kill switch", payload={"run_id": r.id}, actor=actor)
         await audit(actor_kind="user", actor_id=actor, action="system.kill", resource_kind="project",
                     resource_id=project_id, reason=f"aborted {len(runs)} run(s)")
         return {"project_id": project_id, "aborted_runs": len(runs)}
+
+    @transactional
+    async def cancel_run(self, run_id: str, *, actor: str = "user") -> dict:
+        from crew.execution.lifecycle import cancel
+
+        async with session_scope(write_lock=True) as s:
+            run = await s.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.status in (RunStatus.COMPLETED.value, RunStatus.FAILED.value, RunStatus.ABORTED.value):
+                return {"run_id": run_id, "status": run.status}
+            run.status, run.ended_at = RunStatus.ABORTED.value, datetime.now(UTC)
+            project_id = run.project_id
+            await s.execute(update(Task).where(Task.run_id == run_id,
+                Task.state.notin_([TaskState.COMPLETED.value, TaskState.FAILED.value, TaskState.ABORTED.value]))
+                .values(state=TaskState.ABORTED.value, ended_at=datetime.now(UTC)))
+        await expire_inactive_approvals(run_id=run_id)
+        async def stop_after_commit():
+            await asyncio.to_thread(cancel, run_id)
+        await after_commit(stop_after_commit)
+        await ev.emit("run.aborted", project_id=project_id, run_id=run_id,
+                      title="run cancelled", payload={"run_id": run_id}, actor=actor)
+        return {"run_id": run_id, "status": "aborted"}
 
     async def kill_all(self, *, actor: str = "user") -> dict:
         async with session_scope() as s:

@@ -22,7 +22,7 @@ from crew.core.models import Agent, AgentSkill, Task
 from crew.core.security import approval_granted, decide_approval, request_approval
 from crew.domain.catalog import SKILLS, RoleSpec
 from crew.domain.enums import Capability, Role, TaskState
-from crew.execution.tools import ToolContext, invoker
+from crew.execution.tools import invoker
 
 
 async def _agent(s, project_id: str, *, name: str, skills: dict[str, float] | None = None,
@@ -97,7 +97,7 @@ async def test_a_granted_approval_covers_its_own_scope_only(bound_loop, project)
 
 
 @pytest.mark.asyncio
-async def test_invoker_uses_a_granted_approval_end_to_end(bound_loop, project, tmp_path):
+async def test_invoker_uses_a_granted_approval_end_to_end(tool_context, bound_loop, project, tmp_path):
     """The loop a human actually sees: gated → approve → the SAME call goes through."""
     async with session_scope() as s:
         a = await _agent(s, project["id"], name="Deleter", grade=5,
@@ -108,7 +108,7 @@ async def test_invoker_uses_a_granted_approval_end_to_end(bound_loop, project, t
     agent.id = agent_id  # detached twin: policy checks read attributes, not the row
     doomed = tmp_path / "doomed.txt"
     doomed.write_text("bye", encoding="utf-8")
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-1", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-1", workspace=tmp_path)
 
     # tools run in a worker thread in production; invoke from one so run_on_loop can block
     r1 = await asyncio.to_thread(invoker.invoke, ctx, "fs_delete", {"path": "doomed.txt"})

@@ -1,4 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useDialogFocus } from './useDialogFocus';
 import { cn } from '../../lib/cn';
 
 export function Drawer({
@@ -18,36 +20,25 @@ export function Drawer({
   footer?: ReactNode;
   width?: string;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    panelRef.current?.focus();
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const panelRef = useDialogFocus(open, onClose);
+  const titleId = useId();
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={panelRef} tabIndex={-1}>
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
         aria-hidden
       />
       <div
-        ref={panelRef}
-        tabIndex={-1}
         style={{ width }}
         className="relative z-10 flex h-full max-w-[92vw] flex-col border-l border-slate-700/70 bg-slate-950/95 shadow-2xl outline-none"
       >
         <header className="flex items-start justify-between gap-3 border-b border-slate-700/60 px-4 py-3">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-slate-100">{title}</h2>
+            <h2 id={titleId} className="truncate text-base font-semibold text-slate-100">{title}</h2>
             {subtitle && <div className="mt-0.5 text-xs text-slate-400">{subtitle}</div>}
           </div>
           <button
@@ -64,7 +55,8 @@ export function Drawer({
           <footer className="border-t border-slate-700/60 px-4 py-2.5">{footer}</footer>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -83,19 +75,13 @@ export function Modal({
   footer?: ReactNode;
   className?: string;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const panelRef = useDialogFocus(open, onClose);
+  const titleId = useId();
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={panelRef} tabIndex={-1}>
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       {/* The scroller is a sibling ABOVE the backdrop: a dialog taller than the window
           can always be scrolled (the panel caps its height and scrolls its body, so
@@ -114,7 +100,7 @@ export function Modal({
             )}
           >
             <header className="flex shrink-0 items-center justify-between border-b border-slate-700/60 px-4 py-3">
-              <h2 className="text-base font-semibold text-slate-100">{title}</h2>
+              <h2 id={titleId} className="text-base font-semibold text-slate-100">{title}</h2>
               <button
                 type="button"
                 onClick={onClose}
@@ -133,6 +119,7 @@ export function Modal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

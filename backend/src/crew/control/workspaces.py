@@ -28,7 +28,7 @@ _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 def sanitize_folder(name: str) -> str:
     """A folder-name-safe version of a company/project name. Never empty, never traversing."""
-    cleaned = _ILLEGAL.sub(" ", name or "").strip().strip(".")
+    cleaned = _ILLEGAL.sub(" ", name or "").replace(",", " ").strip().strip(".")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned or "unnamed"
 
@@ -42,7 +42,7 @@ def company_root(company: Project) -> Path:
     chosen = str((company.settings or {}).get("workspace_root") or "").strip()
     if chosen:
         return Path(chosen).expanduser().resolve()
-    return default_root() / sanitize_folder(company.name)
+    return default_root() / f"{sanitize_folder(company.name)}-{company.id}"
 
 
 def validate_company_path(raw: str) -> str:
@@ -52,6 +52,8 @@ def validate_company_path(raw: str) -> str:
     if not p.is_absolute():
         raise ValueError("workspace path must be absolute")
     p = p.resolve()
+    if settings.sandbox_url and not p.is_relative_to(settings.default_workspace_root.resolve()):
+        raise ValueError("Docker workspaces must stay inside the dedicated workspace volume")
     p.mkdir(parents=True, exist_ok=True)
     return str(p)
 
@@ -83,9 +85,9 @@ async def allocate_project_workspace(project_id: str, *, company_id: str | None 
             company = await s.get(Project, company_id)
             if company is None or company.kind != "company":
                 raise KeyError(company_id)
-            path = company_root(company) / sanitize_folder(project.name)
+            path = company_root(company) / f"{sanitize_folder(project.name)}-{project.id}"
         else:
-            path = settings.workspace_dir(project.id)
+            path = default_root() / "standalone" / project.id if settings.sandbox_url else settings.workspace_dir(project.id)
         path.mkdir(parents=True, exist_ok=True)
         if not existing:
             project.settings = {**(project.settings or {}), "workspace": str(path)}

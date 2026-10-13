@@ -68,6 +68,7 @@ export interface CommandAck {
 // ─── System & auth ───────────────────────────────────────────────────────────
 
 export interface Health {
+  offline_llm: boolean;
   status: string;
   version: string;
   contract: number;
@@ -291,6 +292,7 @@ export interface CompanyBrainsPage {
 /** Founding a company (POST /found, ADR 0015): company + first project under it +
  * the first run, in one call. */
 export interface FoundInput {
+  idempotency_key?: string;
   name: string;
   mission?: string;
   budget_usd?: number;
@@ -318,6 +320,8 @@ export interface CompanyReview {
 }
 
 export interface Project {
+  active_run?: boolean;
+  run_status?: string | null;
   id: string;
   name: string;
   slug?: string;

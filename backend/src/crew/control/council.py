@@ -40,15 +40,18 @@ class CouncilOutcome:
     confidence: float
 
 
-def _llm_json(model_tier: ModelTier, system: str, user: str) -> dict | None:
+async def _llm_json(model_tier: ModelTier, system: str, user: str, *, project_id: str) -> dict | None:
+    from crew.core.db import in_transaction
+    if in_transaction():
+        return None  # Bootstrap does not bill inside a database transaction.
     model = router.model_for_tier(model_tier)
     if not settings.provider_key_for(model) or settings.offline_llm:
         return None
     try:
-        from crewai import LLM
+        from crew.execution.gateway import complete
 
-        llm = LLM(model=model, temperature=0.2, api_key=settings.provider_key_for(model))
-        raw = llm.call(messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
+        raw = await complete(project_id=project_id, model=model,
+                             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
         m = re.search(r"\{.*\}", str(raw), re.S)
         return json.loads(m.group(0)) if m else None
     except Exception as e:
@@ -170,7 +173,8 @@ class CouncilService:
                 "round": session_round,
                 "strongest_counter_argument": (strongest or {}).get("claim") if session_round > 1 else None,
             })
-            data = _llm_json(ModelTier.REASONING, POSITION_PROMPT.format(name=a.name, role=a.role), user)
+            data = await _llm_json(ModelTier.REASONING, POSITION_PROMPT.format(name=a.name, role=a.role), user,
+                                   project_id=project_id)
             if data is None:   # deterministic fallback: argue from skills, flag no evidence
                 data = {
                     "option_id": (options[0] or {}).get("id", "a"),
@@ -236,9 +240,9 @@ class CouncilService:
             if p["option_id"] in tally:
                 tally[p["option_id"]] += max(0.05, p["confidence"])
 
-        data = _llm_json(ModelTier.REASONING, DECISION_PROMPT, json.dumps({
+        data = await _llm_json(ModelTier.REASONING, DECISION_PROMPT, json.dumps({
             "question": sess.question, "options": sess.options, "positions": positions,
-            "tally": tally, "criteria": sess.criteria}))
+            "tally": tally, "criteria": sess.criteria}), project_id=project.id)
         if data is None:
             chosen = max(tally, key=lambda k: tally[k]) if tally else option_ids[0]
             dissent = [{"agent_id": p["agent_id"], "claim": p["claim"], "confidence": p["confidence"]}

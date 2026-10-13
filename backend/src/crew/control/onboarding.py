@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from crew.core.db import atomic_scope
 from crew.core.security import vault
 from crew.core.settings import settings
 
@@ -39,7 +40,7 @@ PROVIDERS: dict[str, tuple[str, str, str | None]] = {
     "anthropic": ("ANTHROPIC_API_KEY", "anthropic_api_key",
                   "https://api.anthropic.com/v1/models"),
     "openrouter": ("OPENROUTER_API_KEY", "openrouter_api_key",
-                   "https://openrouter.ai/api/v1/models"),
+                   "https://openrouter.ai/api/v1/key"),
     # Local Ollama: the "key" slot carries its base URL; there is no secret. The
     # cloud side deliberately has no entry here — it is reached through OpenRouter.
     "ollama": ("OLLAMA_BASE_URL", "ollama_base_url", None),
@@ -74,9 +75,9 @@ PROVIDER_PRESETS: dict[str, dict[str, str]] = {
                  "fast": "deepseek/deepseek-flash"},
     "openai": {"reasoning": "openai/gpt-4o", "standard": "openai/gpt-4o-mini",
                "fast": "openai/gpt-4o-mini", "embed": "openai/text-embedding-3-small"},
-    "anthropic": {"reasoning": "anthropic/claude-sonnet", "standard": "anthropic/claude-3-5-haiku",
-                  "fast": "anthropic/claude-3-5-haiku"},
-    "openrouter": {"reasoning": "openrouter/anthropic/claude-sonnet",
+    "anthropic": {"reasoning": "anthropic/claude-sonnet-4-6", "standard": "anthropic/claude-haiku-4-5-20251001",
+                  "fast": "anthropic/claude-haiku-4-5-20251001"},
+    "openrouter": {"reasoning": "openrouter/anthropic/claude-sonnet-4.6",
                    "standard": "openrouter/openai/gpt-4o-mini",
                    "fast": "openrouter/openai/gpt-4o-mini"},
     "ollama": {"reasoning": "ollama/llama3.2", "standard": "ollama/llama3.2",
@@ -128,22 +129,24 @@ async def verify(provider: str, key: str) -> tuple[bool, str]:
         with contextlib.suppress(Exception):
             models = [m.get("name", "?") for m in (r.json().get("models") or [])]
         if not models:
-            return True, f"Ollama is up at {base} — no models pulled yet (`ollama pull` first)"
+            return False, f"Ollama is up at {base}, but no models are installed. Run `ollama pull llama3.2`."
+        if not any(name.split(":")[0] == "llama3.2" for name in models):
+            return False, "The selected model is missing. Run `ollama pull llama3.2` first."
         return True, f"Ollama is up at {base} — {len(models)} model(s) available"
 
     endpoint = PROVIDERS[provider][2]
     if endpoint is None:
-        return True, "saved; no live check exists for this provider"
+        return False, "no verification check exists for this provider; configure it through the environment"
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(endpoint, headers=_headers(provider, key))
     except httpx.HTTPError as e:
-        return True, f"saved; couldn't reach the provider to verify ({type(e).__name__})"
+        return False, f"couldn't verify the provider ({type(e).__name__}); check connectivity and retry"
     if r.status_code == 200:
         return True, "key verified against the provider"
     if r.status_code in (401, 403):
         return False, "the provider rejected this key"
-    return True, f"saved; the provider answered {r.status_code} to the check"
+    return False, f"provider verification failed with status {r.status_code}; retry before switching to Live"
 
 
 def apply_presets(provider: str) -> dict[str, str]:
@@ -167,20 +170,26 @@ def apply_presets(provider: str) -> dict[str, str]:
 
 
 async def save_provider_key(provider: str, key: str, actor: str = "user") -> dict:
+    await _require_no_active_runs()
     key = key.strip()
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider '{provider}'")
     if provider == "ollama":
         key = normalize_ollama_base(key)
+    elif len(key) < 8:
+        raise ValueError("provider key must contain at least eight characters")
     ok, detail = await verify(provider, key)
     if not ok:
         raise PermissionError(detail)
-    await vault.create(name=secret_name(provider), value=key, scope_kind="global",
-                       scope_id="", actor=actor)
-    env_var, field, _ = PROVIDERS[provider]
-    os.environ[env_var] = key          # CrewAI / LiteLLM read the env at call time
-    setattr(settings, field, key)      # and our own routing sees it immediately
-    tiers = apply_presets(provider)
+    async with atomic_scope():
+        # Verification yields to other requests. A run may have started meanwhile.
+        await _require_no_active_runs()
+        await vault.create(name=secret_name(provider), value=key, scope_kind="global",
+                           scope_id="", actor=actor)
+        env_var, field, _ = PROVIDERS[provider]
+        os.environ[env_var] = key          # CrewAI / LiteLLM read the env at call time
+        setattr(settings, field, key)      # and our own routing sees it immediately
+        tiers = apply_presets(provider)
     log.info("provider configured and active: %s", provider)
     return {"provider": provider, "verified": ok, "detail": detail, "tiers": tiers}
 
@@ -205,7 +214,61 @@ async def load_vault_provider_keys() -> list[str]:
         if os.environ.get(f"CREW_TIER_{name.upper()}"):
             continue  # an explicit env pin wins over the stored choice
         setattr(settings, f"tier_{name}", model)
+    try:
+        mode = json.loads((settings.data_path / "runtime-mode.json").read_text(encoding="utf-8"))["mode"]
+        if mode in ("demo", "live"):
+            settings.offline_llm = mode == "demo"
+            from crew.control.orchestrator import orchestrator
+            from crew.execution.runner import select_runner
+            orchestrator.runner = select_runner()
+    except (OSError, ValueError, KeyError):
+        pass
     return loaded
+
+
+async def _require_no_active_runs() -> None:
+    from sqlalchemy import select
+
+    from crew.core.db import session_scope
+    from crew.core.models import Run
+
+    async with session_scope() as s:
+        active = await s.scalar(select(Run.id).where(Run.status.notin_(["completed", "failed", "aborted"])).limit(1))
+    if active:
+        raise ValueError("Finish or cancel active and paused runs before changing the provider or execution mode")
+
+
+async def set_mode(mode: str) -> dict:
+    if mode not in ("demo", "live"):
+        raise ValueError("mode must be demo or live")
+    await _require_no_active_runs()
+    verified_model = settings.tier_standard
+    verified_key = settings.provider_key_for(verified_model)
+    if mode == "live":
+        provider = provider_of(settings.tier_standard)
+        if provider not in PROVIDERS:
+            raise ValueError("Select a supported provider first")
+        key = settings.provider_key_for(settings.tier_standard)
+        if not key:
+            raise ValueError("Connect a provider before enabling Live")
+        ok, detail = await verify(provider, settings.ollama_base_url if provider == "ollama" else key)
+        if not ok:
+            raise ValueError(detail)
+    from crew.control.orchestrator import orchestrator
+    from crew.execution.runner import select_runner
+
+    async with atomic_scope():
+        await _require_no_active_runs()
+        if mode == "live" and (settings.tier_standard != verified_model
+                               or settings.provider_key_for(verified_model) != verified_key):
+            raise ValueError("Provider changed during verification; retry enabling Live")
+        target = settings.data_path / "runtime-mode.json"
+        temporary = target.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"mode": mode}), encoding="utf-8")
+        temporary.replace(target)
+        settings.offline_llm = mode == "demo"
+        orchestrator.runner = select_runner()
+    return state()
 
 
 def state() -> dict:

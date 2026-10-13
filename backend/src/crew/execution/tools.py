@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,8 +24,17 @@ from crew.control import backlog, inbox
 from crew.control import security_review as sreview
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Project, Task, WorkItem
-from crew.core.security import approval_granted, audit, policy, redactor, request_approval, scan_injection
+from crew.core.models import Agent, Project, Run, Task, WorkItem
+from crew.core.security import (
+    approval_granted,
+    audit,
+    invocation_hash,
+    policy,
+    redactor,
+    request_approval,
+    scan_injection,
+)
+from crew.core.settings import settings
 from crew.domain.enums import Capability, PolicyOutcome
 
 log = logging.getLogger("crew.tools")
@@ -52,6 +62,10 @@ class ToolContext:
         return f"agent:{self.agent.id}" if self.agent else "system"
 
 
+class ToolApprovalPending(RuntimeError):
+    """A bounded worker must yield to the operator before another generation."""
+
+
 def run_on_loop(coro, timeout: float = 30.0):
     """Run an async coroutine from a worker thread on the server loop."""
     loop = ev.current_loop()
@@ -61,12 +75,23 @@ def run_on_loop(coro, timeout: float = 30.0):
 
 
 def _jailed(ctx: ToolContext, rel: str) -> Path:
-    """Path containment for fs tools (docs/08 §4: realpath containment, symlink-safe)."""
-    root = (ctx.workspace or Path.cwd()).resolve()
+    """Only relative paths below an explicitly assigned workspace are accepted."""
+    if ctx.workspace is None:
+        raise PermissionError("no project workspace assigned")
+    root = ctx.workspace.resolve()
     root.mkdir(parents=True, exist_ok=True)
+    if Path(rel).is_absolute() or Path(rel).drive:
+        raise PermissionError("absolute paths are not permitted")
     candidate = (root / rel).resolve()
-    if not str(candidate).startswith(str(root)):
+    if not candidate.is_relative_to(root):
         raise PermissionError(f"path escapes the project workspace: {rel}")
+    # Refuse links/reparse points, including links that currently point inward.
+    # Their targets must never be a second, mutable source of authority.
+    current = root
+    for part in Path(rel).parts:
+        current = current / part
+        if current.is_symlink() or current.is_junction():
+            raise PermissionError("workspace links are not permitted")
     return candidate
 
 
@@ -82,21 +107,18 @@ def _truncate(data: Any) -> Any:
 # ── handlers ─────────────────────────────────────────────────────────────────────────
 def _search_page(query: str) -> str:
     """The raw DuckDuckGo SERP. Factored out so tests can fake the network (ADR 0017)."""
-    import httpx
+    from urllib.parse import urlencode
 
-    with httpx.Client(timeout=20, follow_redirects=True) as c:
-        r = c.get("https://html.duckduckgo.com/html/", params={"q": query},
-                  headers={"User-Agent": "crew-agent/0.1"})
-    return r.text
+    from crew.execution.http import fetch_public
+
+    return fetch_public("https://html.duckduckgo.com/html/?" + urlencode({"q": query}))[1]
 
 
-def _fetch_url(url: str) -> tuple[int, str, str]:
+def _fetch_url(url: str, project: Project | None = None) -> tuple[int, str, str]:
     """One GET, no redirect tail-chasing beyond 5 hops. Factored out for tests."""
-    import httpx
+    from crew.execution.http import fetch_public
 
-    with httpx.Client(timeout=20, follow_redirects=True, max_redirects=5) as c:
-        r = c.get(url, headers={"User-Agent": "crew-agent/0.1"})
-    return r.status_code, r.text, str(r.url)
+    return fetch_public(url, project)
 
 
 def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict:
@@ -106,7 +128,7 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
        "response": dict|None}. Risky content is quarantined and an approval is filed —
     the agent never sees it before a human releases it.
     """
-    review = sreview.review_content(text, url=url, kind=kind)
+    review = run_on_loop(sreview.review_content(text, url=url, kind=kind, project_id=ctx.project_id), timeout=150)
     run_on_loop(ev.emit("security.content.reviewed", project_id=ctx.project_id,
                         severity="warning" if review.risky else "info",
                         title=f"content reviewed ({review.verdict}): {url[:70]}",
@@ -118,7 +140,7 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
         return {"outcome": "clean", "review": review, "body": None, "response": None}
     released = run_on_loop(sreview.release_for_content(
         ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, url=url,
-        task_id=ctx.task_id))
+        task_id=ctx.task_id, run_id=ctx.run_id))
     if released:
         body = sreview.load_quarantined(released)
         if body is not None:
@@ -135,7 +157,7 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
     meta = sreview.quarantine_content(ctx.project_id, url=url, text=text, review=review)
     response = run_on_loop(sreview.gate_content(
         ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
-        url=url, kind=kind, review=review, meta=meta))
+        url=url, kind=kind, review=review, meta=meta, run_id=ctx.run_id))
     return {"outcome": "gated", "review": review, "body": None, "response": response}
 
 
@@ -195,7 +217,7 @@ def h_http_get(ctx: ToolContext, args: dict) -> dict:
                             agent_id=ctx.agent.id if ctx.agent else None))
         return {"ok": False, "error": f"egress_denied: {decision.reason}"}
     try:
-        status, raw, final_url = _fetch_url(url)
+        status, raw, final_url = _fetch_url(url, ctx.project)
     except Exception as e:
         return {"ok": False, "error": f"fetch failed: {type(e).__name__}: {e}"}
     body = raw[:MAX_BYTES]
@@ -234,7 +256,11 @@ def h_fs_read(ctx: ToolContext, args: dict) -> dict:
     p = _jailed(ctx, rel)
     if not p.exists():
         return {"ok": False, "error": f"not found: {rel}"}
-    return {"ok": True, "data": _truncate(p.read_text(encoding="utf-8", errors="replace"))}
+    if p.stat().st_size > 2_000_000:
+        return {"ok": False, "error": "file exceeds the supported read size (2 MB)"}
+    with p.open(encoding="utf-8", errors="replace") as stream:
+        data = stream.read(MAX_BYTES + 1)
+    return {"ok": True, "data": _truncate(data)}
 
 
 def h_fs_list(ctx: ToolContext, args: dict) -> dict:
@@ -249,6 +275,8 @@ def h_fs_list(ctx: ToolContext, args: dict) -> dict:
 def h_fs_delete(ctx: ToolContext, args: dict) -> dict:
     rel = str(args.get("path", ""))
     p = _jailed(ctx, rel)
+    if p == ctx.workspace.resolve():
+        raise PermissionError("the workspace root cannot be deleted")
     if p.is_dir():
         shutil.rmtree(p)
     elif p.exists():
@@ -258,19 +286,50 @@ def h_fs_delete(ctx: ToolContext, args: dict) -> dict:
 
 def _sandbox_available() -> bool:
     """Execution happens in the container or not at all (ADR 0017)."""
-    return bool(shutil.which("docker"))
+    if settings.sandbox_url:
+        from crew.execution.sandbox_client import available
+        return available()
+    if not shutil.which("docker"):
+        return False
+    try:
+        return subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"],
+                              capture_output=True, timeout=5, check=False).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def _run_in_container(*, workspace: Path, argv: list[str], timeout: int) -> subprocess.CompletedProcess:
     """The one way a command runs: no network, read-only root, tmpfs /tmp, capped,
     the project workspace at /work and nothing else mounted. Factored out so tests
     can stub the execution while still exercising the gate."""
-    name = f"crew-{os.urandom(4).hex()}"
-    full = ["docker", "run", "--rm", "--name", name, "--network", "none",
+    from crew.execution import lifecycle
+    from crew.execution.process import run_bounded
+
+    lifecycle.check_cancelled()
+    if settings.sandbox_url:
+        from crew.execution.sandbox_client import run
+        return run(workspace, argv, timeout, lifecycle.current_run.get())
+    name = f"crew-{os.urandom(8).hex()}"
+    full = ["docker", "create", "--rm", "--name", name, "--network", "none",
             "--read-only", "--tmpfs", "/tmp", "--memory", "1g", "--cpus", "1",
-            "--pids-limit", "256", "-v", f"{workspace}:/work", "-w", "/work",
+            "--pids-limit", "256", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+            "-v", f"{workspace}:/work", "-w", "/work",
             SANDBOX_IMAGE] + argv
-    return subprocess.run(full, capture_output=True, text=True, timeout=timeout)
+    lifecycle.register_container(name)
+    try:
+        lifecycle.check_cancelled()
+        created = run_bounded(full, 60)
+        if created.returncode:
+            return created
+        lifecycle.check_cancelled()
+        return run_bounded(["docker", "start", "-a", name], timeout)
+    finally:
+        try:
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        finally:
+            lifecycle.unregister_container(name)
 
 
 def _command_gate(ctx: ToolContext, *, tool: str, capability: str, cmd: str) -> dict | None:
@@ -290,13 +349,13 @@ def _command_gate(ctx: ToolContext, *, tool: str, capability: str, cmd: str) -> 
         if review.risky:
             released = run_on_loop(sreview.release_for_command(
                 ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, norm=norm,
-                capability=capability, task_id=ctx.task_id))
+                capability=capability, task_id=ctx.task_id, run_id=ctx.run_id))
             if released is not None:
                 allowed_via = "approval"
             else:
                 return run_on_loop(sreview.gate_command(
                     ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None,
-                    task_id=ctx.task_id, tool=tool, capability=capability, cmd=cmd, review=review))
+                    task_id=ctx.task_id, tool=tool, capability=capability, cmd=cmd, review=review, run_id=ctx.run_id))
     if allowed_via:
         run_on_loop(ev.emit("security.command.allowed", project_id=ctx.project_id,
                             severity="notice", title=f"command allowed via {allowed_via}",
@@ -398,31 +457,48 @@ def h_brain_write(ctx: ToolContext, args: dict) -> dict:
 
 def h_artifact_publish(ctx: ToolContext, args: dict) -> dict:
     name = Path(str(args.get("name", "artifact.txt"))).name
-    content = str(args.get("content", ""))
-    root = (ctx.artifacts or (ctx.workspace or Path.cwd())) / (ctx.task_id or "task")
+    source = args.get("source_path")
+    if source is not None:
+        if "content" in args:
+            return {"ok": False, "error": "provide source_path or content, not both"}
+        # Publishing a workspace file also requires current filesystem authority.
+        # Re-enter the normal invoker so project policy and exact approvals apply.
+        checked = invoker.invoke(ctx, "fs_read", {"path": source})
+        if not checked.get("ok"):
+            return checked
+        data = _jailed(ctx, str(source)).read_bytes()
+    else:
+        if "content" not in args:
+            return {"ok": False, "error": "content or source_path is required"}
+        data = str(args["content"]).encode("utf-8")
+    # A retry may replace a logical deliverable, but published evidence is immutable.
+    root = (ctx.artifacts or (ctx.workspace or Path.cwd())) / (ctx.task_id or "task") / os.urandom(16).hex()
     root.mkdir(parents=True, exist_ok=True)
     p = root / name
     # Byte-exact write: text mode mangles \n to \r\n on Windows, and the recorded
     # sha256 must describe the bytes actually stored (downloads verify against it).
-    p.write_bytes(content.encode("utf-8"))
+    p.write_bytes(data)
     import hashlib
-    digest = hashlib.sha256(content.encode()).hexdigest()
-    nbytes = len(content.encode("utf-8"))
-    run_on_loop(_record_artifact(ctx, name, p, nbytes, digest))
-    return {"ok": True, "data": {"name": name, "path": str(p), "sha256": digest, "bytes": len(content)}}
+    digest = hashlib.sha256(data).hexdigest()
+    nbytes = len(data)
+    run_on_loop(_record_artifact(ctx, name, p, nbytes, digest, source_path=str(source) if source is not None else None))
+    return {"ok": True, "data": {"name": name, "path": str(p), "sha256": digest, "bytes": nbytes}}
 
 
-async def _record_artifact(ctx: ToolContext, name: str, path: Path, size: int, digest: str) -> None:
+async def _record_artifact(ctx: ToolContext, name: str, path: Path, size: int, digest: str,
+                           source_path: str | None = None) -> None:
     from crew.core.db import session_scope
     from crew.core.models import Artifact
 
     async with session_scope() as s:
         s.add(Artifact(project_id=ctx.project_id, task_id=ctx.task_id,
                        agent_id=ctx.agent.id if ctx.agent else None, kind="file", path=str(path),
-                       bytes=size, sha256=digest, meta={"name": name}))
+                       bytes=size, sha256=digest, meta={"name": name,
+                           **({"source_path": source_path} if source_path is not None else {})}))
     await ev.emit("artifact.published", project_id=ctx.project_id, task_id=ctx.task_id,
                   agent_id=ctx.agent.id if ctx.agent else None, title=f"artifact: {name}",
-                  payload={"name": name, "sha256": digest, "bytes": size})
+                  run_id=ctx.run_id, payload={"name": name, "sha256": digest, "bytes": size,
+                                            "source_path": source_path})
 
 
 def h_ask_colleague(ctx: ToolContext, args: dict) -> dict:
@@ -647,7 +723,7 @@ TOOLS: dict[str, ToolSpec] = {
     "shell_run": ToolSpec("shell_run", "Run a shell command in the sandboxed workspace.",
                           Capability.SHELL_SANDBOX, _schema({"cmd": {"type": "string"},
                                                              "timeout_s": {"type": "integer"}}, ["cmd"]), h_shell_run),
-    "python_eval": ToolSpec("python_eval", "Execute Python in the workspace.",
+    "python_eval": ToolSpec("python_eval", "Execute Python in an isolated interpreter with the project workspace as cwd. Local imports require adding '.' to sys.path; alternatively run project tests with subprocess.run(['python', '-m', 'unittest', 'TEST_FILE'], capture_output=True, text=True).",
                             Capability.CODE_PYTHON, _schema({"code": {"type": "string"}}, ["code"]), h_python_eval),
     "brain_search": ToolSpec("brain_search", "Search the organization's memory.",
                              Capability.BRAIN_READ, _schema({"query": {"type": "string"}}, ["query"]), h_brain_search),
@@ -655,10 +731,11 @@ TOOLS: dict[str, ToolSpec] = {
                             Capability.BRAIN_WRITE, _schema({"title": {"type": "string"}, "body": {"type": "string"},
                                                              "kind": {"type": "string"}},
                                                             ["title", "body"]), h_brain_write),
-    "artifact_publish": ToolSpec("artifact_publish", "Publish a deliverable artifact.",
+    "artifact_publish": ToolSpec("artifact_publish", "Publish a deliverable. Prefer source_path for an existing workspace file; otherwise provide content. Supply one, not both.",
                                  Capability.ARTIFACT_PUBLISH, _schema({"name": {"type": "string"},
-                                                                       "content": {"type": "string"}},
-                                                                      ["name", "content"]), h_artifact_publish),
+                                                                       "content": {"type": "string"},
+                                                                       "source_path": {"type": "string"}},
+                                                                      ["name"]), h_artifact_publish),
     "ask_colleague": ToolSpec("ask_colleague", "Ask another agent a question.",
                               Capability.COMMS_ASK, _schema({"agent": {"type": "string"},
                                                              "question": {"type": "string"}},
@@ -701,10 +778,32 @@ def tools_for_agent(agent: Agent | None) -> list[str]:
 class ToolInvoker:
     """The single choke point for tool side effects."""
 
+    def __init__(self):
+        self._guard = threading.Lock()
+        self._workspace_locks: dict[str, threading.RLock] = {}
+
     def invoke(self, ctx: ToolContext, name: str, args: dict) -> dict:
+        # A sandbox command can create symlinks. Serialize it with file-tool calls
+        # so another agent cannot swap a checked path while a read/write is pending.
+        key = ctx.project_id
+        with self._guard:
+            lock = self._workspace_locks.setdefault(key, threading.RLock())
+        if not lock.acquire(timeout=150):
+            return {"ok": False, "error": "workspace busy; retry later"}
+        try:
+            return self._invoke(ctx, name, args)
+        finally:
+            lock.release()
+
+    def _invoke(self, ctx: ToolContext, name: str, args: dict) -> dict:
         spec = TOOLS.get(name)
         if spec is None:
             return {"ok": False, "error": f"unknown tool: {name}"}
+        try:
+            run_on_loop(self._refresh_authority(ctx))
+        except (PermissionError, KeyError) as exc:
+            self._denied(ctx, name, spec.capability, str(exc))
+            return {"ok": False, "error": "policy_denied", "detail": str(exc)}
         if ctx.agent is not None and spec.capability.value not in set(ctx.agent.tools or []):
             decision_reason = f"{spec.capability.value} not granted"
             self._denied(ctx, name, spec.capability, decision_reason)
@@ -715,12 +814,14 @@ class ToolInvoker:
             self._denied(ctx, name, spec.capability, decision.reason)
             return {"ok": False, "error": "policy_denied", "detail": decision.reason}
         if decision.outcome == PolicyOutcome.REQUIRE_APPROVAL:
+            invocation = {"tool": name, "args": args, "run_id": ctx.run_id}
             # The gate opens when a decision is ALREADY on file. Without this half the
             # human's "granted" was recorded and then ignored: the retried call was denied
             # forever and the approval queue was theatre (docs/17 batch 1).
             if run_on_loop(approval_granted(ctx.project_id,
                                             agent_id=ctx.agent.id if ctx.agent else None,
-                                            capability=spec.capability.value, task_id=ctx.task_id)):
+                                            capability=spec.capability.value, task_id=ctx.task_id,
+                                            invocation=invocation)):
                 run_on_loop(ev.emit("policy.approval.used", project_id=ctx.project_id, task_id=ctx.task_id,
                                     agent_id=ctx.agent.id if ctx.agent else None, severity="notice",
                                     title=f"approval on file: {spec.capability.value}",
@@ -729,7 +830,8 @@ class ToolInvoker:
                 approval_id = run_on_loop(request_approval(
                     ctx.project_id, capability=spec.capability.value,
                     agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
-                    request={"tool": name, "args": {k: str(v)[:200] for k, v in args.items()}},
+                    request={"tool": name, "args": redactor.clean(args),
+                             "invocation_hash": invocation_hash(invocation), "use": "once", "run_id": ctx.run_id},
                 ))
                 run_on_loop(ev.emit("policy.approval.requested", project_id=ctx.project_id, task_id=ctx.task_id,
                                     agent_id=ctx.agent.id if ctx.agent else None, severity="warning",
@@ -745,7 +847,14 @@ class ToolInvoker:
                             payload={"tool": name, "args": {k: str(v)[:400] for k, v in args.items()}},
                             actor=ctx.actor))
         try:
-            result = spec.handler(ctx, args)
+            from crew.execution import lifecycle
+
+            token = lifecycle.current_run.set(ctx.run_id)
+            try:
+                lifecycle.check_cancelled()
+                result = spec.handler(ctx, args)
+            finally:
+                lifecycle.current_run.reset(token)
         except Exception as e:  # a tool must never kill the run
             log.exception("tool %s failed", name)
             result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
@@ -755,14 +864,60 @@ class ToolInvoker:
             run_on_loop(ev.emit("security.secret.redaction", project_id=ctx.project_id,
                                 severity="warning", title=f"{redactions} secret(s) redacted from {name} output",
                                 payload={"tool": name, "count": redactions}))
+        receipt = {}
+        if name in ("shell_run", "python_eval"):
+            receipt = {"execution": json.loads(clean).get("data", {}), "invocation": redactor.clean(args),
+                       "invocation_hash": invocation_hash({"tool": name, "args": args, "run_id": ctx.run_id})}
         run_on_loop(ev.emit("agent.tool.result", project_id=ctx.project_id, task_id=ctx.task_id,
                             run_id=ctx.run_id, agent_id=ctx.agent.id if ctx.agent else None,
                             trace_id=ctx.trace_id, title=f"tool result: {name}",
                             summary=clean[:400],
                             payload={"tool": name, "ok": bool(result.get("ok")),
-                                     "untrusted": bool(spec.untrusted or result.get("untrusted"))},
+                                     "untrusted": bool(spec.untrusted or result.get("untrusted")), **receipt},
                             severity="info" if result.get("ok") else "warning", actor=ctx.actor))
         return json.loads(clean)
+
+    @staticmethod
+    async def _refresh_authority(ctx: ToolContext) -> None:
+        """Worker snapshots cannot grant authority after an operator changes policy."""
+        async with session_scope() as s:
+            project = await s.get(Project, ctx.project_id)
+            if project is None:
+                raise PermissionError("project no longer exists")
+            if project.status != "active":
+                raise PermissionError("project is not active")
+            agent = await s.get(Agent, ctx.agent.id) if ctx.agent is not None else None
+            if agent is None or agent.project_id != project.id or agent.archived_at is not None:
+                raise PermissionError("agent is not active in this project")
+            run = await s.get(Run, ctx.run_id) if ctx.run_id else None
+            if run is None or run.project_id != project.id or run.status != "running":
+                raise PermissionError("run is not active in this project")
+            task = await s.get(Task, ctx.task_id) if ctx.task_id else None
+            if (task is None or task.project_id != project.id or task.run_id != run.id
+                    or task.state in ("aborted", "completed", "failed")):
+                raise PermissionError("task is not active in this run")
+            others = (await s.scalars(select(Project).where(Project.id != project.id, Project.kind == "project"))).all()
+            await asyncio.to_thread(ToolInvoker._bind_paths, ctx, project, others)
+            ctx.project, ctx.agent = project, agent
+
+    @staticmethod
+    def _bind_paths(ctx, project, others):
+        from crew.control.workspaces import resolve_workspace
+
+        workspace = resolve_workspace(project).resolve()
+        if ctx.workspace is not None and ctx.workspace.resolve() != workspace:
+            raise PermissionError("workspace does not match the project's recorded path")
+        artifacts = settings.artifacts_dir(project.id).resolve()
+        if ctx.artifacts is not None and ctx.artifacts.resolve() != artifacts:
+            raise PermissionError("artifact directory does not match this project")
+        # Legacy name-based allocations can overlap. Refuse access until an
+        # operator separates them; never silently move or merge user files.
+        for other in others:
+            raw = (other.settings or {}).get("workspace")
+            other_path = Path(raw).resolve() if raw else settings.workspace_dir(other.id).resolve()
+            if workspace.is_relative_to(other_path) or other_path.is_relative_to(workspace):
+                raise PermissionError("workspace overlaps another project; separate the recorded paths before running")
+        ctx.workspace, ctx.artifacts = workspace, artifacts
 
     @staticmethod
     def _denied(ctx: ToolContext, name: str, cap: Capability, reason: str) -> None:
@@ -787,7 +942,9 @@ def build_crewai_tools(ctx: ToolContext) -> list[Any]:
     out: list[Any] = []
     for name in tools_for_agent(ctx.agent):
         spec = TOOLS[name]
-        fields = {prop: (_PY_TYPES.get(cfg.get("type", "string"), str), ...)
+        required = set(spec.schema.get("required", []))
+        fields = {prop: ((_PY_TYPES.get(cfg.get("type", "string"), str), ...) if prop in required else
+                         (_PY_TYPES.get(cfg.get("type", "string"), str) | None, None))
                   for prop, cfg in spec.schema.get("properties", {}).items()}
         args_model = create_model(f"{name}_args", **fields)
 
@@ -801,7 +958,10 @@ def build_crewai_tools(ctx: ToolContext) -> list[Any]:
                 args_schema: type = schema_cls
 
                 def _run(self, **kwargs: Any) -> str:
-                    return json.dumps(invoker.invoke(ctx, spec_name, kwargs), default=str)
+                    result = invoker.invoke(ctx, spec_name, {k: v for k, v in kwargs.items() if v is not None})
+                    if result.get("error") == "approval_required" and result.get("approval_id"):
+                        ctx.extra["pending_approval"] = result["approval_id"]
+                    return json.dumps(result, default=str)
 
             return _Tool()
 

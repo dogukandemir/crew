@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DeliverableRow } from '../../api/types';
-import { API_BASE } from '../../api/client';
+import { DownloadButton } from '../../components/ui/DownloadButton';
 import { Chip } from '../../components/ui/Chip';
 import { Input, Select } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Drawer';
@@ -43,7 +43,7 @@ function typeTag(name: string, mime: string): string {
 }
 
 function fileDownloadUrl(artifactId: string): string {
-  return `${API_BASE}/api/artifacts/${artifactId}/download`;
+  return `/api/artifacts/${artifactId}/download`;
 }
 
 function packDownloadUrl(
@@ -57,7 +57,7 @@ function packDownloadUrl(
     scope === 'company'
       ? `/api/companies/${id}/artifacts/download`
       : `/api/projects/${id}/artifacts/download`;
-  return `${API_BASE}${base}${qs ? `?${qs}` : ''}`;
+  return `${base}${qs ? `?${qs}` : ''}`;
 }
 
 export function DeliverablesPanel({
@@ -158,10 +158,9 @@ export function DeliverablesPanel({
           </Select>
         )}
         {rows.length > 0 && (
-          <a
-            href={packDownloadUrl(scope, id, isCompany ? { project_id: proj || undefined } : { agent_id: agent || undefined, department_id: dept || undefined })}
-            download
-            onClick={(e) => e.stopPropagation()}
+          <DownloadButton
+            path={packDownloadUrl(scope, id, isCompany ? { project_id: proj || undefined } : { agent_id: agent || undefined, department_id: dept || undefined })}
+            filename={`${scope}-deliverables.zip`}
             className="rounded border border-slate-700/70 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800/60"
             title={
               isCompany
@@ -170,7 +169,7 @@ export function DeliverablesPanel({
             }
           >
             ↓ Download all
-          </a>
+          </DownloadButton>
         )}
         <span className="ml-auto text-[11px] tabular-nums text-slate-500">
           {rows.length} deliverable{rows.length === 1 ? '' : 's'}
@@ -242,16 +241,16 @@ function DeliverableItem({
         </span>
         <span className="min-w-0 flex-1 truncate text-[12.5px] text-slate-200">{row.name}</span>
         {isCompany && row.project_name && (
-          <Chip tone="neutral" title="Project">
+          <Chip tone="neutral" title="Project" className="hidden sm:inline-flex">
             {row.project_name}
           </Chip>
         )}
         {row.department_name && (
-          <Chip tone="neutral" title="Department">
+          <Chip tone="neutral" title="Department" className="hidden sm:inline-flex">
             {row.department_name}
           </Chip>
         )}
-        <span className="shrink-0 text-[11.5px] text-slate-400">
+        <span className="hidden shrink-0 text-[11.5px] text-slate-400 md:inline">
           by{' '}
           {onAgent ? (
             <button
@@ -272,20 +271,19 @@ function DeliverableItem({
           {formatSize(row.bytes)}
         </span>
         <span
-          className="w-20 shrink-0 text-right text-[11px] text-slate-500"
+          className="hidden w-20 shrink-0 text-right text-[11px] text-slate-500 sm:inline"
           title={new Date(row.created_at).toLocaleString()}
         >
           {formatRelativeTime(row.created_at)}
         </span>
-        <a
-          href={fileDownloadUrl(row.id)}
-          download
-          onClick={(e) => e.stopPropagation()}
+        <DownloadButton
+          path={fileDownloadUrl(row.id)}
+          filename={row.name}
           className="shrink-0 rounded px-1 py-0.5 text-[12px] text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
           title="Download this file"
         >
           ↓
-        </a>
+        </DownloadButton>
       </div>
     </li>
   );
@@ -303,13 +301,14 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
       footer={
         row && (
           <div className="flex w-full min-w-0 items-center gap-x-3 text-[11px] text-slate-500">
-            <a
-              href={fileDownloadUrl(row.id)}
-              download
+            <DownloadButton
+              path={fileDownloadUrl(row.id)}
+              filename={row.name}
+              title="Download this file"
               className="shrink-0 rounded border border-slate-700/70 px-2 py-0.5 text-slate-200 hover:bg-slate-800/60"
             >
               ↓ Download file
-            </a>
+            </DownloadButton>
             <span className="shrink-0">sha256 {row.sha256.slice(0, 12)}…</span>
             <span className="min-w-0 flex-1 truncate" title={row.path}>
               {row.path}

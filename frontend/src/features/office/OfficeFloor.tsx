@@ -1,3 +1,4 @@
+import { animateFrames } from '../../app/animation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRow, Task } from '../../api/types';
 import { useOrg, useTasks } from '../../app/hooks';
@@ -366,9 +367,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   targetsRef.current = targets;
 
   useEffect(() => {
-    let raf = 0;
     let last = performance.now();
-    const tick = (t: number) => {
+    const tick = (t: number, reducedMotion: boolean) => {
       // Clamp dt so a backgrounded tab does not teleport everyone on return.
       const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
       last = t;
@@ -393,7 +393,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         };
       }
       for (const [id, w] of walkers.current) {
-        const next = w.moving ? step(w, dt) : w;
+        const next = w.moving ? step(w, reducedMotion ? 1_000_000 : dt) : w;
         if (next !== w) walkers.current.set(id, next);
         const el = spriteEls.current.get(id);
         if (!el) continue;
@@ -444,10 +444,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         el.setAttribute('data-depth', String(next.x + next.y));
       }
       sortDepthLayer();
-      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return animateFrames(tick);
   }, []);
 
   const registerSprite = useCallback(

@@ -31,6 +31,14 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
+class CommandReceipt(Base):
+    __tablename__ = "command_receipts"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    response: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+
 def usd_to_micros(v: float) -> int:
     return int(round(v * 1_000_000))
 

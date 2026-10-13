@@ -27,7 +27,7 @@ async def client():
     await init_db()
     app = create_app()
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+    async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as c:
         yield c
 
 
@@ -212,8 +212,8 @@ async def test_websocket_streams_live_events(client):
 
     p = await _create_project(client, "Socket Project", budget=2.0)
     app = create_app()
-    with TestClient(app) as tc:
-        with tc.websocket_connect(f"/ws/projects/{p['id']}?since_seq=0") as ws:
+    with TestClient(app, base_url="http://localhost") as tc:
+        with tc.websocket_connect(f"ws://localhost/ws/projects/{p['id']}?since_seq=0") as ws:
             hello = ws.receive_json()
             assert hello["type"] == "hello" and hello["contract"] == 1
             ws.send_json({"action": "subscribe", "filters": {"types": ["task.*"]}})
@@ -279,7 +279,7 @@ async def test_onboarding_key_roundtrip(client, monkeypatch):
     assert body["offline_llm"] is True, "the test env runs offline; needed stays false"
 
     r = await client.post("/api/onboarding/key",
-                          json={"provider": "nope", "key": "sk-1234567890"})
+                          json={"provider": "nope", "key": "sk-1234567890"})  # gitleaks:allow -- synthetic invalid-provider fixture
     assert r.status_code == 400
 
     async def reject(provider: str, key: str) -> tuple[bool, str]:
@@ -287,7 +287,7 @@ async def test_onboarding_key_roundtrip(client, monkeypatch):
 
     monkeypatch.setattr(onboarding, "verify", reject)
     r = await client.post("/api/onboarding/key",
-                          json={"provider": "deepseek", "key": "sk-bad-12345678"})
+                          json={"provider": "deepseek", "key": "sk-bad-12345678"})  # gitleaks:allow -- mocked rejected key
     assert r.status_code == 400 and "rejected" in r.text
 
     async def accept(provider: str, key: str) -> tuple[bool, str]:
@@ -296,7 +296,7 @@ async def test_onboarding_key_roundtrip(client, monkeypatch):
     monkeypatch.setattr(onboarding, "verify", accept)
     try:
         r = await client.post("/api/onboarding/key",
-                              json={"provider": "deepseek", "key": "sk-test-12345678"})
+                              json={"provider": "deepseek", "key": "sk-test-12345678"})  # gitleaks:allow -- mocked accepted key
         assert r.status_code == 201 and r.json()["verified"] is True
         handles = await vault.list_handles()
         assert any(h["name"] == "provider:deepseek" for h in handles)

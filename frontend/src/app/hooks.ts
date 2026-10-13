@@ -48,12 +48,12 @@ export function useOnboardingState() {
 }
 
 export function useProjects() {
-  return useQuery({ queryKey: ['projects'], queryFn: api.listProjects });
+  return useQuery({ queryKey: ['projects'], queryFn: api.listProjects, refetchInterval: 5_000 });
 }
 
 export function useCompanies() {
   // The company strip is optional: a backend without the company layer must not break Home.
-  return useQuery({ queryKey: ['companies'], queryFn: api.listCompanies, retry: 1 });
+  return useQuery({ queryKey: ['companies'], queryFn: api.listCompanies, retry: 1, refetchInterval: 5_000 });
 }
 
 export function useBoard(projectId: string | null | undefined, departmentId?: string,

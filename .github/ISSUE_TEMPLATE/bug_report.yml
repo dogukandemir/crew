@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem. Use private reporting for security issues.
+body:
+  - type: markdown
+    attributes:
+      value: Please remove credentials and private project content. For vulnerabilities, follow SECURITY.md instead of filing a public issue.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Commit/version, OS, Docker or native installation, browser, Demo or Live. Never include API keys.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal goal and the actions that triggered the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Relevant error, task/tool output or screenshot. Review for secrets before attaching.

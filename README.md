@@ -1,274 +1,90 @@
-# Crew
+# Crew — a playable control room for real AI agents
 
-**An autonomous agent organization platform — real org charts, a real command chain, budgets with teeth, and a 2.5D office where you can watch it all happen.**
+Give a company a goal. Watch its agents organize, use tools, produce files, and ask for approvals in an animated office.
 
 [![CI](https://github.com/dogukandemir/crew/actions/workflows/ci.yml/badge.svg)](https://github.com/dogukandemir/crew/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3da639.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab.svg)](backend/pyproject.toml)
-[![Node 22+](https://img.shields.io/badge/node-22%2B-339933.svg)](frontend/package.json)
 
-Crew runs **self-organizing crews of AI agents** across independent projects. Each project is
-a tab in the UI, owns its own org chart, budget, memory ("brain") and task queue, and grows
-its own departments and agent swarms on demand to reach the goals you give it.
+**Experimental, local-first software.** Crew combines a game-like interface with a real [CrewAI](https://github.com/crewAIInc/crewAI) execution harness. It is for developers and builders exploring supervised agent companies. Agent output still needs human review. It is not a hosted multi-tenant service or a guarantee of autonomous business success.
 
-Execution of individual AI work is delegated to [CrewAI](https://crewai.com) (agents, tasks,
-crews, flows). Crew adds the layers above it: the **organization**, the **command chain**,
-the **reward system**, the **memory hierarchy**, **security governance** and **observability**.
+![Crew's animated office](docs/assets/office.png)
 
-Security posture (ADR 0017): every company picks a **workspace root** at founding (default
-`~/crew/workspace/{company}/{project}`) and agents are jailed to that tree — file tools
-contained, shell/Python container-only with no network, egress allowlisted. Fetched content and
-executed commands pass a **security review** before use: risky findings go to a human approval
-(the risky content or command shown as-is), and an approved command can be kept on an
-**always-allow list** — audited and revocable.
+## Try it
 
-![The office floor](docs/assets/office.png)
+Install Docker Desktop with Linux containers, or Docker Engine 26+ with Compose. From this checkout:
 
-<p>
-  <img src="docs/assets/hq.png" width="49%" alt="The HQ floor — board room, C-suites and project pods" />
-  <img src="docs/assets/command-desk.png" width="49%" alt="The command desk — orders, ideas and questions, with their actions on the record" />
-</p>
-
-## Why it's different
-
-- **The org chart is a runtime artifact.** Departments, squads and agents are generated from
-  the goal's capability requirements — and dissolve or rebuild as the needs change. Nobody
-  hard-codes a team.
-- **A real command chain.** Orchestrator → function chiefs (C-level) → department heads →
-  squad leads → workers. Escalation and delegation both follow the chain, and a **board of
-  directors** governs the whole portfolio one level above it.
-- **Rewards with teeth.** Agents are scored on verified outcomes, cost efficiency and
-  quality; reputation gates model tier, spend limits, autonomy and promotion. Only verifier
-  verdicts move a score — producer output never does.
-- **Three-level cognition.** Project, department and agent brains with controlled promotion
-  of insights, so the org gets smarter without every agent drowning in every other agent's
-  context.
-- **The Captain's command desk.** You write to the company in plain words — *an order, an
-  idea, or a question*. The orchestrator parses it, executes it against the real services
-  (assign, reassign, fire, breaks, goals, budgets, hires), and every action lands on the
-  record, attributed end to end. No god-hands, no whispers.
-- **People, not templates.** Every hire gets a **soul** — a human name, personality, values,
-  a vision and a voice that ride the system prompt — and growth hires are interviewed by a
-  **Head of People**: candidates are scored against the real gap, the real budget and the
-  floor they would join; misfits are rejected with cited reasons, at most two before one
-  always lands (ADR 0016). Realism, bounded.
-- **Observability as a first-class feature.** Every thought, tool call, token and dollar is
-  an append-only event. Watch live by project, department or agent; replay history like a
-  video; verify the hash-chained audit trail.
-
-## Quick start
-
-### Fastest — Docker, two commands, no local toolchain
-
-```bash
-docker compose up    # backend on http://127.0.0.1:8787, control room on http://localhost:5173
+```sh
+docker compose up --build
 ```
 
-It boots **keyless in offline mode** (`CREW_OFFLINE_LLM=true` in `docker-compose.yml`): the
-full pipeline runs against a deterministic fake model — zero spend, nothing to configure.
-Create a project, give it a goal, watch the org form. Put real keys in a `.env` at the repo
-root to switch to live providers (see **Model providers** below).
+Open [the control room](http://localhost:5173). The first build downloads the agent runtime and container images; later starts reuse them. The API listens at `127.0.0.1:8787`. Both published ports are restricted to this computer.
 
-### Local development (uv + npm)
+1. Start in **Demo**. It uses deterministic simulated agents, makes no model requests, and incurs no provider usage charges.
+2. Choose **Found your company**, select a template, and review the goal and spending caps. The first run starts only if you select its checkbox.
+3. Open the project's office, tasks, and deliverables. Demo files are labelled simulated.
+4. For real work, choose **Configure provider**, connect a provider, then explicitly **Enable Live**. Saving a key alone does not enable Live.
+5. Give the first Live run a small, checkable goal, such as the [first-project recipe](docs/FIRST-PROJECT.md). Review actual files and verification results before using them.
 
-Requires [uv](https://docs.astral.sh/uv/) and Node 22+.
+Stop the app with `docker compose stop`. Resume with `docker compose up -d`. Named volumes preserve the database, encrypted vault, and project files. `docker compose down` also keeps volumes; adding `--volumes` deletes them.
 
-```bash
-# 1. backend  (API + orchestrator; serves the REST contract and the event socket)
+## What is real?
+
+| Capability | Demo | Live |
+|---|---|---|
+| Company, projects, tasks and event history | Real saved records | Real saved records |
+| Agent reasoning and planning | Simulated | Your selected model provider |
+| Deliverable files | Labelled sample output | Files actually created by agents |
+| Shell / Python tools | Not used by the simulated runner | Disposable Docker containers |
+| Model spend | Zero | Estimated from token usage and a price table |
+| Verification | Simulation checks | Artifact integrity, declared contracts and model review |
+| Office movement | Visualization of application state | Visualization of application state |
+
+The office makes work visible; the saved task, tool and artifact records are the source of truth. Rewards are internal scores, not money paid to agents. A successful verifier result does not replace a human quality or security review.
+
+See [a verified DeepSeek example](examples/temperature-converter/PROVENANCE.md): actual source files, ten passing tests and the captured execution report. Its provenance records the repairs, operator approval and cumulative cost needed to complete the workflow.
+
+## Providers and installation
+
+The picker offers DeepSeek, OpenAI, Anthropic, OpenRouter, and local Ollama. The bounded DeepSeek/Docker workflow has passed real-provider acceptance; the other integrations remain experimental. See the [tested support matrix](docs/SUPPORT-MATRIX.md) for exact evidence and limitations. Hosted providers need your own account and credentials. Ollama needs its server and the configured model installed. Docker reaches host Ollama through `host.docker.internal`; native installs normally use `localhost`. Provider availability and model access depend on your account.
+
+Keys are encrypted locally. Model requests send task context to the selected provider. Web tools can access approved public destinations even when the model itself is local. Read [privacy and security](SECURITY.md) before giving agents private work.
+
+For development, use Python 3.12, uv, Node 22, and Docker for command tools. In separate terminals:
+
+```sh
 cd backend
-uv sync
-cp ../.env.example .env          # provider keys — see “Model providers” below
-uv run python -m crew serve      # http://127.0.0.1:8787  (docs at /docs)
-
-# 2. frontend (tabbed control room)
-cd ../frontend
-npm install
-npm run dev                      # http://localhost:5173
+uv sync --frozen
+uv run python -m crew serve
 ```
 
-On first launch the control room offers a **provider picker** — DeepSeek, OpenAI,
-Anthropic, OpenRouter, or **local Ollama** (no key, zero spend). The key is verified
-against the provider, stored encrypted in the local vault, and the choice points every
-model tier at that provider immediately. No `.env` edit, no restart.
-
-![The provider picker](docs/assets/onboarding.png)
-
-Next comes the **founding wizard**: pick a template (or open *Detailed setup*), name the
-company, and one call (`POST /api/found`) creates the company with its CEO and board, its
-first project **under it**, and starts the first run. The company floor (HQ) then holds
-the portfolio — each member one breadcrumb below, with its own office. Standalone projects
-still work: the new-project dialog's *Company* selector defaults to the first company but
-offers `— standalone —`.
-
-![The company portfolio](docs/assets/portfolio.png)
-
-### Model providers — one key is enough, if it is the right one
-
-The model tiers default to **DeepSeek V4**: `deepseek/deepseek-flash` for the standard and
-fast tiers, `deepseek/deepseek-v4-pro` for reasoning. (The legacy names `deepseek-chat` and
-`deepseek-reasoner` were retired by the provider on 2026-07-24 — don't pin them.) Thinking
-is on by default per request; its level is one setting:
-
-```bash
-CREW_REASONING_EFFORT=high      # low | high | max (provider default: high)
+```sh
+cd frontend
+npm ci
+npm run dev
 ```
 
-So **`DEEPSEEK_API_KEY` is the single key that works out of the box** — via the onboarding
-card or in `.env`. Using OpenAI, Anthropic or a local model instead? Point the tiers at it:
+Both commands also work in PowerShell. No environment file or provider key is needed for Demo. Optional settings are listed in [.env.example](.env.example). Keep the Vite port at 5173 or explicitly update the backend's allowed browser origins. See [installation and upgrades](docs/INSTALLATION.md) for authentication, storage, troubleshooting and recovery.
 
-```bash
-CREW_TIER_STANDARD=openai/gpt-4o-mini
-CREW_TIER_FAST=openai/gpt-4o-mini
-CREW_TIER_REASONING=anthropic/claude-sonnet-4-5
-```
+## Architecture
 
-OpenRouter carries hundreds of models behind one key — including hosted Ollama cloud
-models (`openrouter/anthropic/claude-sonnet`, `openrouter/openai/gpt-4o-mini`). Local
-**Ollama** needs no key at all: point `OLLAMA_BASE_URL` at your server and set the tiers
-to `ollama/llama3.2` — local inference bills **$0** to the budget guard.
+React renders the company and project views. FastAPI owns the API and event stream. The orchestrator plans and assigns work, CrewAI runs individual agents, and a shared model gateway reserves and records estimated usage. Capability checks and approvals guard tools. SQLite stores application state, budgets, audit records and events; project folders hold files.
 
-Embeddings default to `openai/text-embedding-3-small`; without that key the brain's semantic
-recall is skipped — everything else keeps working. `uv run python -m crew status` prints
-which tiers have a key present.
+The Docker distribution has three services: a static frontend, the API, and a private sandbox broker. Only the broker receives the Docker daemon socket. Command containers have no network, a read-only root, resource limits, and one project directory mounted for work. See [the security model](SECURITY.md) for its trust boundary.
 
-### No keys at all? Two ways
+This release supports **one server process and one shared workspace**. Viewer accounts can read that workspace; operators can run work; administrators manage credentials and execution mode. Do not use it to host mutually untrusted tenants.
 
-```bash
-# a) the offline runner — the same pipeline against a deterministic fake model, zero spend
-CREW_OFFLINE_LLM=true uv run python -m crew serve
+## Current limits
 
-# b) the mock — just the control room and the office, no Python, no provider keys
-node dev/mock/server.mjs                                  # http://127.0.0.1:8788
-cd frontend && echo 'VITE_API_BASE=http://127.0.0.1:8788' > .env.local && npm run dev
-```
+- Spending caps use estimates, not a provider invoice. Failed or interrupted requests with unknown usage are charged conservatively. Set provider-side billing limits as well.
+- Stopping a run blocks subsequent tool/model calls and requests container termination. A model request already sent may finish and bill. Server restarts pause interrupted runs for review.
+- Network allowlists and deterministic content checks reduce exposure; they do not prove a page or command safe.
+- One bounded DeepSeek workflow passed Live acceptance. Other providers and clean installations on additional platforms still need release validation. The [implementation tracker](docs/reviews/2026-10-10/IMPLEMENTATION.md) distinguishes changes from verified results.
+- CrewAI still brings Chroma transitively. Its outstanding advisory assessment is recorded in [dependency notes](docs/DEPENDENCIES.md); no Chroma server is shipped.
 
-With the mock the organization grows on its own while you watch (a hire at t+12, a whole new
-department at t+30). See [dev/mock/README.md](dev/mock/README.md) for what it does and does
-not promise.
+## Contribute
 
-## The control room
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development loop and [the code of conduct](CODE_OF_CONDUCT.md). Small, reproducible examples are especially useful: a goal, expected deliverable, observed result, and redacted logs. Use private reporting for security concerns.
 
-Every project opens as a tab; each tab keeps its own route, filters and scroll position.
+The public-readiness [review](docs/reviews/2026-10-10/REPORT.md) and [action plan](docs/reviews/2026-10-10/ACTION-PLAN.md) explain the work underway. Design documents in `docs/` describe both implemented behavior and earlier proposals; the code and current installation guide take precedence.
 
-- **Office** — the 2.5D floor: rooms per department, desks per agent, walkers, chatter,
-  tool screens, the break corner. The simulation writes to a pure scene model; the renderer
-  only draws it.
-- **HQ** — the company on one floor: board room, C-suite offices, one pod per project;
-  portfolio verdicts, allocation calls and board sessions.
-- **Board** — the kanban: epics → features → stories → bugs. Ready items promote into real
-  tasks; after promotion the column is *derived* from the task, so the board cannot disagree
-  with the engine.
-- **Command desk** — the Captain's drawer: plain words in, real actions out, attributed.
-- **Org / Tasks / Agents / Brains / Rewards / Events / Settings** — the working views: the
-  tree with authority, task detail with artifacts and retries, per-agent timelines, the
-  three brain levels with retrieval debugging, score and payout history, the raw event
-  stream, and per-project policy.
-
-## How it works
-
-```
-goal ─► INTAKE ─► PLANNING ─► STAFFING ─► EXECUTING ─► VERIFYING ─► REWARDING ─► DONE
-                    │                        ▲                      │
-               (it hires the people     tasks run, helpers      only verifier
-                it doesn't have)        can join mid-task      verdicts score
-```
-
-1. **Create a project** (the ＋ button, or `POST /api/projects`) and state a goal.
-2. **Start a run** — `POST /api/projects/{id}/runs {"goal": "…", "mode": "autonomous"}`, the
-   desk (`goal: …`), or `uv run python -m crew run --project <id> --goal "…"` headlessly.
-3. **Watch it work**: the orchestrator plans the capability tree, hires departments and
-   agents with the right skills, dispatches tasks in waves, verifies results and settles
-   budgets — every step an event on the record.
-
-The run pipeline is Crew's own resumable state machine ([ADR 0007](docs/adr/0007-run-pipeline-as-own-state-machine.md));
-if the server restarts mid-run, the boot recovery settles the interrupted tasks honestly and
-resumes the run where it stopped.
-
-## Repository layout
-
-```
-backend/          Python 3.12 · FastAPI · SQLAlchemy · CrewAI execution engine
-frontend/         React 19 · TypeScript · Vite · tabbed control room
-docs/             Refinement documentation (read this first)
-docs/adr/         Architecture Decision Records
-dev/mock/         Zero-dependency API mock — the UI and the office, with no backend and no keys
-```
-
-## Documentation
-
-| # | Document | What it settles |
-|---|----------|-----------------|
-| — | [docs/README.md](docs/README.md) | Index and reading order |
-| 00 | [Vision & Scope](docs/00-vision-and-scope.md) | What we build, what we explicitly do not |
-| 01 | [System Architecture](docs/01-system-architecture.md) | Components, layers, tech stack, runtime |
-| 02 | [Organization & Command Chain](docs/02-organization-and-command-chain.md) | Project/Department/Squad/Agent, authority, spawning |
-| 03 | [Orchestration & Lifecycle](docs/03-orchestration-and-lifecycle.md) | From goal to execution to termination |
-| 04 | [Agent Model & Skills](docs/04-agent-model-and-skills.md) | Roles, skills, tools, model routing |
-| 05 | [Reward & Performance](docs/05-reward-and-performance.md) | Scoring, promotion, anti-gaming |
-| 06 | [Memory & Brains](docs/06-memory-and-brains.md) | Three-level brain, promotion of insight |
-| 07 | [Observability](docs/07-observability.md) | Events, traces, live views, replay |
-| 08 | [Security & Governance](docs/08-security-and-governance.md) | Auth, secrets, sandbox, egress, budgets |
-| 09 | [UI/UX Spec](docs/09-ui-ux-spec.md) | Tabs, views, control surfaces |
-| 10 | [Data Model](docs/10-data-model.md) | Tables and invariants |
-| 11 | [API & Event Contract](docs/11-api-and-event-contract.md) | REST + WebSocket message shapes |
-| 12 | [Implementation Plan](docs/12-implementation-plan.md) | Milestones M0–M10 and exit criteria |
-| 13 | [Backend implementation notes](docs/13-backend-implementation-notes.md) | What is built, what is deliberately stubbed, and the bugs already found |
-
-Short on time? Read **00 → 02 → 09** first; everything else is reference. The audits and
-renderer notes (14–17) are indexed in [docs/README.md](docs/README.md).
-
-## Development
-
-```bash
-# backend
-uv run pytest                    # 200 tests, no network required
-uv run pytest -m live -s         # real provider run (needs a key; costs a few cents)
-uv run ruff check .              # must stay clean
-uv run python -m crew status     # env, data dir, model tiers, key presence, sandbox mode
-uv run python -m crew audit verify
-
-# mutation testing (docs/13) — the security spine, pytest-gremlins
-uv run python -m pytest tests/security tests/unit/test_security_review.py tests/unit/test_workspaces.py \
-  --gremlins --gremlin-parallel --gremlin-workers 6 --gremlin-clear-cache --gremlin-report=console
-
-# frontend
-npx tsc --noEmit && npx vitest run && npm run build
-```
-
-CI runs exactly those gates on every push (frontend: tsc + vitest + build; backend: ruff +
-pytest). Before changing code, read [docs/13](docs/13-backend-implementation-notes.md): it
-lists what is implemented, what is deliberately stubbed, and the bugs already found and
-fixed. Docs are the contract: a change that contradicts a doc updates the doc (and adds an
-ADR) in the same commit.
-
-## Security & governance
-
-- **Secrets never touch prompts.** Provider keys and agent credentials live in an encrypted
-  vault; values are injected at call time and redacted from logs.
-- **Policy engine is authoritative, not prompts.** Grade ceiling → agent grant → approval
-  gate, in that order; prompts only express intent.
-- **Sandboxed tools with an egress allowlist.** Tool executions run via Docker when
-  available (subprocess fallback), and outbound hosts must be allowed.
-- **Budgets have a breaker.** Per-project caps, per-agent limits, pre-flight reservations;
-  the breaker pauses a run rather than overspending. A kill switch stops everything.
-- **Audit is hash-chained.** Privileged actions append to a tamper-evident log
-  (`crew audit verify`).
-
-### Exposing it beyond localhost
-
-Loopback + `CREW_AUTH_MODE=local` is the shipped default, and the settings refuse to bind a
-public address in that mode. Before anything is reachable by others: set
-`CREW_AUTH_MODE=token`, a real `CREW_JWT_SECRET`, and create a user:
-
-```bash
-uv run python -m crew auth create-user --email you@example.com --password … --role admin
-```
-
-## Status
-
-See [docs/12-implementation-plan.md](docs/12-implementation-plan.md) for the current
-milestone. Milestone state is tracked there, not in this README.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+Crew's application code is [MIT licensed](LICENSE). Dependencies keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useHealth } from '../../app/hooks';
 import { api } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import { Input, Field, Textarea } from '../../components/ui/Field';
@@ -19,6 +20,9 @@ import { FOUND_TEMPLATES, templateById } from './foundTemplates';
  * both paths create exactly the same thing — the preview line says so.
  */
 export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const requestKey = useRef(crypto.randomUUID());
+  const { data: health } = useHealth();
+  const [startRun, setStartRun] = useState(false);
   const [mode, setMode] = useState<'quick' | 'detailed'>('quick');
   const [templateId, setTemplateId] = useState(FOUND_TEMPLATES[0].id);
   const [name, setName] = useState('');
@@ -49,7 +53,9 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
   // company; everything stays editable.
   useEffect(() => {
     if (open) {
+      requestKey.current = crypto.randomUUID();
       setMode('quick');
+      setStartRun(false);
       setRunMode('autonomous');
       setWorkspacePath('');
       applyTemplate(FOUND_TEMPLATES[0].id);
@@ -60,21 +66,22 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
   const found = useMutation({
     mutationFn: () =>
       api.foundCompany({
+        idempotency_key: requestKey.current,
         name: name.trim(),
         mission: mission.trim(),
-        budget_usd: Number.parseFloat(companyBudget) || undefined,
+        budget_usd: Number.parseFloat(companyBudget),
         project_name: projectName.trim(),
         project_goal: goal.trim(),
-        project_budget_usd: Number.parseFloat(projectBudget) || undefined,
+        project_budget_usd: Number.parseFloat(projectBudget),
         workspace_path: workspacePath.trim() || undefined,
         mode: runMode,
-        start_run: true,
+        start_run: startRun,
       }),
     onSuccess: ({ company, project }) => {
       openTab(company.id, 'main', 'hq');
       setToast({
         kind: 'success',
-        message: `“${company.name}” founded — ${project.name} is planning its first run.`,
+        message: `“${company.name}” founded — ${project.name} ${startRun ? "is planning its first run" : "is ready for your first run"}.`,
       });
       void qc.invalidateQueries({ queryKey: ['projects'] });
       void qc.invalidateQueries({ queryKey: ['companies'] });
@@ -98,7 +105,10 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
   });
 
   const valid =
-    name.trim().length > 0 && projectName.trim().length > 0 && goal.trim().length >= 3;
+    name.trim().length > 0 && projectName.trim().length > 0 && goal.trim().length >= 3 &&
+    Number.isFinite(Number(companyBudget)) && Number(companyBudget) > 0 &&
+    Number.isFinite(Number(projectBudget)) && Number(projectBudget) > 0 &&
+    Number(projectBudget) <= Number(companyBudget);
 
   return (
     <Modal
@@ -193,7 +203,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
             </Field>
             <Field
               label="Workspace root"
-              hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree — they can never touch anything outside it. Empty → ~/crew/workspace/{company}/{project}."
+              hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree — use a dedicated empty folder. Default folders include unique company and project IDs."
             >
               <div className="flex items-center gap-2">
                 <Input
@@ -239,14 +249,23 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
           </Field>
         )}
 
+        <section className="rounded border border-slate-700 p-3 text-sm" aria-label="Before you start">
+          <p className="font-medium">{health?.offline_llm ? 'Demo: simulated work, no model spend' : 'Live: real agents, provider usage may cost money'}</p>
+          <p className="mt-1 text-xs text-slate-400">Company cap: ${companyBudget || '0'} · Project cap: ${projectBudget || '0'}. Spending uses estimated model prices; check your provider's billing limits too.</p>
+          <label className="mt-3 flex items-start gap-2">
+            <input type="checkbox" checked={startRun} onChange={e => setStartRun(e.target.checked)} />
+            <span>Start the first run immediately with these limits</span>
+          </label>
+        </section>
+
         <p className="rounded border border-slate-800 bg-slate-950/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
           Will create: <span className="text-slate-300">{name.trim() || '—'}</span> (company, CEO +
           board), <span className="text-slate-300">{projectName.trim() || '—'}</span> under it, and
-          start its first run{runMode === 'autonomous' ? '' : ' (interactive)'}. Agents work inside{' '}
+          {startRun ? 'start its first run' : 'wait for you to start its first run'}{runMode === 'autonomous' ? '' : ' (interactive)'}. Agents work inside{' '}
           <span className="font-mono text-slate-400">
-            {workspacePath.trim() || '~/crew/workspace/… (default tree)'}
+            {workspacePath.trim() || 'a dedicated project folder'}
           </span>{' '}
-          — never outside it.
+          with file tools restricted to that project folder.
         </p>
 
         {found.isError && <PanelError error={found.error} label="Found the company" />}

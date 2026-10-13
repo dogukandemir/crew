@@ -114,10 +114,20 @@ class CrewAICrewRunner:
 
         agent = req.agent
         llm = router.build_llm(agent, escalate=req.escalate)  # type: ignore[arg-type]
+        from crew.execution.gateway import governed_llm
+
         choice = router.choice_for_agent(agent, escalate=req.escalate)  # type: ignore[arg-type]
         ctx = ToolContext(project_id=req.project_id, agent=agent, task_id=req.task.id,  # type: ignore[arg-type]
                           run_id=req.run_id, trace_id=req.trace_id, workspace=req.workspace,
                           artifacts=req.artifacts)
+
+        def check_approval() -> None:
+            if ctx.extra.get("pending_approval"):
+                from crew.execution.tools import ToolApprovalPending
+
+                raise ToolApprovalPending(ctx.extra["pending_approval"])
+
+        llm = governed_llm(llm, req, model=choice.model, before_call=check_approval)
         tools = build_crewai_tools(ctx)
         steps = {"count": 0}
 
@@ -140,6 +150,26 @@ class CrewAICrewRunner:
                 payload={"text": _render(output)[:1500]}, actor=f"agent:{agent.id}",
             )
 
+        def require_artifact(output: Any):
+            from sqlalchemy import select
+
+            from crew.core.db import session_scope
+            from crew.core.models import Artifact
+            from crew.execution.tools import run_on_loop
+
+            async def published():
+                async with session_scope() as s:
+                    return await s.scalar(select(Artifact.id).where(
+                        Artifact.task_id == req.task.id, Artifact.project_id == req.project_id).limit(1))
+
+            if run_on_loop(published()):
+                return True, output.raw
+            return False, (
+                "No artifact was published. You must actually call tools. Emit one Action and JSON Action Input, "
+                "then STOP and wait for the tool result. Use fs_write to create workspace files and "
+                "artifact_publish with name and source_path to publish an existing file. Never invent Observation results."
+            )
+
         crew_agent = Agent(
             role=f"{agent.name} — {agent.role}",
             goal=build_crewai_goal(agent.mission, req.task.title),
@@ -154,7 +184,10 @@ class CrewAICrewRunner:
             max_tokens=agent.token_cap_per_step,
             step_callback=step_callback,
             use_system_prompt=True,
-            system_template=req.system_prompt,
+            # CrewAI ignores a lone system_template. Both markers preserve our
+            # policy/context as well as CrewAI's tool schemas and call format.
+            system_template=req.system_prompt + "\n\n{{ .System }}",
+            prompt_template="{{ .Prompt }}",
         )
         crew_task = Task(
             name=req.task.id[:40],
@@ -162,6 +195,8 @@ class CrewAICrewRunner:
             expected_output=req.task.deliverable or "A complete answer addressing each acceptance criterion.",
             agent=crew_agent,
             callback=task_callback,
+            guardrail=require_artifact,
+            guardrail_max_retries=1,
         )
         crew = Crew(agents=[crew_agent], tasks=[crew_task], process=Process.sequential,
                     verbose=False, memory=False, step_callback=step_callback,
@@ -169,19 +204,26 @@ class CrewAICrewRunner:
         try:
             result = crew.kickoff()
             text = _render(result)
-            tokens_in, tokens_out, cost = _usage(crew, choice.model)
+            tokens_in, tokens_out, cost = llm.total_in, llm.total_out, llm.total_cost
             ok = bool(text and not str(result).lower().startswith("error"))
             return ExecutionResult(ok=ok, text=text, tokens_in=tokens_in, tokens_out=tokens_out,
                                    cost_micros=cost, model=choice.model, steps=steps["count"])
         except Exception as e:
+            if ctx.extra.get("pending_approval"):
+                return ExecutionResult(ok=False, error=str(ctx.extra["pending_approval"]),
+                    escalation="approval_required", text="Waiting for operator approval",
+                    cost_micros=llm.total_cost, tokens_in=llm.total_in, tokens_out=llm.total_out,
+                    model=choice.model, steps=steps["count"])
             log.exception("crew execution failed")
             return ExecutionResult(ok=False, error=f"{type(e).__name__}: {e}",
+                                   cost_micros=llm.total_cost, tokens_in=llm.total_in, tokens_out=llm.total_out,
                                    model=choice.model, steps=steps["count"],
                                    text=f"execution failed: {type(e).__name__}")
 
 
 def steps_budget(effort: str) -> int:
-    return {"S": 3, "M": 6, "L": 10, "XL": 14}.get(effort, 6)
+    # A small file task needs room to inspect, write, read back, publish and finish.
+    return {"S": 6, "M": 8, "L": 10, "XL": 12}.get(effort, 8)
 
 
 def _usage(crew: Any, model: str) -> tuple[int, int, int]:
@@ -236,14 +278,14 @@ class FakeCrewRunner:
                 self._publish_deliverable(req, text)
             except OSError as exc:  # never fail the simulated task over a file hiccup
                 text += f"\n\n(deliverable file could not be written: {exc})"
-        tokens_in, tokens_out = 1200 + 40 * len(req.task.acceptance_criteria), 400
+        tokens_in, tokens_out = 0, 0
         model = f"offline/{req.agent.model_tier}"
         return ExecutionResult(
             ok=not self.fail,
             text="" if self.fail else text,
             error="simulated failure" if self.fail else "",
             tokens_in=tokens_in, tokens_out=tokens_out,
-            cost_micros=router.cost_micros("deepseek-flash", tokens_in, tokens_out),
+            cost_micros=0,
             model=model, steps=2, tool_calls=1, tool_errors=0,
         )
 

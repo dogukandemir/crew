@@ -21,7 +21,7 @@ from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import Agent, Event, Project, Run, Task
 from crew.domain.enums import Capability, TaskState
-from crew.execution.tools import ToolContext, invoker
+from crew.execution.tools import invoker
 
 
 async def _agent(s, project_id: str, name: str, *, role: str = "worker", grade: int = 1,
@@ -69,14 +69,17 @@ async def test_ask_colleague_is_delivered_and_answered(bound_loop, project):
 
 
 @pytest.mark.asyncio
-async def test_delegate_task_creates_a_real_task_and_event(bound_loop, project):
+async def test_delegate_task_creates_a_real_task_and_event(tool_context, bound_loop, project):
     async with session_scope() as s:
-        boss = await _agent(s, project["id"], "Boss", role="lead")
+        boss = await _agent(s, project["id"], "Boss", role="lead", tools=[Capability.COMMS_ASK.value])
+        run = Run(project_id=project["id"], goal="delegate")
+        s.add(run)
+        await s.flush()
         target = await _agent(s, project["id"], "Target")
         boss_twin = _twin(project["id"], boss, [Capability.COMMS_ASK.value])
         target_id = target.id
 
-    ctx = ToolContext(project_id=project["id"], agent=boss_twin, task_id="t-boss", run_id="r-1")
+    ctx = await tool_context(project_id=project["id"], agent=boss_twin, task_id="t-boss", run_id=run.id)
     r = await asyncio.to_thread(invoker.invoke, ctx, "delegate_task",
                                 {"agent": "Target", "brief": "Check the crawl stats"})
     assert r["ok"] is True, r
@@ -84,7 +87,7 @@ async def test_delegate_task_creates_a_real_task_and_event(bound_loop, project):
 
     async with session_scope() as s:
         tasks = (await s.scalars(select(Task).where(Task.project_id == project["id"],
-                                                    Task.parent_id == "t-boss"))).all()
+                                                    Task.parent_id == ctx.task_id))).all()
         evs = (await s.scalars(select(Event).where(Event.project_id == project["id"],
                                                    Event.type == "agent.delegated"))).all()
     assert len(tasks) == 1 and tasks[0].assignee_agent_id == target_id
@@ -133,20 +136,24 @@ async def test_a_requested_decision_convenes_a_real_council(bound_loop, project)
 
 
 @pytest.mark.asyncio
-async def test_escalate_tool_persists_where_it_went(bound_loop, project):
+async def test_escalate_tool_persists_where_it_went(tool_context, bound_loop, project):
     """Escalating is a fact about the task: reason + escalated_to are written, not just
     emitted — the API has served that field all along (docs/17 batch 3)."""
     async with session_scope() as s:
         lead = await _agent(s, project["id"], "Lead", role="lead")
-        worker = await _agent(s, project["id"], "Escalator", manager_id=lead.id)
+        worker = await _agent(s, project["id"], "Escalator", manager_id=lead.id,
+                              tools=[Capability.COMMS_ESCALATE.value])
+        run = Run(project_id=project["id"], goal="escalate")
+        s.add(run)
+        await s.flush()
         twin = _twin(project["id"], worker, [Capability.COMMS_ESCALATE.value])
-        t = Task(project_id=project["id"], run_id="r-1", title="stuck on the CDN",
+        t = Task(project_id=project["id"], run_id=run.id, title="stuck on the CDN",
                  description="d", deliverable="x", acceptance_criteria=["a"], output_contract={},
                  effort="S", state=TaskState.RUNNING.value, assignee_agent_id=worker.id)
         s.add(t)
         await s.flush()
         tid, lead_id = t.id, lead.id
-    ctx = ToolContext(project_id=project["id"], agent=twin, task_id=tid, run_id="r-1")
+    ctx = await tool_context(project_id=project["id"], agent=twin, task_id=tid, run_id=run.id)
     r = await asyncio.to_thread(invoker.invoke, ctx, "escalate",
                                 {"reason": "the CDN rejects our payload format"})
     assert r["ok"] is True and r["data"]["escalated_to"] == lead_id

@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import select
 
 from crew.core.db import session_scope
-from crew.core.models import Agent, Event, Task
+from crew.core.models import Agent, Event, Run, Task
 from crew.core.security import decide_approval
 from crew.domain.enums import Capability
 from crew.execution import tools as tools_mod
@@ -103,10 +103,10 @@ def test_invoker_refuses_unknown_tools_without_touching_the_loop():
 
 # ── fs tools through the real invoker (capability + jail + events) ─────────────────
 @pytest.mark.asyncio
-async def test_fs_roundtrip_jail_and_delete_flow(bound_loop, project, tmp_path):
+async def test_fs_roundtrip_jail_and_delete_flow(tool_context, bound_loop, project, tmp_path):
     agent = await _mk_agent(project["id"], tools=[Capability.FS_WORKSPACE.value,
                                                   Capability.FS_DELETE.value])
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-fs", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-fs", workspace=tmp_path)
 
     w = await asyncio.to_thread(invoker.invoke, ctx, "fs_write",
                                 {"path": "deep/x/y/z.txt", "content": "level three"})
@@ -126,7 +126,7 @@ async def test_fs_roundtrip_jail_and_delete_flow(bound_loop, project, tmp_path):
     assert missing["ok"] is False and "not found" in missing["error"]
 
     fresh = await _mk_agent(project["id"], tools=[Capability.FS_WORKSPACE.value], name="Lister")
-    lctx = ToolContext(project_id=project["id"], agent=fresh, task_id="t-fs2", workspace=tmp_path)
+    lctx = await tool_context(project_id=project["id"], agent=fresh, task_id="t-fs2", workspace=tmp_path)
     await asyncio.to_thread(invoker.invoke, lctx, "fs_write", {"path": "docs/sub/note.md",
                                                                "content": "hi"})
     listing = await asyncio.to_thread(invoker.invoke, lctx, "fs_list", {"path": "docs"})
@@ -163,9 +163,9 @@ def _serp(n: int) -> str:
 
 
 @pytest.mark.asyncio
-async def test_search_parses_strips_and_caps(bound_loop, project, tmp_path, monkeypatch):
+async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, tmp_path, monkeypatch):
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Seeker")
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-s", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-s", workspace=tmp_path)
 
     monkeypatch.setattr(tools_mod, "_search_page", lambda q: _serp(6))
     r = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
@@ -184,14 +184,14 @@ async def test_search_parses_strips_and_caps(bound_loop, project, tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(
+async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(tool_context,
         bound_loop, project, tmp_path, monkeypatch):
     """Closes: the egress-denied return and the search-failure return — both must be
     honest refusals, never an empty 'success'."""
     from types import SimpleNamespace
 
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Denied")
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-d", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-d", workspace=tmp_path)
 
     monkeypatch.setattr(tools_mod.policy, "check_egress",
                         lambda host, proj: SimpleNamespace(allowed=False, reason="blocked for test"))
@@ -207,28 +207,31 @@ async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(
 
 
 @pytest.mark.asyncio
-async def test_http_get_requires_a_url(bound_loop, project, tmp_path):
+async def test_http_get_requires_a_url(tool_context, bound_loop, project, tmp_path):
     """Closes: the empty-url guard in h_http_get."""
     agent = await _mk_agent(project["id"], tools=[Capability.NET_FETCH.value], name="Fetcher")
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-h", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-h", workspace=tmp_path)
     r = await asyncio.to_thread(invoker.invoke, ctx, "http_get", {})
     assert r["ok"] is False and "url is required" in r["error"]
 
 
 # ── join_task ───────────────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
-async def test_join_task_lifecycle(bound_loop, project, tmp_path):
+async def test_join_task_lifecycle(tool_context, bound_loop, project, tmp_path):
     owner = await _mk_agent(project["id"], tools=[Capability.BOARD_WRITE.value], name="Owner")
     joiner = await _mk_agent(project["id"], tools=[Capability.BOARD_WRITE.value], name="Joiner")
     async with session_scope() as s:
-        t = Task(project_id=project["id"], run_id="r-j", title="Wire the parser",
+        run = Run(project_id=project["id"], goal="parser")
+        s.add(run)
+        await s.flush()
+        t = Task(project_id=project["id"], run_id=run.id, title="Wire the parser",
                  state="running", assignee_agent_id=owner.id)
         s.add(t)
         await s.flush()
         tid = t.id
 
-    ctx = ToolContext(project_id=project["id"], agent=joiner, task_id="t-j",
-                      run_id="r-j", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=joiner, task_id="t-j",
+                      run_id=run.id, workspace=tmp_path)
     r = await asyncio.to_thread(invoker.invoke, ctx, "join_task", {"task_id": tid})
     assert r["ok"] is True and r["data"]["joined"] is True
     async with session_scope() as s:
@@ -245,7 +248,7 @@ async def test_join_task_lifecycle(bound_loop, project, tmp_path):
     again = await asyncio.to_thread(invoker.invoke, ctx, "join_task", {"task_id": tid})
     assert again["ok"] is True and again["data"]["note"] == "already on it"
 
-    own = ToolContext(project_id=project["id"], agent=owner, task_id="t-j2", workspace=tmp_path)
+    own = await tool_context(project_id=project["id"], agent=owner, task_id="t-j2", workspace=tmp_path)
     r_own = await asyncio.to_thread(invoker.invoke, own, "join_task", {"task_id": tid})
     assert r_own["ok"] is False and "your own task" in r_own["error"]
 
@@ -264,13 +267,64 @@ async def test_join_task_lifecycle(bound_loop, project, tmp_path):
 
 # ── CrewAI wrappers ─────────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
-async def test_crewai_wrappers_roundtrip(bound_loop, project, tmp_path):
+async def test_crewai_wrappers_roundtrip(tool_context, bound_loop, project, tmp_path):
     """Closes: build_crewai_tools' loop building and _run's JSON return."""
     agent = await _mk_agent(project["id"], tools=[Capability.FS_WORKSPACE.value], name="Wrap")
-    ctx = ToolContext(project_id=project["id"], agent=agent, task_id="t-w", workspace=tmp_path)
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-w", workspace=tmp_path)
     built = await asyncio.to_thread(tools_mod.build_crewai_tools, ctx)
     assert sorted(t.name for t in built) == ["fs_list", "fs_read", "fs_write"]
     writer = next(t for t in built if t.name == "fs_write")
     out = await asyncio.to_thread(writer._run, path="wrap.txt", content="via crewai")
     assert json.loads(out)["ok"] is True
     assert (tmp_path / "wrap.txt").read_text(encoding="utf-8") == "via crewai"
+    lister = next(t for t in built if t.name == "fs_list")
+    assert "path" not in lister.args_schema.model_json_schema().get("required", [])
+    assert json.loads(await asyncio.to_thread(lister.run))["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_publish_existing_file_preserves_bytes_and_enforces_filesystem_policy(tool_context, bound_loop, project, tmp_path):
+    import hashlib
+    from pathlib import Path
+
+    agent = await _mk_agent(project["id"], tools=[Capability.FS_WORKSPACE.value, Capability.ARTIFACT_PUBLISH.value])
+    ctx = await tool_context(project_id=project["id"], agent=agent, workspace=tmp_path)
+    source = b"first\r\nsecond \xc3\xa9\r\n"
+    (tmp_path / "existing.txt").write_bytes(source)
+    built = await asyncio.to_thread(tools_mod.build_crewai_tools, ctx)
+    publisher = next(t for t in built if t.name == "artifact_publish")
+    result = json.loads(await asyncio.to_thread(publisher.run, name="published.txt", source_path="existing.txt"))
+    assert result["ok"] is True
+    assert await asyncio.to_thread(Path(result["data"]["path"]).read_bytes) == source
+    assert result["data"]["sha256"] == hashlib.sha256(source).hexdigest()
+    assert result["data"]["bytes"] == len(source)
+    (tmp_path / "existing.txt").write_bytes(b"updated content")
+    second = json.loads(await asyncio.to_thread(publisher.run, name="published.txt", source_path="existing.txt"))
+    assert second["data"]["path"] != result["data"]["path"]
+    assert await asyncio.to_thread(Path(result["data"]["path"]).read_bytes) == source
+    from crew.control.verify import current_artifacts
+    from crew.core.models import Artifact
+
+    async with session_scope() as s:
+        versions = list((await s.scalars(select(Artifact).where(Artifact.task_id == ctx.task_id))).all())
+    assert len(versions) == 2
+    latest = current_artifacts(versions)
+    assert len(latest) == 1 and latest[0].path == second["data"]["path"]
+    assert latest[0].meta["source_path"] == "existing.txt"
+    async with session_scope() as s:
+        from crew.core.models import Project
+
+        p = await s.get(Project, project["id"])
+        p.settings = {**p.settings, "tool_policy": {"deny": ["fs.workspace"]}}
+    denied = await asyncio.to_thread(invoker.invoke, ctx, "artifact_publish",
+        {"name": "denied.txt", "source_path": "existing.txt"})
+    assert not denied["ok"] and denied["error"] == "policy_denied"
+
+
+@pytest.mark.asyncio
+async def test_publish_source_cannot_escape_workspace(tool_context, bound_loop, project, tmp_path):
+    agent = await _mk_agent(project["id"], tools=[Capability.FS_WORKSPACE.value, Capability.ARTIFACT_PUBLISH.value])
+    ctx = await tool_context(project_id=project["id"], agent=agent, workspace=tmp_path)
+    result = await asyncio.to_thread(invoker.invoke, ctx, "artifact_publish",
+        {"name": "escape.txt", "source_path": "../outside.txt"})
+    assert not result["ok"] and "path escapes" in result["error"]

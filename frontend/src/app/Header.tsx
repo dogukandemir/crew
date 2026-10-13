@@ -7,7 +7,9 @@ import { Input } from '../components/ui/Field';
 import { ProgressBar } from '../components/ui/Card';
 import { StatusDot } from '../components/ui/StatusDot';
 import { Badge } from '../components/ui/Badge';
-import { useHealth, useProjects } from './hooks';
+import { useHealth, useOnboardingState, useProjects } from './hooks';
+import { ProviderStatus } from '../features/onboarding/ProviderStatus';
+import { useSession } from './AuthGate';
 import { useTabs } from '../stores/tabs';
 import { useConnection } from '../stores/connection';
 import { useUi } from '../stores/ui';
@@ -16,6 +18,7 @@ import { CONTRACT_VERSION } from '../api/types';
 
 function ConnectionIndicator() {
   const { data, isError, isLoading } = useHealth();
+  const onboarding = useOnboardingState();
   const tabs = useTabs((s) => s.tabs);
   const byProject = useConnection((s) => s.byProject);
 
@@ -42,11 +45,15 @@ function ConnectionIndicator() {
   const mismatch = data.contract !== CONTRACT_VERSION;
   return (
     <span
-      className="flex items-center gap-1.5 text-xs text-slate-300"
+      className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300"
       title={`backend ${data.version} · contract ${data.contract} · live event streams: ${live} of ${total} open tabs`}
     >
       <StatusDot state={total === 0 || live > 0 ? 'ok' : 'warning'} pulse />
-      connected
+      <span className="hidden sm:inline">Backend online</span>
+      <Badge tone={data.offline_llm ? 'warning' : 'accent'}>
+        {data.offline_llm ? 'Demo · no model spend' : 'Live · paid usage'}
+      </Badge>
+      <ProviderStatus state={onboarding.data} unavailable={onboarding.isError} />
       {total > 0 && (
         <span className="text-slate-500" title="open project tabs with a live stream">
           {live}/{total}
@@ -93,7 +100,7 @@ function KillSwitch() {
   // no runs in flight → keep the emergency stop available but quiet (it was the
   // loudest thing on an empty control room)
   const active = (data?.items ?? []).some(
-    (p) => !!p.stage && !['IDLE', 'DONE', 'FAILED', ''].includes(p.stage),
+    (p) => p.active_run ?? (!!p.stage && !['IDLE', 'DONE', 'FAILED', 'ABORTED', ''].includes(p.stage)),
   );
 
   const kill = useMutation({
@@ -167,12 +174,25 @@ function KillSwitch() {
   );
 }
 
+function SignOut() {
+  const { signOut } = useSession();
+  const [busy, setBusy] = useState(false);
+  const setToast = useUi((s) => s.setToast);
+  if (!signOut) return null;
+  return <Button variant="ghost" size="sm" disabled={busy} onClick={async () => {
+    setBusy(true);
+    try { await signOut(); }
+    catch (error) { setToast({ kind: 'error', message: `Sign-out failed: ${error instanceof Error ? error.message : String(error)}` }); }
+    finally { setBusy(false); }
+  }}>{busy ? 'Signing out…' : 'Sign out'}</Button>;
+}
+
 export function Header() {
   const newProjectOpen = useUi((s) => s.newProjectOpen);
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
 
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-slate-700/60 bg-slate-950/80 px-3 py-1.5">
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 bg-slate-950/80 px-3 py-1.5">
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold tracking-tight text-slate-100">
           <span className="mr-1 text-emerald-400">◈</span>Crew
@@ -181,10 +201,11 @@ export function Header() {
           ＋ New project
         </Button>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         <GlobalBudgetMeter />
         <ConnectionIndicator />
         <KillSwitch />
+        <SignOut />
       </div>
     </header>
   );

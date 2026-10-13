@@ -52,7 +52,7 @@ class Verdict:
 
 # ── content review ──────────────────────────────────────────────────────────────────
 
-def review_content(text: str, *, url: str = "", kind: str = "page") -> Verdict:
+async def review_content(text: str, *, url: str = "", kind: str = "page", project_id: str = "") -> Verdict:
     """Screen fetched web content before an agent may see it.
 
     Deterministic pattern bank first (the floor); the model reviewer — when a provider
@@ -62,7 +62,7 @@ def review_content(text: str, *, url: str = "", kind: str = "page") -> Verdict:
     reasons = [f"pattern: {label}" for label in labels]
     score = min(1.0, 0.5 + 0.15 * len(labels)) if labels else 0.0
     method = "deterministic"
-    model = _model_review_content(text=text, url=url, kind=kind, det=labels)
+    model = await _model_review_content(text=text, url=url, kind=kind, det=labels, project_id=project_id)
     if model is not None:
         method = "deterministic+model"
         if model.get("risky"):
@@ -73,7 +73,7 @@ def review_content(text: str, *, url: str = "", kind: str = "page") -> Verdict:
     return Verdict("review" if risky else "clean", reasons, score, method)
 
 
-def _model_review_content(*, text: str, url: str, kind: str, det: list[str]) -> dict | None:
+async def _model_review_content(*, text: str, url: str, kind: str, det: list[str], project_id: str) -> dict | None:
     """One classifying call when a provider exists; None offline."""
     from crew.control.council import _llm_json  # lazy: keeps the tools import path light
 
@@ -88,11 +88,11 @@ def _model_review_content(*, text: str, url: str, kind: str, det: list[str]) -> 
     user = (f"SOURCE: {url or '(search results)'} ({kind})\n"
             f"DETERMINISTIC HITS: {det or 'none'}\n"
             f"CONTENT (first 6000 chars):\n{text[:6000]}")
-    raw = _llm_json(ModelTier.FAST, system, user)
+    raw = await _llm_json(ModelTier.FAST, system, user, project_id=project_id)
     return raw if isinstance(raw, dict) else None
 
 
-def _model_note_command(cmd: str, reasons: list[str]) -> str | None:
+async def _model_note_command(cmd: str, reasons: list[str], *, project_id: str = "") -> str | None:
     """The reviewer's human-readable note for a gated command. Never un-flags."""
     from crew.control.council import _llm_json
 
@@ -104,7 +104,7 @@ def _model_note_command(cmd: str, reasons: list[str]) -> str | None:
     )
     user = (f"COMMAND: {cmd[:1200]}\nPATTERNS MATCHED: {reasons}\n"
             'JSON only: {"note": "..."}')
-    raw = _llm_json(ModelTier.FAST, system, user)
+    raw = await _llm_json(ModelTier.FAST, system, user, project_id=project_id)
     note = str((raw or {}).get("note") or "").strip()
     return note[:400] if note else None
 
@@ -146,8 +146,8 @@ def review_command(cmd: str) -> Verdict:
 
 
 def normalize_command(cmd: str) -> str:
-    """What the allowlist and approval matching compare: whitespace-collapsed text."""
-    return re.sub(r"\s+", " ", (cmd or "").strip())
+    """Hash the exact command: quoted whitespace and indentation are significant."""
+    return "sha256:" + hashlib.sha256((cmd or "").encode()).hexdigest()
 
 
 # ── quarantine store ────────────────────────────────────────────────────────────────
@@ -188,11 +188,11 @@ def load_quarantined(meta: dict) -> str | None:
 # ── approval gates ──────────────────────────────────────────────────────────────────
 
 async def gate_content(project_id: str, *, agent_id: str | None, task_id: str | None,
-                       url: str, kind: str, review: Verdict, meta: dict) -> dict:
+                       url: str, kind: str, review: Verdict, meta: dict, run_id: str | None = None) -> dict:
     """File the content approval (full context in the request) and emit the trail."""
     aid = await request_approval(
         project_id, capability="net.fetch", agent_id=agent_id, task_id=task_id,
-        request={"kind": "content_review", "url": url, "source_kind": kind,
+        request={"kind": "content_review", "url": url, "run_id": run_id, "source_kind": kind,
                  "sha256": meta["sha256"], "path": meta["path"], "preview": meta["preview"],
                  "reasons": review.reasons[:8], "score": review.score, "method": review.method})
     await ev.emit("security.content.quarantined", project_id=project_id, severity="warning",
@@ -210,38 +210,40 @@ async def gate_content(project_id: str, *, agent_id: str | None, task_id: str | 
 
 
 async def release_for_content(project_id: str, *, agent_id: str | None, url: str,
-                              task_id: str | None) -> dict | None:
+                              task_id: str | None, run_id: str | None = None) -> dict | None:
     """Is there a GRANTED content_review for this exact URL covering this agent?
 
     Task-scoped like `approval_granted` (a task-scoped grant covers only that task; a
     general one covers the agent). Returns the quarantine identity to serve, or None.
     """
-    async with session_scope() as s:
+    async with session_scope(write_lock=True) as s:
         q = select(Approval).where(Approval.project_id == project_id,
                                    Approval.capability == "net.fetch",
-                                   Approval.state == "granted")
+                                   Approval.state == "granted",
+                                   Approval.expires_at > datetime.now(UTC))
         if agent_id is not None:
             q = q.where(Approval.agent_id == agent_id)
         rows = (await s.scalars(q.order_by(desc(Approval.decided_at)).limit(50))).all()
-    for r in rows:
-        req = r.request or {}
-        if req.get("kind") != "content_review" or req.get("url") != url:
-            continue
-        if r.task_id not in (None, task_id):
-            continue
-        return {"path": req.get("path"), "sha256": req.get("sha256"), "approval_id": r.id}
+        for r in rows:
+            req = r.request or {}
+            if req.get("kind") != "content_review" or req.get("url") != url:
+                continue
+            if r.task_id != task_id or req.get("run_id") != run_id:
+                continue
+            r.state = "consumed"
+            return {"path": req.get("path"), "sha256": req.get("sha256"), "approval_id": r.id}
     return None
 
 
 async def gate_command(project_id: str, *, agent_id: str | None, task_id: str | None,
-                       tool: str, capability: str, cmd: str, review: Verdict) -> dict:
+                       tool: str, capability: str, cmd: str, review: Verdict, run_id: str | None = None) -> dict:
     """File the command approval. The request carries the command itself, the patterns
     it matched, and the reviewer's note — that is what the human decides on."""
-    note = _model_note_command(cmd, review.reasons) or ""
+    note = await _model_note_command(cmd, review.reasons, project_id=project_id) or ""
     norm = normalize_command(cmd)
     aid = await request_approval(
         project_id, capability=capability, agent_id=agent_id, task_id=task_id,
-        request={"kind": "command_review", "tool": tool, "cmd": cmd[:4000], "norm": norm,
+        request={"kind": "command_review", "run_id": run_id, "tool": tool, "cmd": cmd[:4000], "norm": norm,
                  "reasons": review.reasons[:8], "risk_score": review.score, "note": note})
     await ev.emit("security.command.reviewed", project_id=project_id, severity="warning",
                   title=f"command gated: {cmd[:60]}",
@@ -258,22 +260,24 @@ async def gate_command(project_id: str, *, agent_id: str | None, task_id: str | 
 
 
 async def release_for_command(project_id: str, *, agent_id: str | None, norm: str,
-                              capability: str, task_id: str | None) -> dict | None:
+                              capability: str, task_id: str | None, run_id: str | None = None) -> dict | None:
     """A GRANTED command_review for this exact normalized command covers the retry."""
-    async with session_scope() as s:
+    async with session_scope(write_lock=True) as s:
         q = select(Approval).where(Approval.project_id == project_id,
                                    Approval.capability == capability,
-                                   Approval.state == "granted")
+                                   Approval.state == "granted",
+                                   Approval.expires_at > datetime.now(UTC))
         if agent_id is not None:
             q = q.where(Approval.agent_id == agent_id)
         rows = (await s.scalars(q.order_by(desc(Approval.decided_at)).limit(50))).all()
-    for r in rows:
-        req = r.request or {}
-        if req.get("kind") != "command_review" or req.get("norm") != norm:
-            continue
-        if r.task_id not in (None, task_id):
-            continue
-        return {"approval_id": r.id}
+        for r in rows:
+            req = r.request or {}
+            if req.get("kind") != "command_review" or req.get("norm") != norm:
+                continue
+            if r.task_id != task_id or req.get("run_id") != run_id:
+                continue
+            r.state = "consumed"
+            return {"approval_id": r.id}
     return None
 
 

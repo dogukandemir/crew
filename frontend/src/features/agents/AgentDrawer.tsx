@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_BASE, api } from '../../api/client';
+import { api } from '../../api/client';
 import type { DeliverableRow, RewardEvent } from '../../api/types';
+import { DownloadButton } from '../../components/ui/DownloadButton';
 import { Drawer } from '../../components/ui/Drawer';
 import { Badge, severityTone } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -347,15 +348,14 @@ function DeliverablesSection({ projectId, agentId }: { projectId: string; agentI
                 >
                   {formatRelativeTime(r.created_at)}
                 </span>
-                <a
-                  href={`${API_BASE}/api/artifacts/${r.id}/download`}
-                  download
-                  onClick={(e) => e.stopPropagation()}
+                <DownloadButton
+                  path={`/api/artifacts/${r.id}/download`}
+                  filename={r.name}
                   className="shrink-0 rounded px-1 text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
                   title="Download this file"
                 >
                   ↓
-                </a>
+                </DownloadButton>
               </div>
             </li>
           ))}

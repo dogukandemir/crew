@@ -14,15 +14,17 @@ import threading
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import desc, func, select
 from starlette.background import BackgroundTask
 
 from crew import CONTRACT_VERSION, __version__
 from crew.api.auth import require_user
+from crew.api.commands import drive_after_commit, replayable
 from crew.control import backlog, commands, company, onboarding, org, security_review
 from crew.control.council import council
 from crew.control.orchestrator import orchestrator
@@ -66,6 +68,7 @@ from crew.execution.runner import select_runner
 from crew.execution.tools import TOOLS, tools_for_agent
 
 api = APIRouter(prefix="/api", dependencies=[Depends(require_user)])
+public_api = APIRouter(prefix="/api")
 
 # ── schemas ─────────────────────────────────────────────────────────────────────────
 
@@ -78,47 +81,86 @@ class Problem(BaseModel):
     trace_id: str = ""
 
 
-class ProjectCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    goal: str = ""
-    description: str = ""
-    budget_usd: float | None = None
+class APIModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
+
+
+class ProjectSettingsInput(APIModel):
     settings: dict | None = None
+
+    @field_validator("settings")
+    @classmethod
+    def editable_settings(cls, value):
+        if value is None:
+            return value
+        allowed = set(org.DEFAULT_PROJECT_SETTINGS) | {"budget_warning_pct", "cadence_enabled", "cadence_max_runs"}
+        if set(value) - allowed:
+            raise ValueError("settings contain unknown or server-managed fields")
+        if len(json.dumps(value, allow_nan=False).encode()) > 32768:
+            raise ValueError("settings exceed 32 KiB")
+        integer_limits = {"max_agents": (1, settings.max_agents_per_project),
+                          "max_departments": (1, settings.max_departments_per_project),
+                          "layoff_idle_days": (1, 3650), "cadence_max_runs": (1, 100)}
+        for name, (low, high) in integer_limits.items():
+            if name in value and (type(value[name]) is not int or not low <= value[name] <= high):
+                raise ValueError(f"{name} must be an integer between {low} and {high}")
+        for name in ("autonomous_intake", "require_goal_confirmation", "require_human_verification", "auto_hire", "cadence_enabled"):
+            if name in value and type(value[name]) is not bool:
+                raise ValueError(f"{name} must be a boolean")
+        for name in ("max_senior_ratio", "budget_warning_pct"):
+            if name in value and (type(value[name]) not in (int, float) or not 0 <= value[name] <= 1):
+                raise ValueError(f"{name} must be between zero and one")
+        for name in ("reward_weights", "council_policy", "tool_policy", "model_tiers", "retention", "notify", "verification"):
+            if name in value and not isinstance(value[name], dict):
+                raise ValueError(f"{name} must be an object")
+        if "egress_allow" in value:
+            domains = value["egress_allow"]
+            if not isinstance(domains, list) or len(domains) > 100 or any(not isinstance(d, str) or not d or len(d) > 253 for d in domains):
+                raise ValueError("egress_allow must contain at most 100 domain names")
+        return value
+
+
+class ProjectCreate(ProjectSettingsInput):
+    name: str = Field(min_length=1, max_length=200)
+    goal: str = Field(default="", max_length=10000)
+    description: str = ""
+    budget_usd: float | None = Field(default=None, gt=0, le=settings.hard_budget_usd)
     # Born under a company (ADR 0015): the dialog's selector sends this.
     company_id: str | None = None
 
 
-class CompanyCreate(BaseModel):
+class CompanyCreate(APIModel):
     name: str = Field(min_length=1, max_length=120)
-    mission: str = ""
-    budget_usd: float | None = None
+    mission: str = Field(default="", max_length=10000)
+    budget_usd: float | None = Field(default=None, gt=0, le=settings.hard_budget_usd)
 
 
-class FoundBody(BaseModel):
+class FoundBody(APIModel):
     """The founding wizard's one call (ADR 0015): company, first project under it, first run."""
 
     name: str = Field(min_length=1, max_length=120)
-    mission: str = ""
-    budget_usd: float | None = None
+    mission: str = Field(default="", max_length=10000)
+    budget_usd: float | None = Field(default=None, gt=0, le=settings.hard_budget_usd)
     project_name: str = Field(min_length=1, max_length=200)
-    project_goal: str = ""
-    project_budget_usd: float | None = None
+    project_goal: str = Field(default="", max_length=10000)
+    project_budget_usd: float | None = Field(default=None, gt=0, le=settings.hard_budget_usd)
     # Optional workspace root chosen at founding (ADR 0017) — absolute path; empty
     # means the default `{workspace_root}/{company}/{project}` tree.
     workspace_path: str = ""
-    mode: str = "autonomous"
-    start_run: bool = True
+    mode: Literal["autonomous", "interactive"] = "autonomous"
+    start_run: bool = False
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
 
 
-class CompanyProjectBody(BaseModel):
+class CompanyProjectBody(APIModel):
     project_id: str
 
 
-class CompanyChiefBody(BaseModel):
+class CompanyChiefBody(APIModel):
     function: str
 
 
-class BoardItemCreate(BaseModel):
+class BoardItemCreate(APIModel):
     kind: str = "story"
     title: str = Field(min_length=1, max_length=280)
     body: str = ""
@@ -128,63 +170,71 @@ class BoardItemCreate(BaseModel):
     squad_id: str | None = None
     priority: int = 2
     severity: str = "normal"
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
 
 
-class BoardItemPatch(BaseModel):
+class BoardItemPatch(APIModel):
     state: str | None = None
 
 
-class BoardSessionBody(BaseModel):
+class BoardSessionBody(APIModel):
     topic: str = Field(min_length=1, max_length=280)
     options: list[str] | None = None
 
 
-class BoardSeatBody(BaseModel):
+class BoardSeatBody(APIModel):
     role: str = "board_member"
 
 
-class CommandBody(BaseModel):
+class CommandBody(APIModel):
     text: str = Field(min_length=1, max_length=2000)
 
 
-class OnboardingKeyBody(BaseModel):
+class OnboardingKeyBody(APIModel):
     provider: str = "deepseek"
-    key: str = Field(min_length=8, max_length=400)
+    key: str = Field(default="", max_length=400)
 
 
-class ProjectPatch(BaseModel):
-    name: str | None = None
-    goal: str | None = None
-    description: str | None = None
-    settings: dict | None = None
+class ProjectPatch(ProjectSettingsInput):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    goal: str | None = Field(default=None, max_length=10000)
+    description: str | None = Field(default=None, max_length=20000)
+    budget_cap_micros: int | None = Field(default=None, gt=0, le=int(settings.hard_budget_usd * 1_000_000), strict=True)
 
 
-class RunCreate(BaseModel):
-    goal: str = Field(min_length=3)
-    mode: str = "autonomous"
+class RunCreate(APIModel):
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
+    goal: str = Field(min_length=3, max_length=10000)
+    mode: Literal["autonomous", "interactive"] = "autonomous"
 
 
-class SteerBody(BaseModel):
+class SteerBody(APIModel):
     text: str
     target_kind: str = "project"
     target_id: str | None = None
 
 
-class DepartmentCreate(BaseModel):
+class DepartmentCreate(APIModel):
     name: str
-    mission: str = ""
-    budget_usd: float = 0.0
+    mission: str = Field(default="", max_length=10000)
+    budget_usd: float = Field(0.0, ge=0, le=1_000_000)
     capabilities: list[str] = Field(default_factory=list)
 
 
-class SquadCreate(BaseModel):
+class DepartmentPatch(APIModel):
+    mission: str | None = Field(None, max_length=10000)
+    budget_usd: float | None = Field(None, ge=0, le=1_000_000)
+    capabilities: list[str] | None = None
+
+
+class SquadCreate(APIModel):
     name: str
-    mission: str = ""
+    mission: str = Field(default="", max_length=10000)
     workstream: str = ""
     lead_agent_id: str | None = None
 
 
-class HireBody(BaseModel):
+class HireBody(APIModel):
     role: str = "worker"
     title: str | None = None
     grade: int | None = None
@@ -195,29 +245,31 @@ class HireBody(BaseModel):
     rationale: str = ""
 
 
-class AgentPatch(BaseModel):
+class AgentPatch(APIModel):
     mission: str | None = None
     tools: list[str] | None = None
-    spend_cap_per_run_usd: float | None = None
-    autonomy: str | None = None
+    spend_cap_per_run_usd: float | None = Field(None, ge=0, le=1_000_000, allow_inf_nan=False)
+    spend_cap_per_day_usd: float | None = Field(None, ge=0, le=1_000_000, allow_inf_nan=False)
+    autonomy: Literal["supervised", "bounded", "autonomous"] | None = None
 
 
-class TransitionBody(BaseModel):
+class TransitionBody(APIModel):
     reason: str = ""
 
 
-class TaskCreate(BaseModel):
-    title: str
+class TaskCreate(APIModel):
+    title: str = Field(min_length=1, max_length=300)
     description: str = ""
     deliverable: str = ""
     acceptance_criteria: list[str] = Field(default_factory=list)
     required_skills: list[dict] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
-    effort: str = "M"
-    priority: int = 2
+    effort: Literal["S", "M", "L", "XL"] = "M"
+    priority: int = Field(default=2, ge=0, le=5)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
 
 
-class CouncilCreate(BaseModel):
+class CouncilCreate(APIModel):
     question: str
     options: list[dict]
     criteria: list[str] = Field(default_factory=list)
@@ -229,7 +281,7 @@ class CouncilCreate(BaseModel):
     rounds: int = 0
 
 
-class BrainWriteBody(BaseModel):
+class BrainWriteBody(APIModel):
     brain_id: str
     kind: str = "fact"
     title: str
@@ -238,21 +290,21 @@ class BrainWriteBody(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-class PromoteBody(BaseModel):
+class PromoteBody(APIModel):
     to_brain_id: str
     rationale: str = ""
 
 
-class SupersedeBody(BaseModel):
+class SupersedeBody(APIModel):
     new_entry_id: str
     reason: str = ""
 
 
-class OverrideBody(BaseModel):
+class OverrideBody(APIModel):
     reason: str
 
 
-class ApprovalDecision(BaseModel):
+class ApprovalDecision(APIModel):
     reason: str = ""
     ttl_minutes: int = 120
     # Command approvals only (ADR 0017): "always allow" writes the normalized command
@@ -260,23 +312,23 @@ class ApprovalDecision(BaseModel):
     always: bool = False
 
 
-class SecretCreate(BaseModel):
+class SecretCreate(APIModel):
     name: str
     value: str
     scope_kind: str = "project"
     scope_id: str = ""
 
 
-class WeightsBody(BaseModel):
+class WeightsBody(APIModel):
     weights: dict[str, float]
 
 
-class AnswerBody(BaseModel):
+class AnswerBody(APIModel):
     answers: list[str]
     confirm: bool = True
 
 
-class LoginBody(BaseModel):
+class LoginBody(APIModel):
     email: str
     password: str
 
@@ -388,7 +440,7 @@ async def health() -> dict:
     from crew.core.db import ping
 
     return {"status": "ok" if await ping() else "degraded", "version": __version__,
-            "contract": CONTRACT_VERSION, "env": settings.env, "auth_mode": settings.auth_mode,
+            "contract": CONTRACT_VERSION, "offline_llm": settings.offline_llm, "env": settings.env, "auth_mode": settings.auth_mode,
             "server_time": datetime.now(UTC).isoformat()}
 
 
@@ -396,6 +448,18 @@ async def health() -> dict:
 @api.get("/onboarding/state")
 async def get_onboarding_state() -> dict:
     return onboarding.state()
+
+
+class ExecutionModeBody(APIModel):
+    mode: Literal["demo", "live"]
+
+
+@api.post("/onboarding/mode")
+async def post_execution_mode(body: ExecutionModeBody) -> dict:
+    try:
+        return await onboarding.set_mode(body.mode)
+    except ValueError as exc:
+        raise _problem(400, str(exc)) from exc
 
 
 @api.post("/onboarding/key", status_code=201)
@@ -512,11 +576,28 @@ async def list_tools() -> dict:
                        "skills": list(t.default_skills)} for r, t in ROLE_TEMPLATES.items()]}
 
 
-@api.post("/auth/login")
-async def auth_login(body: LoginBody) -> dict:
+@public_api.post("/auth/login")
+async def auth_login(body: LoginBody, request: Request) -> dict:
     from crew.api.auth import login as do_login
 
-    return await do_login(email=body.email, password=body.password)
+    return await do_login(email=body.email, password=body.password,
+                          ip=request.client.host if request.client else "unknown",
+                          ua=request.headers.get("user-agent", ""))
+
+
+@api.post("/auth/logout")
+async def auth_logout(request: Request) -> dict:
+    from crew.api.auth import revoke_session
+
+    token = request.headers.get("authorization", "").removeprefix("Bearer ")
+    if token:
+        await revoke_session(token)
+    return {"ok": True}
+
+
+@public_api.get("/auth/config")
+async def auth_config() -> dict:
+    return {"mode": settings.auth_mode}
 
 
 @api.get("/auth/me")
@@ -557,6 +638,7 @@ async def post_company(body: CompanyCreate, user: dict = Depends(require_user)) 
 
 
 @api.post("/found", status_code=201)
+@replayable
 async def post_found(body: FoundBody, user: dict = Depends(require_user)) -> dict:
     """Company + its first project in one transaction-shaped call, then the first run
     is started and driven in the background — the wizard lands on a company already
@@ -576,7 +658,7 @@ async def post_found(body: FoundBody, user: dict = Depends(require_user)) -> dic
         goal = (body.project_goal or body.project_name).strip()
         run = await orchestrator.start_run(project_id=found["project"]["id"], goal=goal,
                                            mode=body.mode, actor=user["id"])
-        asyncio.create_task(_drive(found["project"]["id"], run["id"]))
+        await drive_after_commit(found["project"]["id"], run["id"])
     return {**found, "run": run}
 
 
@@ -595,6 +677,8 @@ async def post_company_project(company_id: str, body: CompanyProjectBody,
         return await company.attach_project(company_id=company_id, project_id=body.project_id)
     except KeyError as e:
         raise _problem(404, "company or project not found", str(e)) from e
+    except ValueError as e:
+        raise _problem(409, str(e)) from e
 
 
 @api.post("/companies/{company_id}/chiefs", status_code=201)
@@ -680,6 +764,7 @@ async def get_board(project_id: str, department_id: str | None = None,
 
 
 @api.post("/projects/{project_id}/board/items", status_code=201)
+@replayable
 async def post_board_item(project_id: str, body: BoardItemCreate,
                           user: dict = Depends(require_user)) -> dict:
     try:
@@ -734,7 +819,9 @@ async def get_project(project_id: str) -> dict:
 
 @api.patch("/projects/{project_id}")
 async def patch_project(project_id: str, body: ProjectPatch, user: dict = Depends(require_user)) -> dict:
-    async with session_scope() as s:
+    from crew.core.db import atomic_scope
+
+    async with atomic_scope() as s:
         p = await s.get(Project, project_id)
         if p is None:
             raise _problem(404, "project not found", project_id)
@@ -747,12 +834,20 @@ async def patch_project(project_id: str, body: ProjectPatch, user: dict = Depend
             p.goal = body.goal
         if body.description is not None:
             p.description = body.description
+        if body.budget_cap_micros is not None:
+            if body.budget_cap_micros < p.spend_micros + p.reserved_micros:
+                raise _problem(409, "budget cap is below spent and reserved usage", project_id)
+            if p.company_id:
+                parent = await s.get(Project, p.company_id)
+                if parent is None or body.budget_cap_micros > parent.budget_cap_micros:
+                    raise _problem(409, "project cap exceeds company cap", project_id)
+            p.budget_cap_micros = body.budget_cap_micros
         p.settings = merged
         s.add(p)
         out = org.serialize_project(p)
-    await ev.emit("project.updated", project_id=project_id, title="project updated",
-                  payload={"project_id": project_id, "fields": body.model_dump(exclude_none=True)},
-                  actor=user["id"])
+        await ev.emit("project.updated", project_id=project_id, title="project updated",
+                      payload={"project_id": project_id, "fields": body.model_dump(exclude_none=True)},
+                      actor=user["id"])
     return out
 
 
@@ -773,17 +868,19 @@ async def kill_project(project_id: str, user: dict = Depends(require_user)) -> d
 
 @api.delete("/projects/{project_id}")
 async def archive_project(project_id: str, user: dict = Depends(require_user)) -> dict:
-    async with session_scope() as s:
+    from crew.core.db import atomic_scope
+
+    async with atomic_scope() as s:
         p = await s.get(Project, project_id)
         if p is None:
             raise _problem(404, "project not found", project_id)
         p.status = "archived"
         p.archived_at = datetime.now(UTC)
         s.add(p)
-    await ev.emit("project.archived", project_id=project_id, severity="notice",
-                  title="project archived", payload={"project_id": project_id}, actor=user["id"])
-    await audit(actor_kind="user", actor_id=user["id"], action="project.archived",
-                resource_kind="project", resource_id=project_id)
+        await ev.emit("project.archived", project_id=project_id, severity="notice",
+                      title="project archived", payload={"project_id": project_id}, actor=user["id"])
+        await audit(actor_kind="user", actor_id=user["id"], action="project.archived",
+                    resource_kind="project", resource_id=project_id)
     return {"project_id": project_id, "status": "archived"}
 
 
@@ -822,6 +919,7 @@ async def project_report(project_id: str) -> dict:
 
 # ── runs ────────────────────────────────────────────────────────────────────────────
 @api.post("/projects/{project_id}/runs", status_code=202)
+@replayable
 async def start_run(project_id: str, body: RunCreate, user: dict = Depends(require_user)) -> dict:
     await _project_or_404(project_id)
     try:
@@ -829,17 +927,21 @@ async def start_run(project_id: str, body: RunCreate, user: dict = Depends(requi
                                            actor=user["id"])
     except ValueError as e:
         raise _problem(409, "cannot start run", str(e)) from e
-    asyncio.create_task(_drive(project_id, run["id"]))
+    await drive_after_commit(project_id, run["id"])
     return {**run, "accepted": True}
 
 
 async def _drive(project_id: str, run_id: str) -> None:
     try:
+        # An approval can arrive while the prior worker wave is still unwinding.
+        # Queue continuation instead of losing it to already_running.
+        await orchestrator.wait_idle(run_id)
         await orchestrator.advance(run_id)
     except Exception as e:  # a run failure must be visible, not silent
         import logging
 
         logging.getLogger("crew.api").exception("run %s failed", run_id)
+        await orchestrator._set_run(run_id, status="failed", stage="DONE", error=str(e)[:500])
         await ev.emit("run.failed", project_id=project_id, run_id=run_id, severity="error",
                       title="run failed with an internal error", summary=str(e)[:300],
                       payload={"run_id": run_id, "error": f"{type(e).__name__}: {e}"},
@@ -899,17 +1001,10 @@ async def steer_run(run_id: str, body: SteerBody, user: dict = Depends(require_u
 
 @api.post("/runs/{run_id}/cancel")
 async def cancel_run(run_id: str, user: dict = Depends(require_user)) -> dict:
-    async with session_scope() as s:
-        r = await s.get(Run, run_id)
-        if r is None:
-            raise _problem(404, "run not found", run_id)
-        r.status = "aborted"
-        r.ended_at = datetime.now(UTC)
-        s.add(r)
-        project_id = r.project_id
-    await ev.emit("run.aborted", project_id=project_id, run_id=run_id, severity="warning",
-                  title="run cancelled", payload={"run_id": run_id}, actor=user["id"])
-    return {"run_id": run_id, "status": "aborted"}
+    try:
+        return await orchestrator.cancel_run(run_id, actor=user["id"])
+    except KeyError:
+        raise _problem(404, "run not found", run_id) from None
 
 
 @api.get("/runs/{run_id}/dossier")
@@ -969,22 +1064,24 @@ async def get_department(department_id: str) -> dict:
 
 
 @api.patch("/departments/{department_id}")
-async def patch_department(department_id: str, body: dict, user: dict = Depends(require_user)) -> dict:
+@replayable
+async def patch_department(department_id: str, body: DepartmentPatch, user: dict = Depends(require_user)) -> dict:
     async with session_scope() as s:
         d = await s.get(Department, department_id)
         if d is None:
             raise _problem(404, "department not found", department_id)
-        if "mission" in body:
-            d.mission = str(body["mission"])
-        if "budget_usd" in body:
-            d.budget_envelope_micros = int(float(body["budget_usd"]) * 1_000_000)
-        if "capabilities" in body:
-            d.capabilities = list(body["capabilities"])
+        if body.mission is not None:
+            d.mission = body.mission
+        if body.budget_usd is not None:
+            d.budget_envelope_micros = int(body.budget_usd * 1_000_000)
+        if body.capabilities is not None:
+            d.capabilities = list(body.capabilities)
         s.add(d)
         out = {"id": d.id, "mission": d.mission, "budget_usd": micros_to_usd(d.budget_envelope_micros),
                "capabilities": d.capabilities}
     await audit(actor_kind="user", actor_id=user["id"], action="department.updated",
-                resource_kind="department", resource_id=department_id, reason=json.dumps(body)[:200])
+                resource_kind="department", resource_id=department_id,
+                reason=json.dumps(body.model_dump(exclude_none=True))[:200])
     return out
 
 
@@ -1065,6 +1162,7 @@ async def get_agent(agent_id: str) -> dict:
 
 
 @api.patch("/agents/{agent_id}")
+@replayable
 async def patch_agent(agent_id: str, body: AgentPatch, user: dict = Depends(require_user)) -> dict:
     async with session_scope() as s:
         a = await s.get(Agent, agent_id)
@@ -1078,6 +1176,8 @@ async def patch_agent(agent_id: str, body: AgentPatch, user: dict = Depends(requ
             a.autonomy = body.autonomy
         if body.spend_cap_per_run_usd is not None:
             a.spend_cap_per_run_micros = int(body.spend_cap_per_run_usd * 1_000_000)
+        if body.spend_cap_per_day_usd is not None:
+            a.spend_cap_per_day_micros = int(body.spend_cap_per_day_usd * 1_000_000)
         s.add(a)
         out = await agent_dict(a)
     await audit(actor_kind="user", actor_id=user["id"], action="agent.updated", resource_kind="agent",
@@ -1175,11 +1275,17 @@ async def list_tasks(project_id: str, state: str | None = None, department_id: s
 
 
 @api.post("/projects/{project_id}/tasks", status_code=201)
+@replayable
 async def create_task(project_id: str, body: TaskCreate, user: dict = Depends(require_user)) -> dict:
     await _project_or_404(project_id)
     if not body.acceptance_criteria:
         raise _problem(422, "validation_error", "acceptance_criteria are mandatory (docs/03 §3)")
     async with session_scope() as s:
+        if body.depends_on:
+            dependencies = set(await s.scalars(select(Task.id).where(
+                Task.project_id == project_id, Task.id.in_(body.depends_on))))
+            if dependencies != set(body.depends_on):
+                raise _problem(422, "invalid dependencies", "dependencies must belong to this project")
         t = Task(project_id=project_id, title=body.title, description=body.description,
                  deliverable=body.deliverable, acceptance_criteria=body.acceptance_criteria,
                  required_skills=body.required_skills, depends_on=body.depends_on,
@@ -1342,7 +1448,8 @@ async def artifact_content(artifact_id: str) -> dict:
         except (OSError, ValueError):
             inside = False
         if inside and rp is not None and rp.is_file():
-            raw = rp.read_bytes()[:262_144]
+            with rp.open("rb") as stream:
+                raw = stream.read(262_144)
             out["available"] = True
             out["truncated"] = rp.stat().st_size > len(raw)
             out["text"] = raw.decode("utf-8", errors="replace")
@@ -1892,6 +1999,7 @@ async def list_approvals(project_id: str, state: str | None = None) -> dict:
 
 
 @api.post("/approvals/{approval_id}/grant")
+@replayable
 async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = Depends(require_user)) -> dict:
     row = await decide_approval(approval_id, grant=True, decided_by=user["id"], reason=body.reason)
     if row is None:
@@ -1907,14 +2015,21 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
         allow_id = await security_review.allow_command(
             row.project_id, norm=str(req.get("norm")), sample_cmd=str(req.get("cmd") or ""),
             note=body.reason, decided_by=user["id"], source_approval_id=approval_id)
+    continuation = await orchestrator.approval_decided(approval_id, granted=True)
+    if continuation:
+        await drive_after_commit(*continuation)
     return {"approval_id": approval_id, "state": "granted", "allow_id": allow_id}
 
 
 @api.post("/approvals/{approval_id}/deny")
+@replayable
 async def deny_approval(approval_id: str, body: ApprovalDecision, user: dict = Depends(require_user)) -> dict:
     row = await decide_approval(approval_id, grant=False, decided_by=user["id"], reason=body.reason)
     if row is None:
         raise _problem(409, "approval is not pending", approval_id)
+    continuation = await orchestrator.approval_decided(approval_id, granted=False)
+    if continuation:
+        await drive_after_commit(*continuation)
     await ev.emit("policy.approval.denied", project_id=row.project_id, agent_id=row.agent_id,
                   task_id=row.task_id, severity="warning", title=f"denied: {row.capability}",
                   payload={"capability": row.capability, "approval_id": approval_id},
@@ -1927,7 +2042,7 @@ async def list_command_allows(project_id: str, include_revoked: bool = False) ->
     return {"items": await security_review.list_command_allows(project_id, include_revoked=include_revoked)}
 
 
-class AllowRevoke(BaseModel):
+class AllowRevoke(APIModel):
     reason: str = ""
 
 

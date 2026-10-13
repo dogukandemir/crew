@@ -12,7 +12,7 @@ from crew.control.orchestrator import orchestrator
 from crew.core.db import session_scope
 from crew.core.models import Agent, AgentSkill, Event, Run, Task, WorkItem
 from crew.domain.enums import Capability, TaskState
-from crew.execution.tools import ToolContext, invoker
+from crew.execution.tools import invoker
 
 
 async def _agent(s, project_id: str, name: str, *, tools: list[str] | None = None,
@@ -93,10 +93,13 @@ async def test_a_ready_bug_is_promoted_once_and_its_column_follows_the_task(boun
 
 
 @pytest.mark.asyncio
-async def test_report_bug_files_under_the_story_of_the_current_task(bound_loop, project):
+async def test_report_bug_files_under_the_story_of_the_current_task(tool_context, bound_loop, project):
     async with session_scope() as s:
         agent = await _agent(s, project["id"], "Finder", tools=[Capability.BOARD_WRITE.value])
-        t = Task(project_id=project["id"], run_id="r-3", title="build it",
+        run = Run(project_id=project["id"], goal="build")
+        s.add(run)
+        await s.flush()
+        t = Task(project_id=project["id"], run_id=run.id, title="build it",
                  state=TaskState.RUNNING.value, assignee_agent_id=agent.id)
         s.add(t)
         await s.flush()
@@ -107,7 +110,7 @@ async def test_report_bug_files_under_the_story_of_the_current_task(bound_loop, 
         twin = _twin(agent, [Capability.BOARD_WRITE.value])
         t_id, story_id, agent_id = t.id, story.id, agent.id
 
-    ctx = ToolContext(project_id=project["id"], agent=twin, task_id=t_id, run_id="r-3")
+    ctx = await tool_context(project_id=project["id"], agent=twin, task_id=t_id, run_id=run.id)
     r = await asyncio.to_thread(invoker.invoke, ctx, "report_bug",
                                 {"title": "rows overflow the panel", "severity": "high"})
     assert r["ok"] is True, r
@@ -136,7 +139,7 @@ async def test_a_user_task_kind_promotes_too(bound_loop, project):
 
 
 @pytest.mark.asyncio
-async def test_join_task_and_the_helper_takes_the_retry(bound_loop, project):
+async def test_join_task_and_the_helper_takes_the_retry(tool_context, bound_loop, project):
     run = await orchestrator.start_run(project_id=project["id"], goal="helpers finish it")
     async with session_scope() as s:
         primary = await _agent(s, project["id"], "Primary")
@@ -150,7 +153,7 @@ async def test_join_task_and_the_helper_takes_the_retry(bound_loop, project):
         twin = _twin(helper, [Capability.BOARD_WRITE.value])
         t_id, helper_id = t.id, helper.id
 
-    ctx = ToolContext(project_id=project["id"], agent=twin, task_id="other", run_id=run["id"])
+    ctx = await tool_context(project_id=project["id"], agent=twin, task_id="other", run_id=run["id"])
     r = await asyncio.to_thread(invoker.invoke, ctx, "join_task", {"task_id": t_id})
     assert r["ok"] is True, r
     async with session_scope() as s:

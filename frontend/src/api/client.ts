@@ -59,7 +59,13 @@ export const API_BASE: string = (
   import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8787'
 ).replace(/\/+$/, '');
 
-const AUTH_TOKEN: string | undefined = import.meta.env.VITE_AUTH_TOKEN || undefined;
+let AUTH_TOKEN: string | undefined;
+export const AUTH_EXPIRED_EVENT = 'crew:auth-expired';
+
+/** Session credentials remain in memory; never embed them in the build or persist them. */
+export function setAuthToken(token: string | undefined): void {
+  AUTH_TOKEN = token;
+}
 
 /** Derived WS origin for `ws://…/ws/projects/{id}` (docs/11 §3). */
 export function wsBase(): string {
@@ -103,6 +109,7 @@ export function isBackendUnreachable(err: unknown): boolean {
 }
 
 interface RequestOptions {
+  responseType?: 'blob';
   method?: string;
   body?: unknown;
   query?: Record<string, string | number | boolean | null | undefined>;
@@ -121,6 +128,7 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  const requestToken = AUTH_TOKEN;
   const { method = 'GET', body, query, signal } = opts;
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -149,6 +157,8 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     });
   }
 
+  if (res.ok && opts.responseType === 'blob') return (await res.blob()) as T;
+
   const text = await res.text();
   let parsed: unknown = undefined;
   if (text) {
@@ -160,6 +170,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    // A late response from an old session must not sign out a newer session.
+    if (res.status === 401 && requestToken && AUTH_TOKEN === requestToken) {
+      setAuthToken(undefined);
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
     const problem =
       parsed && typeof parsed === 'object' && 'title' in (parsed as object)
         ? (parsed as Problem)
@@ -223,6 +238,8 @@ export const api = {
   // ── System & auth ──────────────────────────────────────────────────────────
   health: () => request<Health>('/api/health'),
   onboardingState: () => request<OnboardingState>('/api/onboarding/state'),
+  setExecutionMode: (mode: 'demo' | 'live') =>
+    request<OnboardingState>('/api/onboarding/mode', { method: 'POST', body: { mode } }),
   saveProviderKey: (provider: string, key: string) =>
     request<OnboardingKeyResult>('/api/onboarding/key', { method: 'POST', body: { provider, key } }),
   killAll: (confirm: boolean) =>
@@ -547,15 +564,32 @@ export const api = {
     request<null>('/api/system/restore', { method: 'POST', body: { path } }),
 
   // ── WS support ─────────────────────────────────────────────────────────────
+  wsProtocols: () => AUTH_TOKEN ? ['crew.v1', `crew.auth.${AUTH_TOKEN}`] : ['crew.v1'],
   wsUrl(projectId: string, sinceSeq: number): string {
     const url = new URL(`${wsBase()}/ws/projects/${projectId}`);
     url.searchParams.set('since_seq', String(sinceSeq ?? 0));
-    if (AUTH_TOKEN) url.searchParams.set('token', AUTH_TOKEN);
     return url.toString();
   },
 
   contract: CONTRACT_VERSION,
 } as const;
+
+/** Download through the same authenticated/error-aware transport as JSON requests. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  if (!path.startsWith('/api/')) throw new Error('Invalid download path');
+  const blob = await request<Blob>(path, { responseType: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename.replace(/[\\/\x00-\x1f]/g, '_');
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
 
 export type Api = typeof api;
 

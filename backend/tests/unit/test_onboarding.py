@@ -20,7 +20,7 @@ def test_roster_is_first_class_and_ordered():
     assert all(kinds[i] == "key" for i in ids if i != "ollama")
     # HTTP providers verify against their models endpoint; local Ollama verifies by
     # reaching the machine's own server instead (custom branch in verify()).
-    assert onboarding.PROVIDERS["openrouter"][2] == "https://openrouter.ai/api/v1/models"
+    assert onboarding.PROVIDERS["openrouter"][2] == "https://openrouter.ai/api/v1/key"
     assert onboarding.PROVIDERS["ollama"][2] is None
 
 

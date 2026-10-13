@@ -1,3 +1,4 @@
+import { animateFrames } from '../../app/animation';
 /**
  * A character, drawn as a sprite from the atlas on the office floor.
  *
@@ -93,22 +94,21 @@ export function SpriteCharacter({
     const cell = (facing: string, pose: string): AtlasEntry | undefined =>
       atlas.get(`char.${look}.${facing}.${pose}`);
 
-    let raf = 0;
     let last = performance.now();
     let phase = 0;
 
-    const tick = (now: number) => {
+    const tick = (now: number, reducedMotion: boolean) => {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       const mov = motion.current;
-      phase += dt;
+      phase = reducedMotion ? 0 : phase + dt;
 
       // `walking` is a destination as much as a movement: an agent sent to the
       // review table keeps that activity after it arrives. Only real movement
       // plays the walk cycle, exactly as the rig did.
       //
       // Which way the figure faces, and in what pose, is one rule — see figureCell.
-      const { face, pose } = figureCell(activity, atDesk, mov.moving, phase);
+      const { face, pose } = figureCell(activity, atDesk, !reducedMotion && mov.moving, phase);
       const e = cell(face, pose) ?? cell('front', 'stand');
       if (e && img.current && clipRect.current) {
         // The cell is drawn in the caller's local space with the feet on the
@@ -138,11 +138,9 @@ export function SpriteCharacter({
         mirror.current.setAttribute('transform', `scale(${mov.facing < 0 ? -1 : 1} 1)`);
       }
 
-      raf = requestAnimationFrame(tick);
     };
 
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return animateFrames(tick);
   }, [name, activity, atDesk, motion]);
 
   return (

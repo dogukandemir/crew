@@ -1,0 +1,8 @@
+# Exact historical synthetic test-fixture findings reviewed on 2026-10-10.
+# No path, directory or generic credential-pattern exemptions.
+c6d87c81775284045bfeab71583d591dbc12486a:backend/tests/api/test_api.py:generic-api-key:267
+c6d87c81775284045bfeab71583d591dbc12486a:backend/tests/api/test_api.py:generic-api-key:275
+c6d87c81775284045bfeab71583d591dbc12486a:backend/tests/api/test_api.py:generic-api-key:284
+75c0b745d49ceb028f910e2ddf443b5ed9ff4efe:backend/tests/conftest.py:generic-api-key:18
+75c0b745d49ceb028f910e2ddf443b5ed9ff4efe:backend/tests/security/test_security.py:generic-api-key:105
+75c0b745d49ceb028f910e2ddf443b5ed9ff4efe:backend/tests/security/test_security.py:generic-api-key:115

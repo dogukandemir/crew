@@ -15,8 +15,8 @@ import logging
 from sqlalchemy import select
 
 from crew.core import events as ev
-from crew.core.db import session_scope
-from crew.core.models import Agent, Task, WorkItem
+from crew.core.db import session_scope, transactional
+from crew.core.models import Agent, Department, Project, Squad, Task, WorkItem
 from crew.domain.catalog import SKILLS_BY_ID
 
 log = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ def _is_agent(handle: str) -> bool:
     return bool(handle) and handle not in ("user", "system") and not handle.startswith("user:")
 
 
+@transactional
 async def create_item(*, project_id: str, kind: str, title: str, body: str = "",
                       acceptance: list | None = None, parent_id: str | None = None,
                       department_id: str | None = None, squad_id: str | None = None,
@@ -53,6 +54,13 @@ async def create_item(*, project_id: str, kind: str, title: str, body: str = "",
                     severity=severity if kind == "bug" else "normal", state=state,
                     priority=priority, tags=list(tags or []), source=dict(source or {}))
     async with session_scope() as s:
+        if await s.get(Project, project_id) is None:
+            raise ValueError("project does not exist")
+        for model, identity in ((WorkItem, parent_id), (Department, department_id), (Squad, squad_id)):
+            if identity:
+                linked = await s.get(model, identity)
+                if linked is None or linked.project_id != project_id:
+                    raise ValueError("linked board item or team must belong to this project")
         s.add(item)
         await s.flush()
         iid = item.id
@@ -66,6 +74,7 @@ async def create_item(*, project_id: str, kind: str, title: str, body: str = "",
     return {"id": iid, "kind": kind, "title": item.title, "state": state}
 
 
+@transactional
 async def plan_items(*, project_id: str, goal: str, tasks: list[Task]) -> dict:
     """Turn a run's plan into the hierarchy: one epic (the goal), features per capability
     category, and stories 1:1 with the plan's tasks — linked, never re-promoted."""
@@ -102,6 +111,7 @@ async def plan_items(*, project_id: str, goal: str, tasks: list[Task]) -> dict:
     return {"epic_id": epic["id"], "features": len(features), "stories": stories}
 
 
+@transactional
 async def move_item(*, project_id: str, item_id: str, state: str, actor: str = "user") -> dict:
     if state not in COLUMNS:
         raise ValueError(f"unknown board column: {state}")
@@ -132,6 +142,7 @@ async def move_item_by_id(*, item_id: str, state: str, actor: str = "user") -> d
     return await move_item(project_id=project_id, item_id=item_id, state=state, actor=actor)
 
 
+@transactional
 async def promote_ready(*, project_id: str, run_id: str) -> list[dict]:
     """READY stories/bugs without a task become real tasks; the wave engine runs them."""
     promoted: list[dict] = []
@@ -165,8 +176,8 @@ async def promote_ready(*, project_id: str, run_id: str) -> list[dict]:
                              "title": item.title})
             pending_events.append({"item_id": item.id, "task_id": task.id, "kind": item.kind,
                                    "task_title": task.title, "item_title": item.title})
-    # events AFTER the write session closes: emitting inside it nests a second write
-    # transaction and SQLite answers with "database is locked" (learned the hard way)
+    # Nested sessions and events share the outer transaction; publication waits
+    # for commit so board promotion and its event trail cannot diverge.
     for e in pending_events:
         await ev.emit("board.item.promoted", project_id=project_id, run_id=run_id,
                       task_id=e["task_id"], title=f"board → work: {e['item_title'][:60]}",

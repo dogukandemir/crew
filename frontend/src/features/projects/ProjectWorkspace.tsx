@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import {
   WORKSPACE_TAB_LABEL,
   defaultWorkspaceTab,
@@ -12,21 +12,21 @@ import { useProject } from '../../app/hooks';
 import { TabBar } from '../../components/ui/Tabs';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { ProjectHeader } from './ProjectHeader';
-import { Overview } from '../overview/Overview';
-import { OrgPanel } from '../org/OrgPanel';
-import { TasksPanel } from '../tasks/TasksPanel';
-import { AgentsPanel } from '../agents/AgentsPanel';
-import { BrainsPanel } from '../brains/BrainsPanel';
-import { RewardsPanel } from '../rewards/RewardsPanel';
-import { EventsPanel } from '../events/EventsPanel';
-import { SettingsPanel } from './SettingsPanel';
+const Overview = lazy(() => import('../overview/Overview').then(m => ({ default: m.Overview })));
+const OrgPanel = lazy(() => import('../org/OrgPanel').then(m => ({ default: m.OrgPanel })));
+const TasksPanel = lazy(() => import('../tasks/TasksPanel').then(m => ({ default: m.TasksPanel })));
+const AgentsPanel = lazy(() => import('../agents/AgentsPanel').then(m => ({ default: m.AgentsPanel })));
+const BrainsPanel = lazy(() => import('../brains/BrainsPanel').then(m => ({ default: m.BrainsPanel })));
+const RewardsPanel = lazy(() => import('../rewards/RewardsPanel').then(m => ({ default: m.RewardsPanel })));
+const EventsPanel = lazy(() => import('../events/EventsPanel').then(m => ({ default: m.EventsPanel })));
+const SettingsPanel = lazy(() => import('./SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 import { DrawerHost } from './DrawerHost';
-import { OfficeTab } from '../office/OfficeTab';
-import { HqTab } from '../hq/HqTab';
-import { CompanyProjects } from '../hq/CompanyProjects';
-import { CompanyBrains } from '../hq/CompanyBrains';
-import { BoardTab } from '../board/BoardTab';
-import { DeliverablesPanel } from '../deliverables/DeliverablesPanel';
+const OfficeTab = lazy(() => import('../office/OfficeTab').then(m => ({ default: m.OfficeTab })));
+const HqTab = lazy(() => import('../hq/HqTab').then(m => ({ default: m.HqTab })));
+const CompanyProjects = lazy(() => import('../hq/CompanyProjects').then(m => ({ default: m.CompanyProjects })));
+const CompanyBrains = lazy(() => import('../hq/CompanyBrains').then(m => ({ default: m.CompanyBrains })));
+const BoardTab = lazy(() => import('../board/BoardTab').then(m => ({ default: m.BoardTab })));
+const DeliverablesPanel = lazy(() => import('../deliverables/DeliverablesPanel').then(m => ({ default: m.DeliverablesPanel })));
 import { cn } from '../../lib/cn';
 
 /**
@@ -105,7 +105,7 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
         )}
       >
         {project.data ? (
-          <Panel tab={tab} current={current} kind={project.data.kind} />
+          <Suspense fallback={<p className="p-4" role="status">Loading view…</p>}><Panel tab={tab} current={current} kind={project.data.kind} /></Suspense>
         ) : (
           <div className="space-y-2 pt-1">
             <Skeleton className="h-4 w-2/3" />

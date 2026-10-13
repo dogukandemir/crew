@@ -28,8 +28,8 @@ from sqlalchemy import desc, func, select
 from crew.control import org, workspaces
 from crew.core import events as ev
 from crew.core.brains import brain_service
-from crew.core.db import session_scope
-from crew.core.models import Agent, Brain, BrainEntry, Department, Event, Project, Task
+from crew.core.db import session_scope, transactional
+from crew.core.models import Agent, Brain, BrainEntry, Department, Event, Project, Run, Task
 from crew.core.security import audit
 from crew.domain.catalog import RoleSpec
 from crew.domain.enums import BrainScope, Role
@@ -265,6 +265,7 @@ async def get_company(company_id: str) -> dict:
         return await _company_core(s, c)
 
 
+@transactional
 async def attach_project(*, company_id: str, project_id: str) -> dict:
     """A project joins the company: the report chain gains a top — orchestrator → CEO."""
     async with session_scope() as s:
@@ -274,6 +275,19 @@ async def attach_project(*, company_id: str, project_id: str) -> dict:
             raise KeyError(company_id)
         if project is None or project.kind != "project":
             raise KeyError(project_id)
+        if project.company_id != company_id:
+            active_run = await s.scalar(select(Run.id).where(Run.project_id == project_id,
+                Run.status.in_(["running", "paused", "paused_budget"])).limit(1))
+            if project.reserved_micros or active_run:
+                raise ValueError("finish or cancel project runs before changing its company")
+            if company.spend_micros + company.reserved_micros + project.spend_micros > company.budget_cap_micros:
+                raise ValueError("project spending exceeds the destination company's available budget")
+            if project.company_id:
+                previous = await s.get(Project, project.company_id)
+                if previous is None or previous.spend_micros < project.spend_micros:
+                    raise ValueError("company spending is inconsistent; reconcile it before moving this project")
+                previous.spend_micros -= project.spend_micros
+            company.spend_micros += project.spend_micros
         project.company_id = company_id
         s.add(project)
         ceo_id = (company.settings or {}).get("ceo_id")

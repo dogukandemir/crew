@@ -16,7 +16,7 @@ os.environ.update({
     "CREW_WORKSPACE_ROOT": str(TMP_DATA / "workspaces"),
     "CREW_DEFAULT_PROJECT_BUDGET_USD": "5",
     "CREW_VALIDATE_EVENTS": "true",
-    "CREW_JWT_SECRET": "test-secret-that-is-long-enough-0123456789",
+    "CREW_JWT_SECRET": "test-secret-that-is-long-enough-0123456789",  # gitleaks:allow -- test-only signing secret
 })
 
 import pytest  # noqa: E402
@@ -44,7 +44,46 @@ async def project() -> dict:
     from crew.control import org
 
     p = await org.create_project(name="Test Project", goal="Test the pipeline end to end", budget_usd=5.0)
-    return p
+    yield p
+    # Tests share the schema, but active-run admission is installation-wide.
+    # Retire this test's unfinished runs so later provider tests exercise their
+    # intended path instead of being rejected by unrelated fixture state.
+    from sqlalchemy import update
+
+    from crew.core.db import session_scope
+    from crew.core.models import Run
+
+    async with session_scope() as s:
+        await s.execute(update(Run).where(Run.project_id == p["id"],
+            Run.status.notin_(["completed", "failed", "aborted"])).values(status="aborted"))
+
+
+@pytest.fixture
+def tool_context():
+    """Persist real run/task authority for tests that exercise the tool adapter."""
+    async def make(*, project_id, agent, task_id=None, run_id=None, workspace=None, **kwargs):
+        from crew.core.db import session_scope
+        from crew.core.models import Run, Task
+        from crew.execution.tools import ToolContext
+
+        async with session_scope() as s:
+            p = await s.get(Project, project_id)
+            if workspace is not None:
+                p.settings = {**p.settings, "workspace": str(workspace)}
+            run = await s.get(Run, run_id) if run_id else None
+            if run is None:
+                run = Run(project_id=project_id, goal="Tool integration test")
+                s.add(run)
+                await s.flush()
+            task = await s.get(Task, task_id) if task_id else None
+            if task is None:
+                task = Task(project_id=project_id, run_id=run.id, title=task_id or "Tool integration test",
+                            state="running", assignee_agent_id=agent.id)
+                s.add(task)
+                await s.flush()
+            return ToolContext(project_id=project_id, agent=agent, task_id=task.id, run_id=run.id,
+                               workspace=workspace, **kwargs)
+    return make
 
 
 @pytest_asyncio.fixture

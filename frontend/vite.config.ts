@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    strictPort: false,
+    strictPort: true,
   },
   build: {
     // Split the heavy vendors so the main bundle stays reviewable.

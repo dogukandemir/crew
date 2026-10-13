@@ -3,7 +3,6 @@ audit hash chain, injection detection (docs/08)."""
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import re
@@ -12,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from cryptography.fernet import Fernet
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 
 from crew.core.db import session_scope
 from crew.core.models import (
@@ -21,7 +20,9 @@ from crew.core.models import (
     AuditLog,
     BudgetLedger,
     Department,
+    Event,
     Project,
+    Run,
     Secret,
     SecretLease,
     usd_to_micros,
@@ -183,14 +184,26 @@ class SecretRedactor:
             return text, 0
         count = 0
         out = text
-        for v in list(self._values):
+        for v in sorted(self._values, key=len, reverse=True):
             if v in out:
                 count += out.count(v)
                 out = out.replace(v, "[REDACTED]")
         return out, count
 
+    def clean(self, value):
+        if isinstance(value, str):
+            return self.redact(value)[0]
+        if isinstance(value, dict):
+            return {self.redact(str(k))[0]: self.clean(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self.clean(v) for v in value]
+        return value
+
 
 redactor = SecretRedactor()
+for _key in (settings.deepseek_api_key, settings.openai_api_key, settings.anthropic_api_key,
+             settings.gemini_api_key, settings.openrouter_api_key, settings.jwt_secret, settings.vault_key):
+    redactor.learn(_key)
 
 
 class CredentialVault:
@@ -201,8 +214,8 @@ class CredentialVault:
         raw = (key or settings.vault_key).encode()
         try:
             self._fernet = Fernet(raw)
-        except Exception:
-            self._fernet = Fernet(base64.urlsafe_b64encode(hashlib.sha256(raw).digest()))
+        except ValueError as exc:
+            raise ValueError("CREW_VAULT_KEY must be a generated Fernet key; arbitrary passwords are not supported") from exc
 
     async def create(self, name: str, value: str, *, scope_kind: str = "project",
                      scope_id: str = "", actor: str = "user") -> str:
@@ -234,6 +247,7 @@ class CredentialVault:
             if not row:
                 return None
             value = self._fernet.decrypt(row.ciphertext.encode()).decode()
+            redactor.learn(value)
             if use:
                 row.last_used_at = datetime.now(UTC)
                 s.add(SecretLease(secret_id=row.id, agent_id=agent_id, capability=capability,
@@ -282,50 +296,177 @@ class BudgetGuard:
         self._breaker_open.discard(project_id)
 
     async def available_micros(self, project_id: str, *, agent_id: str | None = None,
-                               department_id: str | None = None) -> int:
+                               department_id: str | None = None, run_id: str | None = None) -> int:
         async with session_scope() as s:
-            p = await s.get(Project, project_id)
-            if p is None:
+            return await self._available(s, project_id, agent_id, department_id, run_id)
+
+    async def recover_reservations(self) -> int:
+        """Startup only: interrupted requests may have billed, so charge held estimates.
+
+        Never release unknown usage as free credit or retry it automatically. Settlement
+        keys make this safe if recovery itself is interrupted and restarted.
+        """
+        async with session_scope() as s:
+            rows = (await s.scalars(select(BudgetLedger).where(
+                BudgetLedger.kind.in_(["reserve", "release"]))
+                .order_by(BudgetLedger.ts, BudgetLedger.id))).all()
+        held = {}
+        for row in rows:
+            key = (row.project_id, row.scope_kind, row.scope_id, row.ref)
+            held[key] = held.get(key, 0) + row.amount_micros * (1 if row.kind == "reserve" else -1)
+        # Older recovery versions released a whole scope under one generic ref.
+        # Match those releases to the oldest held operations, never charge them twice.
+        legacy_releases = {key[:3]: -amount for key, amount in held.items()
+                           if key[3] == "startup-recovery" and amount < 0}
+        for key, amount in held.items():
+            released = legacy_releases.get(key[:3], 0)
+            if amount > 0 and released:
+                matched = min(amount, released)
+                held[key] -= matched
+                legacy_releases[key[:3]] -= matched
+        count = 0
+        for (project_id, kind, scope_id, ref), amount in held.items():
+            if amount <= 0:
+                continue
+            await self.settle(project_id, reserved_micros=amount, actual_micros=amount,
+                              scope_kind=kind, scope_id=scope_id, ref=ref,
+                              idempotency_key=f"recovery:{uuid_hint()}", _recovering=True)
+            count += 1
+        return count
+
+    async def _available(self, s, project_id: str, agent_id: str | None, department_id: str | None,
+                         run_id: str | None = None) -> int:
+        p = await s.get(Project, project_id)
+        if p is None or p.status != "active":
+            return 0
+        avail = p.budget_cap_micros - p.spend_micros - p.reserved_micros
+        if p.company_id:
+            company = await s.get(Project, p.company_id)
+            if company is None or company.status != "active":
                 return 0
-            avail = p.budget_cap_micros - p.spend_micros - p.reserved_micros
-            if department_id:
-                d = await s.get(Department, department_id)
-                if d and d.budget_envelope_micros:
-                    avail = min(avail, d.budget_envelope_micros - d.spend_micros)
-            if agent_id:
-                a = await s.get(Agent, agent_id)
-                if a:
-                    avail = min(avail, a.spend_cap_per_day_micros - a.spend_today_micros)
-            return max(0, avail)
+            avail = min(avail, company.budget_cap_micros - company.spend_micros - company.reserved_micros)
+        a = await s.get(Agent, agent_id) if agent_id else None
+        if agent_id and (a is None or a.project_id != project_id):
+            return 0
+        if a:
+            department_id = a.department_id
+            start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            spent = await s.scalar(select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
+                BudgetLedger.project_id == project_id, BudgetLedger.scope_kind == "agent",
+                BudgetLedger.scope_id == a.id, BudgetLedger.kind == "settle", BudgetLedger.ts >= start))
+            held = await self._held(s, project_id, [a.id])
+            avail = min(avail, a.spend_cap_per_day_micros - int(spent or 0) - held)
+            if run_id:
+                # New operation refs bind settlements (including crash recovery)
+                # to their run. Legacy model events identify earlier plain refs.
+                legacy_refs = select(Event.payload["call_id"].as_string()).where(
+                    Event.project_id == project_id, Event.agent_id == a.id, Event.run_id == run_id,
+                    Event.type == "llm.response")
+                run_spent = await s.scalar(select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
+                    BudgetLedger.project_id == project_id, BudgetLedger.scope_kind == "agent",
+                    BudgetLedger.scope_id == a.id, BudgetLedger.kind == "settle", or_(
+                        BudgetLedger.ref.startswith(f"run:{run_id}:", autoescape=True),
+                        BudgetLedger.ref.in_(legacy_refs))))
+                avail = min(avail, a.spend_cap_per_run_micros - int(run_spent or 0) - held)
+        if department_id:
+            d = await s.get(Department, department_id)
+            if d is None or d.project_id != project_id:
+                return 0
+            if d.budget_envelope_micros:
+                ids = list((await s.scalars(select(Agent.id).where(Agent.department_id == d.id))).all())
+                held = await self._held(s, project_id, [d.id, *ids])
+                avail = min(avail, d.budget_envelope_micros - d.spend_micros - held)
+        return max(0, avail)
+
+    @staticmethod
+    async def _held(s, project_id: str, scope_ids: list[str]) -> int:
+        rows = (await s.scalars(select(BudgetLedger).where(BudgetLedger.project_id == project_id,
+                                                         BudgetLedger.scope_id.in_(scope_ids)))).all()
+        return max(0, sum(r.amount_micros * (1 if r.kind == "reserve" else -1 if r.kind == "release" else 0)
+                          for r in rows))
+
+    @staticmethod
+    async def _duplicate(s, key: str | None, project_id: str, scope_kind: str,
+                         scope_id: str, kind: str, amount: int, ref: str, note: str = "") -> bool:
+        if not key:
+            return False
+        row = await s.scalar(select(BudgetLedger).where(BudgetLedger.idempotency_key == key))
+        if row is None:
+            return False
+        if (row.project_id, row.scope_kind, row.scope_id, row.kind, row.amount_micros, row.ref, row.note) != (
+                project_id, scope_kind, scope_id, kind, amount, ref, note):
+            raise ValueError("idempotency key was already used for a different budget operation")
+        return True
+
+    @staticmethod
+    async def _held_operation(s, project_id, scope_kind, scope_id, ref):
+        query = select(BudgetLedger).where(BudgetLedger.project_id == project_id,
+            BudgetLedger.scope_kind == scope_kind, BudgetLedger.scope_id == scope_id,
+            BudgetLedger.kind.in_(["reserve", "release"]))
+        if ref is not None:
+            query = query.where(BudgetLedger.ref == ref)
+        rows = (await s.scalars(query)).all()
+        return sum(r.amount_micros * (1 if r.kind == "reserve" else -1) for r in rows)
+
+    @staticmethod
+    async def _validate_scope(s, project_id, scope_kind, scope_id):
+        if scope_kind == "project" and scope_id == project_id:
+            return
+        model = {"agent": Agent, "department": Department}.get(scope_kind)
+        row = await s.get(model, scope_id) if model else None
+        if row is None or row.project_id != project_id:
+            raise ValueError("budget scope does not belong to this project")
+
+    @staticmethod
+    def _entry(s, project_id, scope_kind, scope_id, kind, amount, ref, key=None, note=""):
+        s.add(BudgetLedger(project_id=project_id, scope_kind=scope_kind, scope_id=scope_id,
+                           kind=kind, amount_micros=amount, ref=ref, note=note,
+                           idempotency_key=key or f"{kind}:{uuid_hint()}"))
 
     async def reserve(self, project_id: str, *, amount_micros: int, scope_kind: str, scope_id: str,
-                      ref: str = "", idempotency_key: str | None = None) -> None:
-        if self.breaker_open(project_id):
-            raise BudgetExceeded(scope_kind, scope_id, amount_micros, 0)
-        available = await self.available_micros(
-            project_id,
-            agent_id=scope_id if scope_kind == "agent" else None,
-            department_id=scope_id if scope_kind == "department" else None,
-        )
-        if amount_micros > available:
-            self.open_breaker(project_id)
-            await self._ledger(project_id, scope_kind, scope_id, "reserve", 0, ref,
-                               note="refused: insufficient budget", idem=idempotency_key)
-            raise BudgetExceeded(scope_kind, scope_id, amount_micros, available)
-        async with session_scope() as s:
+                      ref: str = "", idempotency_key: str | None = None, run_id: str | None = None) -> None:
+        if amount_micros < 0:
+            raise ValueError("reservation cannot be negative")
+        async with session_scope(write_lock=True) as s:
+            await self._validate_scope(s, project_id, scope_kind, scope_id)
+            if await self._duplicate(s, idempotency_key, project_id, scope_kind, scope_id, "reserve", amount_micros, ref):
+                return
+            available = await self._available(s, project_id, scope_id if scope_kind == "agent" else None,
+                                              scope_id if scope_kind == "department" else None, run_id)
+            if self.breaker_open(project_id) or amount_micros > available:
+                self.open_breaker(project_id)
+                raise BudgetExceeded(scope_kind, scope_id, amount_micros, available)
             p = await s.get(Project, project_id)
+            if p is None or p.status != "active":
+                raise BudgetExceeded(scope_kind, scope_id, amount_micros, 0)
             p.reserved_micros += amount_micros
-            s.add(p)
-        await self._ledger(project_id, scope_kind, scope_id, "reserve", amount_micros, ref, idem=idempotency_key)
+            if p.company_id:
+                company = await s.get(Project, p.company_id)
+                company.reserved_micros += amount_micros
+            self._entry(s, project_id, scope_kind, scope_id, "reserve", amount_micros, ref, idempotency_key)
 
     async def settle(self, project_id: str, *, reserved_micros: int, actual_micros: int,
                      scope_kind: str, scope_id: str, ref: str = "",
-                     idempotency_key: str | None = None) -> None:
-        async with session_scope() as s:
+                     idempotency_key: str | None = None, _recovering: bool = False) -> None:
+        if min(reserved_micros, actual_micros) < 0:
+            raise ValueError("settlement cannot be negative")
+        async with session_scope(write_lock=True) as s:
+            await self._validate_scope(s, project_id, scope_kind, scope_id)
+            note = f"reserved_micros={reserved_micros}"
+            if await self._duplicate(s, idempotency_key, project_id, scope_kind, scope_id, "settle", actual_micros, ref, note):
+                return
+            held = await self._held_operation(s, project_id, scope_kind, scope_id, None if _recovering else ref)
+            if held < reserved_micros:
+                raise ValueError("settlement exceeds this operation's held reservation")
             p = await s.get(Project, project_id)
+            if p is None or p.reserved_micros < reserved_micros:
+                raise ValueError("settlement exceeds held reservation")
             p.reserved_micros = max(0, p.reserved_micros - reserved_micros)
             p.spend_micros += actual_micros
-            s.add(p)
+            if p.company_id:
+                company = await s.get(Project, p.company_id)
+                company.reserved_micros = max(0, company.reserved_micros - reserved_micros)
+                company.spend_micros += actual_micros
             if scope_kind == "department" and scope_id:
                 d = await s.get(Department, scope_id)
                 if d:
@@ -334,17 +475,36 @@ class BudgetGuard:
             if scope_kind == "agent" and scope_id:
                 a = await s.get(Agent, scope_id)
                 if a:
-                    a.spend_today_micros += actual_micros
-                    s.add(a)
-        await self._ledger(project_id, scope_kind, scope_id, "settle", actual_micros, ref, idem=idempotency_key)
+                    start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+                    today = await s.scalar(select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
+                        BudgetLedger.project_id == project_id, BudgetLedger.scope_kind == "agent",
+                        BudgetLedger.scope_id == scope_id, BudgetLedger.kind == "settle", BudgetLedger.ts >= start))
+                    a.spend_today_micros = int(today or 0) + actual_micros
+                    if a.department_id:
+                        department = await s.get(Department, a.department_id)
+                        if department:
+                            department.spend_micros += actual_micros
+            self._entry(s, project_id, scope_kind, scope_id, "release", reserved_micros, ref)
+            self._entry(s, project_id, scope_kind, scope_id, "settle", actual_micros, ref, idempotency_key, note)
 
     async def release(self, project_id: str, *, amount_micros: int, scope_kind: str, scope_id: str,
                       ref: str = "", idempotency_key: str | None = None) -> None:
-        async with session_scope() as s:
+        if amount_micros < 0:
+            raise ValueError("release cannot be negative")
+        async with session_scope(write_lock=True) as s:
+            await self._validate_scope(s, project_id, scope_kind, scope_id)
+            if await self._duplicate(s, idempotency_key, project_id, scope_kind, scope_id, "release", amount_micros, ref):
+                return
+            if await self._held_operation(s, project_id, scope_kind, scope_id, ref) < amount_micros:
+                raise ValueError("release exceeds this operation's held reservation")
             p = await s.get(Project, project_id)
+            if p is None or p.reserved_micros < amount_micros:
+                raise ValueError("release exceeds held reservation")
             p.reserved_micros = max(0, p.reserved_micros - amount_micros)
-            s.add(p)
-        await self._ledger(project_id, scope_kind, scope_id, "release", amount_micros, ref, idem=idempotency_key)
+            if p.company_id:
+                company = await s.get(Project, p.company_id)
+                company.reserved_micros = max(0, company.reserved_micros - amount_micros)
+            self._entry(s, project_id, scope_kind, scope_id, "release", amount_micros, ref, idempotency_key)
 
     async def _ledger(self, project_id: str, scope_kind: str, scope_id: str, kind: str,
                       amount_micros: int, ref: str, note: str = "",
@@ -363,29 +523,35 @@ class BudgetGuard:
         """
         async with session_scope() as s:
             p = await s.get(Project, project_id)
+            project_ids = [project_id]
+            if p is not None and p.kind == "company":
+                project_ids.extend(await s.scalars(select(Project.id).where(Project.company_id == project_id)))
             settled = await s.scalar(
                 select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
-                    BudgetLedger.project_id == project_id,
+                    BudgetLedger.project_id.in_(project_ids),
                     BudgetLedger.kind == "settle",
                 )
             )
             reserved = await s.scalar(
                 select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
-                    BudgetLedger.project_id == project_id,
+                    BudgetLedger.project_id.in_(project_ids),
                     BudgetLedger.kind == "reserve",
                 )
             )
             released = await s.scalar(
                 select(func.coalesce(func.sum(BudgetLedger.amount_micros), 0)).where(
-                    BudgetLedger.project_id == project_id,
+                    BudgetLedger.project_id.in_(project_ids),
                     BudgetLedger.kind == "release",
                 )
             )
         spend = p.spend_micros if p else 0
+        held = int(reserved or 0) - int(released or 0)
         return {"project_id": project_id, "ledger_settle_micros": int(settled or 0),
                 "ledger_reserved_micros": int(reserved or 0),
                 "ledger_released_micros": int(released or 0),
-                "spend_micros": spend, "ok": int(settled or 0) == spend}
+                "spend_micros": spend, "reserved_micros": p.reserved_micros if p else 0,
+                "ledger_held_micros": held,
+                "ok": p is not None and int(settled or 0) == spend and held == p.reserved_micros}
 
 
 def uuid_hint() -> str:
@@ -403,7 +569,8 @@ def _canonical(entry: dict) -> str:
 async def audit(*, actor_kind: str, actor_id: str, action: str, resource_kind: str = "",
                 resource_id: str = "", outcome: str = "ok", reason: str = "",
                 trace_id: str = "") -> str:
-    async with session_scope() as s:
+    reason = redactor.redact(reason)[0]
+    async with session_scope(write_lock=True) as s:
         prev = await s.scalar(select(AuditLog).order_by(AuditLog.seq.desc()).limit(1))
         seq = (prev.seq + 1) if prev else 1
         prev_hash = prev.hash if prev else "genesis"
@@ -449,7 +616,15 @@ async def verify_audit_chain() -> dict:
 # ── approvals ────────────────────────────────────────────────────────────────────────
 async def request_approval(project_id: str, *, capability: str, agent_id: str | None,
                            task_id: str | None, request: dict, ttl_minutes: int = 120) -> str:
-    async with session_scope() as s:
+    request = redactor.clean(request)
+    async with session_scope(write_lock=True) as s:
+        pending = (await s.scalars(select(Approval).where(
+            Approval.project_id == project_id, Approval.agent_id == agent_id,
+            Approval.task_id == task_id, Approval.capability == capability,
+            Approval.state == "pending", Approval.expires_at > datetime.now(UTC)))).all()
+        for existing in pending:
+            if existing.request == request:
+                return existing.id
         row = Approval(project_id=project_id, capability=capability, agent_id=agent_id, task_id=task_id,
                        request=request, expires_at=datetime.now(UTC) + timedelta(minutes=ttl_minutes))
         s.add(row)
@@ -461,9 +636,12 @@ async def request_approval(project_id: str, *, capability: str, agent_id: str | 
 
 
 async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, reason: str = "") -> Approval | None:
-    async with session_scope() as s:
+    async with session_scope(write_lock=True) as s:
         row = await s.get(Approval, approval_id)
         if not row or row.state != "pending":
+            return None
+        if row.expires_at and row.expires_at.replace(tzinfo=UTC) <= datetime.now(UTC):
+            row.state = "expired"
             return None
         row.state = "granted" if grant else "denied"
         row.decided_by, row.decided_at, row.reason = decided_by, datetime.now(UTC), reason
@@ -473,8 +651,20 @@ async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, rea
     return row
 
 
+async def expire_inactive_approvals(*, run_id: str | None = None) -> int:
+    """Close stale requests without touching valid permissions for active/paused work."""
+    terminal = select(Run.id).where(Run.status.in_(["completed", "failed", "aborted"]))
+    stmt = update(Approval).where(Approval.state.in_(["pending", "granted"]), or_(
+        Approval.expires_at <= datetime.now(UTC), Approval.request["run_id"].as_string().in_(terminal)))
+    if run_id is not None:
+        stmt = stmt.where(Approval.request["run_id"].as_string() == run_id)
+    async with session_scope(write_lock=True) as s:
+        result = await s.execute(stmt.values(state="expired"))
+        return result.rowcount
+
+
 async def approval_granted(project_id: str, *, agent_id: str | None, capability: str,
-                           task_id: str | None) -> bool:
+                           task_id: str | None, invocation: dict | None = None) -> bool:
     """Is there a GRANTED approval that covers this call?
 
     `policy.check` will keep answering "requires human approval" — that is correct; what
@@ -483,14 +673,27 @@ async def approval_granted(project_id: str, *, agent_id: str | None, capability:
     covers one agent and one capability, scoped to the task it was requested for, or to
     the agent's general scope when it was requested without a task (task_id NULL).
     """
-    async with session_scope() as s:
+    async with session_scope(write_lock=invocation is not None) as s:
         q = select(Approval).where(Approval.project_id == project_id,
                                    Approval.capability == capability,
-                                   Approval.state == "granted")
+                                   Approval.state == "granted",
+                                   or_(Approval.expires_at.is_(None), Approval.expires_at > datetime.now(UTC)))
         if agent_id is not None:
             q = q.where(Approval.agent_id == agent_id)
         rows = (await s.scalars(q.order_by(Approval.decided_at.desc()).limit(20))).all()
-    return any(r.task_id in (None, task_id) for r in rows)
+        for row in rows:
+            if row.task_id not in (None, task_id):
+                continue
+            if invocation is not None:
+                if (row.request or {}).get("invocation_hash") != invocation_hash(invocation):
+                    continue
+                row.state = "consumed"
+            return True
+    return False
+
+
+def invocation_hash(invocation: dict) -> str:
+    return hashlib.sha256(_canonical(invocation).encode()).hexdigest()
 
 
 async def ensure_default_caps(project: Project) -> None:

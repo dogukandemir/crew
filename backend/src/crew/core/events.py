@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from crew.core.db import session_scope
+from crew.core.db import after_commit, session_scope
 from crew.core.models import Event, uid
 from crew.core.settings import settings
 
@@ -39,12 +39,11 @@ class EventBus:
             try:
                 q.put_nowait(frame)
             except asyncio.QueueFull:
-                # Backpressure: drop oldest and tell the client there is a gap (docs/11 §3).
-                try:
-                    q.get_nowait()
-                    q.put_nowait(frame)
-                except Exception:  # pragma: no cover - racing consumer
-                    pass
+                dropped = []
+                while not q.empty():
+                    dropped.append(q.get_nowait())
+                q.put_nowait({"type": "gap", "from": min((f.get("seq", f.get("from", 0)) for f in dropped), default=0),
+                              "to": frame.get("seq", 0), "reason": "queue_overflow"})
 
     def publish_threadsafe(self, loop: asyncio.AbstractEventLoop, project_id: str, frame: dict) -> None:
         try:
@@ -145,21 +144,27 @@ async def emit(
     duration_ms: int = 0,
 ) -> dict[str, Any]:
     """Append an event and publish it live. Returns the serialized event."""
-    seq = await next_seq(project_id)
+    from crew.core.security import redactor
+
+    title = redactor.redact(title)[0]
+    summary = redactor.redact(summary)[0]
+    payload = redactor.clean(payload or {})
+    if settings.validate_events:
+        _validate(type, payload)
     span = span_id or uid()[:16]
     e = Event(
-        project_id=project_id, seq=seq, type=type, severity=severity, title=title[:300],
+        project_id=project_id, seq=0, type=type, severity=severity, title=title[:300],
         summary=summary, payload=payload or {}, actor=actor, department_id=department_id,
         squad_id=squad_id, agent_id=agent_id, task_id=task_id, run_id=run_id, job_id=job_id,
         trace_id=trace_id, span_id=span, parent_span_id=parent_span_id,
         cost_micros=cost_micros, tokens_in=tokens_in, tokens_out=tokens_out, duration_ms=duration_ms,
     )
-    async with session_scope() as s:
+    async with session_scope(write_lock=True) as s:
+        seq = int(await s.scalar(select(func.max(Event.seq)).where(Event.project_id == project_id)) or 0) + 1
+        e.seq = seq
         s.add(e)
     frame = {"type": "event", "seq": seq, "event": event_to_dict(e)}
-    await bus.publish(project_id, frame)
-    if settings.validate_events:
-        _validate(type, e.payload)
+    await after_commit(lambda: bus.publish(project_id, frame))
     return frame["event"]
 
 

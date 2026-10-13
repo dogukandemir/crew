@@ -215,6 +215,9 @@ async def get_project(project_id: str) -> dict:
         if p is None:
             raise KeyError(project_id)
         d = serialize_project(p)
+        latest = await s.scalar(select(Run).where(Run.project_id == project_id)
+                                .order_by(Run.started_at.desc(), Run.id.desc()).limit(1))
+        d.update(_run_summary(latest.stage, latest.status) if latest else _run_summary(None, None))
         d["runs"] = int(await s.scalar(select(func.count(Run.id)).where(
             Run.project_id == project_id)) or 0)
         if p.company_id:
@@ -245,20 +248,35 @@ def serialize_project(p: Project) -> dict:
     }
 
 
+def _run_summary(stage: str | None, status: str | None) -> dict:
+    terminal = {"completed": "DONE", "failed": "FAILED", "aborted": "ABORTED"}
+    return {"stage": terminal.get(status, stage or "IDLE"),
+            "active_run": status is not None and status not in terminal,
+            "run_status": status}
+
+
 async def list_projects() -> list[dict]:
     async with session_scope() as s:
         rows = (await s.scalars(select(Project).where(Project.kind == "project")
                                 .order_by(desc(Project.created_at)))).all()
         ids = [p.id for p in rows]
         run_counts: dict[str, int] = {}
+        latest_runs = {}
         if ids:
             run_counts = {pid: int(n) for pid, n in (await s.execute(
                 select(Run.project_id, func.count(Run.id)).where(Run.project_id.in_(ids))
                 .group_by(Run.project_id))).all()}
+            ranked = select(Run.project_id, Run.stage, Run.status,
+                            func.row_number().over(partition_by=Run.project_id,
+                                                   order_by=(Run.started_at.desc(), Run.id.desc())).label("position"))\
+                .where(Run.project_id.in_(ids)).subquery()
+            latest_runs = {pid: _run_summary(stage, status) for pid, stage, status in (await s.execute(
+                select(ranked.c.project_id, ranked.c.stage, ranked.c.status).where(ranked.c.position == 1))).all()}
     out = []
     for p in rows:
         d = serialize_project(p)
         d["runs"] = run_counts.get(p.id, 0)
+        d.update(latest_runs.get(p.id, _run_summary(None, None)))
         async with session_scope() as s:
             d["agents"] = int(await s.scalar(select(func.count(Agent.id)).where(
                 Agent.project_id == p.id, Agent.state != "archived")))
@@ -378,7 +396,7 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
                 seed=f"{project_id}:{spec.role.value}:{idx + attempt}")
             if candidate_soul["name"] not in used:
                 break
-        soul = await _polish_soul(candidate_soul) or candidate_soul
+        soul = await _polish_soul(candidate_soul, project_id=project_id) or candidate_soul
     chosen_name = (name or str(soul.get("name") or "")).strip()
     if not chosen_name:
         raise ValueError("hire needs a name — the soul carried none and none was given")
@@ -431,7 +449,7 @@ async def _ensure_agent_brain(s, project_id: str, agent_id: str) -> str:
     return b.id
 
 
-async def _polish_soul(soul: dict) -> dict | None:
+async def _polish_soul(soul: dict, *, project_id: str) -> dict | None:
     """Best effort (ADR 0016): the model may deepen the wording — never invent facts.
 
     Returns None when no provider answers (offline, no key) so the deterministic soul
@@ -448,7 +466,7 @@ async def _polish_soul(soul: dict) -> dict | None:
     payload = {k: soul.get(k) for k in ("name", "traits", "values", "vision", "voice",
                                         "background")}
     try:
-        raw = _llm_json(ModelTier.FAST, system, json.dumps(payload, ensure_ascii=False))
+        raw = await _llm_json(ModelTier.FAST, system, json.dumps(payload, ensure_ascii=False), project_id=project_id)
     except Exception as e:  # a hire never fails on polish
         log.info("soul polish skipped: %s", e)
         return None
@@ -623,7 +641,9 @@ def plan_heuristic(goal: str, *, max_tasks: int = 8) -> Plan:
 
 
 PLANNER_PROMPT = """You are the Orchestrator of an autonomous AI organization. Decompose the goal
-into 3-6 tasks that can each be independently verified. Return ONLY JSON:
+into 1-6 tasks that can each be independently verified. Prefer the fewest sufficient tasks;
+inspection and publication are usually steps within a task, not separate departments of work.
+Return ONLY JSON:
 
 {"interpretation": "...", "success_criteria": ["..."], "assumptions": ["..."],
  "tasks": [{"key":"short_id","title":"...","description":"...","deliverable":"...",
@@ -633,7 +653,11 @@ into 3-6 tasks that can each be independently verified. Return ONLY JSON:
 
 Rules: acceptance criteria are mandatory and must be checkable from artifacts. Use the exact
 skill ids from this catalog when possible: {skills}. At most 6 tasks. depends_on must reference
-keys defined in the same response and must not form a cycle."""
+keys defined in the same response and must not form a cycle. Respect explicit constraints
+such as no network access; do not add external research to a self-contained coding task.
+Use output_contract only for a single JSON artifact and provide a valid JSON Schema.
+For source files, Markdown, or multiple files, leave output_contract empty ({}).
+Every task must publish its actual deliverable as an artifact for verification."""
 
 
 async def plan_run(*, project: Project, goal: str, orchestrator: Agent | None = None) -> Plan:
@@ -642,17 +666,21 @@ async def plan_run(*, project: Project, goal: str, orchestrator: Agent | None = 
     tier_model = router.model_for_tier(ModelTier.REASONING)
     if settings.provider_key_for(tier_model) and not settings.offline_llm:
         try:
-            from crewai import LLM
-
-            llm = LLM(model=tier_model, temperature=0.1, api_key=settings.provider_key_for(tier_model))
+            from crew.execution.gateway import complete
             catalog = ", ".join(sorted(SKILLS_BY_ID)[:60])
-            raw = llm.call(messages=[
-                {"role": "system", "content": PLANNER_PROMPT.format(skills=catalog)},
+            raw = await complete(project_id=project.id, model=tier_model, compact=True, messages=[
+                {"role": "system", "content": PLANNER_PROMPT.replace("{skills}", catalog)},
                 {"role": "user", "content": f"PROJECT: {project.name}\nGOAL: {goal}"},
             ])
             plan = _parse_plan(str(raw))
+            if plan is None:
+                raise ValueError("Provider returned no usable tasks")
         except Exception as e:
-            log.warning("LLM planning failed (%s); falling back to heuristic plan", e)
+            # A generic substitute can violate the user's constraints and spend
+            # money on unrelated work. Demo alone uses the heuristic planner.
+            raise ValueError("Live planning failed; no tasks were started. Retry the run after checking provider settings.") from e
+    elif not settings.offline_llm:
+        raise ValueError("Live planning requires a configured provider")
     if plan is None:
         plan = plan_heuristic(goal)
     _validate_plan(plan)
@@ -1120,7 +1148,7 @@ async def revive_blocked(project_id: str, run_id: str) -> int:
         for t in blocked:
             if any(d not in done for d in (t.depends_on or [])):
                 continue
-            if (t.escalation_reason or "").startswith("no agent"):
+            if (t.escalation_reason or "").startswith(("no agent", "approval_required:")):
                 continue          # a capability problem, not a dependency problem
             t.state = TaskState.ASSIGNED.value if t.assignee_agent_id else TaskState.PENDING.value
             t.escalation_reason = ""

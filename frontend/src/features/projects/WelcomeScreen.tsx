@@ -3,6 +3,7 @@ import { useCompanies, useOnboardingState, useProjects } from '../../app/hooks';
 import { CompaniesSection } from '../companies/CompaniesSection';
 import { FoundCompanyWizard } from '../companies/FoundCompanyWizard';
 import { GettingStarted } from '../companies/GettingStartedCard';
+import { ExecutionModeControl } from '../onboarding/ExecutionModeControl';
 import { OnboardingCard } from '../onboarding/OnboardingCard';
 import {
   clearOnboardingDismissal,
@@ -39,11 +40,12 @@ export function WelcomeScreen() {
   const onboarding = useOnboardingState();
   const [dismissed, setDismissed] = useState(() => onboardingDismissed());
   const [hideCard, setHideCard] = useState(false);
+  const [providerOpen, setProviderOpen] = useState(false);
   // The wizard lives in the ui store: the Companies section and the welcome
   // CTAs all open THE SAME one — there is no second way to create a company.
   const wizardOpen = useUi((s) => s.foundWizardOpen);
   const setWizardOpen = useUi((s) => s.setFoundWizardOpen);
-  const showCard = !hideCard && shouldShowOnboarding(onboarding.data, dismissed);
+  const showCard = providerOpen || (!hideCard && shouldShowOnboarding(onboarding.data, dismissed));
 
   const hasCompanies = (companies.data?.items.length ?? 0) > 0;
 
@@ -69,8 +71,10 @@ export function WelcomeScreen() {
         </button>
       )}
 
+      <ExecutionModeControl onConfigure={() => setProviderOpen(true)} />
+
       <GettingStarted
-        providerReady={onboarding.data?.needed === false}
+        providerReady={onboarding.data?.providers?.some(p => p.id === onboarding.data?.provider && p.configured) ?? false}
         companies={companies.data?.items.length ?? 0}
         projects={projects.data?.items.length ?? 0}
         runs={(projects.data?.items ?? []).reduce((n, p) => n + (p.runs ?? 0), 0)}
@@ -164,10 +168,12 @@ export function WelcomeScreen() {
           state={onboarding.data}
           onDone={(detail) => {
             setHideCard(true);
-            setToast({ kind: 'success', message: `Provider active — ${detail}.` });
+            setProviderOpen(false);
+            setToast({ kind: 'success', message: `Provider saved — ${detail}. Choose Live to run real agents.` });
             void onboarding.refetch();
           }}
           onSkip={() => {
+            setProviderOpen(false);
             dismissOnboarding();
             setDismissed(true);
           }}

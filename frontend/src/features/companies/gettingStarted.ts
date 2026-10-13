@@ -22,7 +22,7 @@ export function gettingStartedSteps(input: GettingStartedInput): GettingStartedS
     {
       key: 'provider',
       label: 'Connect a model provider',
-      hint: 'A key (or local Ollama) so agents can actually work.',
+      hint: 'Required for Live agents. You can explore Demo without one.',
       done: input.providerReady,
     },
     {

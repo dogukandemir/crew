@@ -32,9 +32,11 @@ async def test_boot_settles_interrupted_tasks_and_hands_runs_back(bound_loop, pr
     resumed = await orchestrator.recover_interrupted()
 
     ids = [rid for rid, _ in resumed]
-    assert (run_id, project["id"]) in resumed
+    assert resumed == [], "restart must never repeat side effects automatically"
     assert paused_id not in ids, "a paused run is not the boot's business"
     async with session_scope() as s:
+        assert (await s.get(Run, run_id)).status == RunStatus.PAUSED.value
+        assert (await s.get(Agent, agent.id)).state == "idle"
         task = await s.get(Task, tid)
         types = {e.type for e in (await s.scalars(select(Event).where(
             Event.project_id == project["id"],

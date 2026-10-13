@@ -105,7 +105,7 @@ def test_benign_text_is_not_flagged():
 
 # ── secret redaction ────────────────────────────────────────────────────────────────
 def test_redactor_removes_known_secrets():
-    secret = "sk-live-abcdef1234567890abcdef"
+    secret = "sk-live-abcdef1234567890abcdef"  # gitleaks:allow -- synthetic redaction fixture
     redactor.learn(secret)
     text, count = redactor.redact(f"here is the key: {secret} and again {secret}")
     assert count == 2
@@ -115,7 +115,7 @@ def test_redactor_removes_known_secrets():
 
 def test_vault_roundtrip_and_handle_hiding():
     async def run():
-        sid = await vault.create("unit-test-key", "sk-test-9f8a7b6c5d4e3f2a", scope_kind="project")
+        sid = await vault.create("unit-test-key", "sk-test-9f8a7b6c5d4e3f2a", scope_kind="project")  # gitleaks:allow -- synthetic vault fixture
         value = await vault.reveal("unit-test-key")
         handles = await vault.list_handles()
         return sid, value, handles
@@ -277,15 +277,17 @@ def test_budget_available_math_boundaries_and_breaker():
         await budget.reserve(pid, amount_micros=2_000_000, scope_kind="project",
                              scope_id=pid, ref="r0", idempotency_key="IDEM-K")
         await budget.settle(pid, reserved_micros=2_000_000, actual_micros=2_000_000,
-                            scope_kind="project", scope_id=pid, ref="s0")
+                            scope_kind="project", scope_id=pid, ref="r0")
         await budget.reserve(pid, amount_micros=3_000_000, scope_kind="project",
                              scope_id=pid, ref="r1")
         avail = await budget.available_micros(pid)                      # 10 - 2 - 3 = 5M
 
         await budget.reserve(pid, amount_micros=5_000_000, scope_kind="project",
                              scope_id=pid, ref="r2")                    # exactly available
-        await budget.settle(pid, reserved_micros=8_000_000, actual_micros=6_000_000,
-                            scope_kind="project", scope_id=pid, ref="s1")
+        await budget.settle(pid, reserved_micros=3_000_000, actual_micros=2_000_000,
+                            scope_kind="project", scope_id=pid, ref="r1")
+        await budget.settle(pid, reserved_micros=5_000_000, actual_micros=4_000_000,
+                            scope_kind="project", scope_id=pid, ref="r2")
         async with session_scope() as s:
             row = await s.get(Project, pid)
             after_settle = (row.reserved_micros, row.spend_micros)      # (0, 8M)
@@ -294,7 +296,7 @@ def test_budget_available_math_boundaries_and_breaker():
         await budget.reserve(pid, amount_micros=1_000_000, scope_kind="project",
                              scope_id=pid, ref="r3")
         await budget.release(pid, amount_micros=1_000_000, scope_kind="project",
-                             scope_id=pid, ref="rel1")
+                             scope_id=pid, ref="r3")
         async with session_scope() as s:
             row = await s.get(Project, pid)
             after_release = row.reserved_micros                         # 0
@@ -322,14 +324,14 @@ def test_budget_available_math_boundaries_and_breaker():
     assert open_now is True and closed is True
     assert rec["ok"] is True and rec["ledger_settle_micros"] == 8_000_000
     assert rec["ledger_reserved_micros"] == 11_000_000, "reserved sums only this project's reserves"
-    assert rec["ledger_released_micros"] == 1_000_000
+    assert rec["ledger_released_micros"] == 11_000_000, "settlements release their reservations too"
 
 
 def test_budget_department_and_agent_clamps():
     """Closes: the dept/agent clamp arithmetic, the scope dispatch (`==` swapped to
     `!=` would not pass the id through on reserve), a zero-envelope department (must
     NOT clamp), and the per-scope settle attribution."""
-    from crew.core.models import Agent, Department, Project
+    from crew.core.models import Agent, BudgetLedger, Department, Project
 
     async def run():
         from crew.core.db import session_scope
@@ -354,6 +356,8 @@ def test_budget_department_and_agent_clamps():
             s.add(a)
             await s.flush()
             aid = a.id
+            s.add(BudgetLedger(project_id=pid, scope_kind="agent", scope_id=aid,
+                               kind="settle", amount_micros=100_000))
 
         avail_dept = await budget.available_micros(pid, department_id=did)
         avail_zero_env = await budget.available_micros(pid, department_id=d0id)

@@ -161,7 +161,7 @@ def _note(opening: Opening, cand: Candidate, scores: dict) -> str:
     return f"Reject. {'; '.join(scores['reasons'])}."
 
 
-async def _model_note(opening: Opening, cand: Candidate, scores: dict) -> str | None:
+async def _model_note(opening: Opening, cand: Candidate, scores: dict, *, project_id: str) -> str | None:
     """One grounded paragraph when a provider is configured; None offline."""
     from crew.control.council import _llm_json
 
@@ -176,7 +176,7 @@ async def _model_note(opening: Opening, cand: Candidate, scores: dict) -> str | 
             f"vision “{cand.soul.get('vision')}”.\n"
             f"SCORES: {scores}.\n"
             'JSON only: {"note": "..."}')
-    raw = _llm_json(ModelTier.FAST, system, user)
+    raw = await _llm_json(ModelTier.FAST, system, user, project_id=project_id)
     note = str((raw or {}).get("note") or "").strip()
     return note[:600] if note else None
 
@@ -276,7 +276,7 @@ async def _interview(project_id: str, run_id: str, opening: Opening, cand: Candi
     scores = assess(cand, opening, team_skills=team_skills)
     note = _note(opening, cand, scores)
     method = "deterministic"
-    enriched = await _model_note(opening, cand, scores)
+    enriched = await _model_note(opening, cand, scores, project_id=project_id)
     if enriched:
         note, method = enriched, "model"
     cand.note = note

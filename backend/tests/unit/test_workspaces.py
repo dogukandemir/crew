@@ -103,7 +103,7 @@ async def test_allocate_keeps_a_preexisting_record_and_guards_non_company_parent
 async def test_founding_materializes_the_default_tree():
     co = await company.create_company(name="Northwind Labs", mission="m", owner_id="tester")
     proj = await org.create_project(name="Atlas 2.0", goal="g", company_id=co["id"])
-    expected = workspaces.default_root() / "Northwind Labs" / "Atlas 2.0"
+    expected = workspaces.default_root() / f"Northwind Labs-{co['id']}" / f"Atlas 2.0-{proj['id']}"
     assert expected.is_dir(), "the default tree must exist on disk"
     assert Path(proj["settings"]["workspace"]) == expected
     async with session_scope() as s:
@@ -117,8 +117,8 @@ async def test_a_chosen_root_is_used_as_is(tmp_path):
     chosen = tmp_path / "studio"
     co = await company.create_company(name="Acme Media", owner_id="tester", workspace_root=str(chosen))
     proj = await org.create_project(name="Rocket", company_id=co["id"])
-    assert (chosen / "Rocket").is_dir(), "projects land directly under the chosen root"
-    assert Path(proj["settings"]["workspace"]) == chosen / "Rocket"
+    assert (chosen / f"Rocket-{proj['id']}").is_dir(), "projects land directly under the chosen root"
+    assert Path(proj["settings"]["workspace"]) == chosen / f"Rocket-{proj['id']}"
     async with session_scope() as s:
         row = await s.get(Project, co["id"])
         assert Path(row.settings["workspace_root"]) == chosen

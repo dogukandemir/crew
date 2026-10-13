@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     orc.add_argument("--goal", required=True)
 
     sub.add_parser("status", help="print runtime status")
+    sub.add_parser("doctor", help="check local installation without making model requests")
     return p
 
 
@@ -53,7 +54,10 @@ def main(argv: list[str] | None = None) -> int:
 
         from crew.core.settings import settings
 
-        uvicorn.run("crew.api.main:app", host=args.host or settings.host, port=args.port or settings.port,
+        host = args.host or settings.host
+        if settings.auth_mode == "local" and host not in ("127.0.0.1", "localhost", "::1") and not settings.container_local_auth:
+            raise ValueError("local authentication requires a loopback listener")
+        uvicorn.run("crew.api.main:app", host=host, port=args.port or settings.port,
                     reload=args.reload, log_level=settings.log_level)
         return 0
     if args.cmd == "db":
@@ -65,7 +69,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "brains":
         return asyncio.run(_brains(args))
     if args.cmd == "run":
-        return asyncio.run(_run(args))
+        from crew.core.lease import runtime_lease
+        from crew.core.settings import settings
+
+        with runtime_lease(settings.data_path):
+            return asyncio.run(_run(args))
+    if args.cmd == "doctor":
+        return asyncio.run(_doctor())
     if args.cmd == "status":
         return asyncio.run(_status())
     build_parser().print_help()
@@ -96,9 +106,17 @@ async def _db(action: str) -> int:
 async def _auth(args) -> int:
     from crew.api.auth import create_user
 
-    if not args.email or not args.password:
-        print("--email and --password are required", file=sys.stderr)
+    if not args.email:
+        print("--email is required", file=sys.stderr)
         return 2
+    if not args.password:
+        from getpass import getpass
+        args.password = getpass("Password: ")
+    if len(args.password) < 12:
+        print("Use a password of at least 12 characters", file=sys.stderr)
+        return 2
+    from crew.core.db import init_db
+    await init_db()
     return _print(await create_user(email=args.email, name=args.name or args.email,
                                     password=args.password, role=args.role))
 
@@ -149,6 +167,31 @@ async def _status() -> int:
                    "data_dir": str(settings.data_path), "auth_mode": settings.auth_mode,
                    "offline_llm": settings.offline_llm, "models": router.available(),
                    "tool_sandbox": settings.tool_sandbox})
+
+
+async def _doctor() -> int:
+    import asyncio
+
+    from crew.control.onboarding import load_vault_provider_keys, state
+    from crew.core.db import init_db, ping
+    from crew.core.settings import settings
+    from crew.execution.tools import _sandbox_available
+
+    await init_db()
+    await load_vault_provider_keys()
+    provider_state = state()
+    checks = {
+        "database": await ping(),
+        "sandbox": await asyncio.to_thread(_sandbox_available),
+        "mode": "demo" if settings.offline_llm else "live",
+        "provider_configured": any(p["id"] == provider_state["provider"] and p["configured"]
+                                   for p in provider_state["providers"]),
+        "data_directory": str(settings.data_path),
+        "workspace_root": str(settings.default_workspace_root),
+        "single_process_required": True,
+    }
+    _print(checks)
+    return 0 if checks["database"] and (settings.offline_llm or (checks["sandbox"] and checks["provider_configured"])) else 1
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -75,10 +75,11 @@ def _norm(s: str) -> str:
 def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
     """Resolve @tags (and bare first names) to agent ids, preserving text order.
 
-    Returns (ids, unknown-tags). Ambiguity resolves to the FIRST match by name — the
-    desk never guesses between two people silently; the reply names who it took.
+    Returns (ids, unknown-tags). Full names take precedence; ambiguous partial
+    names need clarification instead of routing an order to the first match.
     """
-    tokens = [t.strip(" ,;:!?.…").strip() for t in re.findall(r"@([^\s,;:!?]+)", text)]
+    tags = list(re.finditer(r"@([^\s,;:!?]+)", text))
+    tokens = [m.group(1).strip(" ,;:!?.…").strip() for m in tags]
     tokens = [t.split("'")[0].split("’")[0] for t in tokens]  # @Ada's → Ada
     if not tokens:
         # no tags: look for roster first-names used as words (2+ letters)
@@ -88,26 +89,29 @@ def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
                   and re.search(rf"\b{re.escape(_norm(a['name'].split()[0]))}\b", norm_text)]
     ids: list[str] = []
     unknown: list[str] = []
-    for tok in tokens:
+    for index, tok in enumerate(tokens):
         nt = _norm(tok)
-        hit = None
-        for a in roster:
-            name = _norm(a["name"])
-            if name.startswith(nt) or any(w.startswith(nt) for w in name.split()):
-                hit = a["id"]
-                break
-        if hit is None:
+        tail = _norm(text[tags[index].start() + 1:]) if tags else _norm(tok)
+        full = [a for a in roster if re.match(rf"{re.escape(_norm(a['name']))}(?=\b|['’])", tail)
+                and _norm(a["name"]).startswith(nt)]
+        if full:
+            longest = max(len(a["name"]) for a in full)
+            candidates = [a for a in full if len(a["name"]) == longest]
+        else:
+            candidates = [a for a in roster if _norm(a["name"]).startswith(nt)
+                          or any(w.startswith(nt) for w in _norm(a["name"]).split())]
+        if not candidates:
             # a role word addresses whoever holds it: @Orchestrator, @Head of People…
-            for a in roster:
-                role = _norm(str(a.get("role", "")))
-                if role and (role == nt or (len(nt) >= 4 and role.startswith(nt))):
-                    hit = a["id"]
-                    break
-        if hit is None:
+            candidates = [a for a in roster if _norm(str(a.get("role", ""))) == nt or
+                          (len(nt) >= 4 and _norm(str(a.get("role", ""))).startswith(nt))]
+        if len(candidates) > 1:
+            unknown.append(f"{tok} (ambiguous)")
+            continue
+        if not candidates:
             if tok.isalpha():
                 unknown.append(tok)
-        elif hit not in ids:
-            ids.append(hit)
+        elif candidates[0]["id"] not in ids:
+            ids.append(candidates[0]["id"])
     return ids, unknown
 
 
@@ -165,7 +169,7 @@ def parse_command(text: str, roster: list[dict]) -> Command:
     return cmd
 
 
-async def _interpret_with_model(text: str, roster: list[dict]) -> Command | None:
+async def _interpret_with_model(text: str, roster: list[dict], *, project_id: str) -> Command | None:
     """Ask the orchestrator's model to turn the message into the same strict schema.
     Only called when the lexicon is not confident and a provider key exists."""
     from crew.control.council import _llm_json
@@ -180,7 +184,7 @@ async def _interpret_with_model(text: str, roster: list[dict]) -> Command | None
         'verbatim from the roster], "minutes": int|null, "amount_usd": number|null, '
         '"percent": number|null, "text": "the work/goal/reason text", "confidence": 0..1}'
     )
-    raw = _llm_json(ModelTier.FAST, system, f"ROSTER: {names}\nMESSAGE: {text}")
+    raw = await _llm_json(ModelTier.FAST, system, f"ROSTER: {names}\nMESSAGE: {text}", project_id=project_id)
     if not isinstance(raw, dict):
         return None
     intent = str(raw.get("intent", "unparsed"))
@@ -228,7 +232,7 @@ async def handle_command(*, project_id: str, text: str, actor: str = "user") -> 
 
     parsed = parse_command(text, roster)
     if parsed.confidence < 0.6:
-        better = await _interpret_with_model(text, roster)
+        better = await _interpret_with_model(text, roster, project_id=project_id)
         if better is not None:
             parsed = better
 
@@ -265,6 +269,8 @@ async def _execute(*, project_id: str, parsed: Command, roster: list[dict], raw:
     """(reply, actions, executed). `executed` tells the truth about what happened: a
     refusal or a missing name is a reply, not an act — and never a directive."""
     intent = parsed.intent
+    if "(ambiguous)" in parsed.note:
+        return ("That name matches several agents. Use an @full name so I can route the order correctly.", [], False)
     if intent == "help" or intent == "unparsed":
         return (_HELP, [], False)
     if intent == "status":

@@ -12,12 +12,17 @@ export default defineConfig({
   },
   build: {
     // Split the heavy vendors so the main bundle stays reviewable.
-    rollupOptions: {
+    // Vite 8 bundles with Rolldown: `build.rollupOptions` is deprecated (alias of
+    // `rolldownOptions`) and the object form of `output.manualChunks` is gone —
+    // vendor splitting is now expressed as `output.codeSplitting.groups`.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          flow: ['@xyflow/react'],
-          charts: ['recharts'],
-          state: ['@tanstack/react-query', 'zustand'],
+        codeSplitting: {
+          groups: [
+            { name: 'flow', test: /node_modules[\\/]@xyflow[\\/]/ },
+            { name: 'charts', test: /node_modules[\\/](recharts|victory-vendor|d3-[^\\/]+)[\\/]/ },
+            { name: 'state', test: /node_modules[\\/](@tanstack[\\/]react-query|zustand)[\\/]/ },
+          ],
         },
       },
     },

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import type { TooltipValueType } from 'recharts';
 import { api } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import { Badge, severityTone } from '../../components/ui/Badge';
@@ -126,7 +127,12 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                   />
                   <Tooltip
                     contentStyle={{ background: '#0f172a', border: '1px solid #334155', fontSize: 11 }}
-                    formatter={(v: number) => [`$${v.toFixed(4)}`, 'cumulative']}
+                    formatter={(v: TooltipValueType | undefined) => {
+                      // Recharts 3 widens a tooltip value to ValueType | undefined;
+                      // format only real numbers and never print a fake "$NaN".
+                      const usd = typeof v === 'number' && Number.isFinite(v) ? v : null;
+                      return [usd === null ? '—' : `$${usd.toFixed(4)}`, 'cumulative'];
+                    }}
                     labelFormatter={(l) => `seq ${l}`}
                   />
                   <Area type="monotone" dataKey="usd" stroke="#34d399" fill="url(#burnFill)" strokeWidth={1.5} />

@@ -35,6 +35,8 @@ export interface SpriteMotion {
    */
   x: number;
   y: number;
+  /** Updated by the floor when the character actually reaches a seat. */
+  seated?: boolean;
 }
 
 export interface SpriteMotionRef {
@@ -62,13 +64,15 @@ export function figureCell(
   moving: boolean,
   phase: number,
 ): { face: 'front' | 'back'; pose: 'stand' | 'walkA' | 'walkB' | 'sit' } {
+  if (moving) return { face: 'front', pose: Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB' };
   if (atDesk) {
     const working = activity === 'typing' || activity === 'tool';
     return { face: working ? 'back' : 'front', pose: 'sit' };
   }
-  if (moving) return { face: 'front', pose: Math.floor(phase / STRIDE) % 2 === 0 ? 'walkA' : 'walkB' };
   return { face: 'front', pose: 'stand' };
 }
+
+const atlasCells = new Map<string, AtlasEntry>(ATLAS.entries.map(entry => [entry.name, entry]));
 
 export function SpriteCharacter({
   name,
@@ -89,13 +93,14 @@ export function SpriteCharacter({
   const clipId = `char-${useId().replace(/:/g, '')}`;
 
   useEffect(() => {
-    const atlas = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
     const look = lookIndex(name);
     const cell = (facing: string, pose: string): AtlasEntry | undefined =>
-      atlas.get(`char.${look}.${facing}.${pose}`);
+      atlasCells.get(`char.${look}.${facing}.${pose}`);
 
     let last = performance.now();
     let phase = 0;
+    let painted = '';
+    let mirrored: number | undefined;
 
     const tick = (now: number, reducedMotion: boolean) => {
       const dt = Math.min((now - last) / 1000, 0.05);
@@ -108,16 +113,18 @@ export function SpriteCharacter({
       // plays the walk cycle, exactly as the rig did.
       //
       // Which way the figure faces, and in what pose, is one rule — see figureCell.
-      const { face, pose } = figureCell(activity, atDesk, !reducedMotion && mov.moving, phase);
+      const { face, pose } = figureCell(activity, mov.seated ?? atDesk, !reducedMotion && mov.moving, phase);
       const e = cell(face, pose) ?? cell('front', 'stand');
-      if (e && img.current && clipRect.current) {
+      const k = SPRITE_UNIT * spriteScaleFactor();
+      const key = `${e?.name}:${k}`;
+      if (e && img.current && clipRect.current && painted !== key) {
+        painted = key;
         // The cell is drawn in the caller's local space with the feet on the
         // origin, at EXACTLY the sprite factor every prop uses. There is no second
         // rule for people: this used to take a `height` from its caller and divide
         // it by 40, so a figure was drawn 40 units tall — 0.56 m — while the desk
         // beside it was drawn from the other factor entirely. One rule, one atlas,
         // one metre. See Sprite.tsx.
-        const k = SPRITE_UNIT * spriteScaleFactor();
         const x0 = -e.ax * k;
         const y0 = -e.ay * k;
         // The sheet slides under a window the size of the cell: an <image> has no
@@ -132,7 +139,9 @@ export function SpriteCharacter({
         img.current.setAttribute('height', (ATLAS.height * k).toFixed(2));
       }
 
-      if (mirror.current) {
+      const facing = mov.facing < 0 ? -1 : 1;
+      if (mirror.current && mirrored !== facing) {
+        mirrored = facing;
         // Mirror about the figure's own centre — the local origin. Mirroring the
         // caller's group would flip the name tag and the bubble with it.
         mirror.current.setAttribute('transform', `scale(${mov.facing < 0 ? -1 : 1} 1)`);

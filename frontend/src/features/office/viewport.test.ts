@@ -8,6 +8,12 @@ const toWorld = (t: Transform, px: number, py: number) => ({
 });
 
 describe('viewport maths', () => {
+  it('zooming out never zooms into a floor fitted below the old minimum', () => {
+    const fitted = { x: 60, y: 40, scale: 0.21 };
+    expect(zoomAt(fitted, 0.8, 300, 200).scale).toBeLessThan(fitted.scale);
+    const enormous = { ...fitted, scale: 0.02 };
+    expect(zoomAt(enormous, 0.8, 300, 200).scale).toBeLessThanOrEqual(enormous.scale);
+  });
   it('clamps the zoom range', () => {
     expect(clampScale(0.01)).toBe(MIN_SCALE);
     expect(clampScale(99)).toBe(MAX_SCALE);

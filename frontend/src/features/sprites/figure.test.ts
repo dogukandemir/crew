@@ -25,4 +25,8 @@ describe('figureCell', () => {
     expect(figureCell('idle', false, false, 0)).toEqual({ face: 'front', pose: 'stand' });
     expect(figureCell('typing', false, false, 0)).toEqual({ face: 'front', pose: 'stand' });
   });
+
+  it('walks to a desk rather than sliding while seated', () => {
+    expect(figureCell('typing', true, true, 0.3)).toEqual({ face: 'front', pose: 'walkB' });
+  });
 });

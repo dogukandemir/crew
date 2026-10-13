@@ -320,6 +320,7 @@ export interface CompanyReview {
 }
 
 export interface Project {
+  latest_run_id?: string | null;
   active_run?: boolean;
   run_status?: string | null;
   id: string;
@@ -672,6 +673,7 @@ export interface Artifact {
 /** One row of the deliverables surface (project / department / company scope).
  * Every row names the producing agent; company rows also name their project. */
 export interface DeliverableRow {
+  run_id?: string | null;
   id: string;
   name: string;
   path: string;

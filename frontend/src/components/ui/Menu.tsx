@@ -31,11 +31,27 @@ export function Menu({
 
   useEffect(() => {
     if (!open) return;
+    const menu = ref.current?.querySelector<HTMLElement>('[role="menu"]');
+    const enabled = () => [...(menu?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [])];
+    enabled()[0]?.focus();
+    const restore = () => ref.current?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')?.focus();
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); restore(); return; }
+      if (!menu?.contains(document.activeElement)) return;
+      if (e.key === 'Tab') { setOpen(false); restore(); return; }
+      const buttons = enabled();
+      if (!buttons.length) return;
+      const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      let next = index;
+      if (e.key === 'ArrowDown') next = (index + 1) % buttons.length;
+      else if (e.key === 'ArrowUp') next = (index + buttons.length - 1) % buttons.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = buttons.length - 1;
+      else return;
+      e.preventDefault(); buttons[next]?.focus();
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -70,6 +86,7 @@ export function Menu({
               key={it.key}
               type="button"
               role="menuitem"
+              tabIndex={-1}
               disabled={it.disabled}
               onClick={() => {
                 setOpen(false);

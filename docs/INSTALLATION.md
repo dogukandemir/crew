@@ -4,6 +4,8 @@ Crew is an experimental, single-process application for one trusted shared works
 
 Check the [tested support matrix](SUPPORT-MATRIX.md) before choosing a provider or deployment. The Docker instructions below describe the distribution; platform support is limited to the evidence recorded there.
 
+Use **Home** (the Crew logo) for your companies and projects. A project's main views are **Office**, **Overview**, **Tasks** and **Deliverables**; **More views** holds team structure, board, memory, scores, events and settings. Tasks and files default to the latest run, with **All runs** available for history. On the office floor, choose a room or agent for a closer view. **System**, **Animated** and **Calm** control visual motion without changing whether agents work.
+
 ## Docker
 
 Use Docker Desktop with Linux containers or Docker Engine 26+ (the sandbox uses volume subpaths), with Compose installed. Run these from the repository root:

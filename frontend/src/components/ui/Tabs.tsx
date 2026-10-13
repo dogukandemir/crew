@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
 export function TabBar<T extends string>({
@@ -7,15 +7,19 @@ export function TabBar<T extends string>({
   onChange,
   counts,
   className,
+  label = 'Views',
 }: {
   tabs: Array<{ id: T; label: string }>;
   value: T;
   onChange: (id: T) => void;
   counts?: Partial<Record<T, number>>;
   className?: string;
+  label?: string;
 }) {
+  const buttons = useRef(new Map<T, HTMLButtonElement>());
+  const selected = tabs.some(tab => tab.id === value) ? value : tabs[0]?.id;
   return (
-    <div role="tablist" className={cn('flex items-center gap-0.5 overflow-x-auto', className)}>
+    <div role="tablist" aria-label={label} className={cn('flex min-w-0 items-center gap-0.5 overflow-x-auto', className)}>
       {tabs.map((t) => {
         const active = t.id === value;
         const count = counts?.[t.id];
@@ -23,11 +27,25 @@ export function TabBar<T extends string>({
           <button
             key={t.id}
             role="tab"
+            ref={element => { if (element) buttons.current.set(t.id, element); else buttons.current.delete(t.id); }}
+            tabIndex={t.id === selected ? 0 : -1}
             aria-selected={active}
             type="button"
             onClick={() => onChange(t.id)}
+            onKeyDown={event => {
+              const index = tabs.findIndex(tab => tab.id === t.id);
+              let next = index;
+              if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+              else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+              else if (event.key === 'Home') next = 0;
+              else if (event.key === 'End') next = tabs.length - 1;
+              else return;
+              event.preventDefault();
+              onChange(tabs[next].id);
+              buttons.current.get(tabs[next].id)?.focus();
+            }}
             className={cn(
-              'relative flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-1.5 text-xs font-medium transition-colors',
+              'relative flex min-h-10 shrink-0 items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-xs font-medium transition-colors',
               active
                 ? 'border-emerald-400 text-slate-100'
                 : 'border-transparent text-slate-400 hover:text-slate-200',

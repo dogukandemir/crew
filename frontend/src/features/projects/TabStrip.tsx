@@ -36,7 +36,8 @@ function Tab({
   const openTab = useTabs((s) => s.openTab);
   const socketState = useConnection((s) => s.byProject[tab.projectId]?.state);
 
-  const active = activeTabId === tab.id;
+  const homeOpen = useTabs(state => state.homeOpen);
+  const active = !homeOpen && activeTabId === tab.id;
   const pending = project?.pending_approvals ?? 0;
 
   return (

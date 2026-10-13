@@ -2,9 +2,15 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 import { cn } from '../../lib/cn';
 
 const CONTROL =
-  'w-full rounded-md border border-slate-600/70 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100 ' +
+  'rounded-md border border-slate-600/70 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-100 ' +
   'placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none focus:ring-1 focus:ring-emerald-400/40 ' +
   'disabled:cursor-not-allowed disabled:opacity-50';
+
+function controlClass(className?: string) {
+  // Explicit widths must not compete with w-full in the utility cascade.
+  const width = className?.split(/\s+/).some(token => token.startsWith('w-'));
+  return cn(CONTROL, !width && 'w-full', className);
+}
 
 export function Field({
   label,
@@ -27,11 +33,11 @@ export function Field({
 }
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...rest} className={cn(CONTROL, className)} />;
+  return <input {...rest} className={controlClass(className)} />;
 }
 
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...rest} className={cn(CONTROL, 'min-h-[72px] resize-y', className)} />;
+  return <textarea {...rest} className={cn(controlClass(className), 'min-h-[72px] resize-y')} />;
 }
 
 export function Select({
@@ -40,7 +46,7 @@ export function Select({
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   return (
-    <select {...rest} className={cn(CONTROL, 'appearance-none pr-7', className)}>
+    <select {...rest} className={cn(controlClass(className), 'pr-7')}>
       {children}
     </select>
   );

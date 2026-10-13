@@ -5,7 +5,8 @@ import type { Project, Stage } from '../../api/types';
 import { STAGES } from '../../api/types';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Input } from '../../components/ui/Field';
+import { Textarea } from '../../components/ui/Field';
+import { hasActiveRun, needsResume, runLabel } from './runState';
 import { ProgressBar } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { cn } from '../../lib/cn';
@@ -17,10 +18,11 @@ import { Menu } from '../../components/ui/Menu';
 import { switchTargets } from './projectSwitch';
 
 function StageStepper({ stage }: { stage: Stage }) {
+  const labels: Record<string, string> = { INTAKE: 'Brief', PLANNING: 'Plan', STAFFING: 'Team', EXECUTING: 'Work', VERIFYING: 'Check', REWARDING: 'Learn', DONE: 'Done' };
   const current = STAGES.indexOf(stage);
   const idle = current < 0;
   return (
-    <ol className="flex flex-wrap items-center gap-1" aria-label="Run stage">
+    <ol className="hidden flex-wrap items-center gap-1 sm:flex" aria-label="Run stage">
       {idle && (
         <li className="flex items-center gap-1">
           <span
@@ -48,7 +50,7 @@ function StageStepper({ stage }: { stage: Stage }) {
               )}
               aria-current={active ? 'step' : undefined}
             >
-              {s}
+              {labels[s] ?? s}
             </span>
             {i < STAGES.length - 1 && <span className="text-slate-700">›</span>}
           </li>
@@ -60,6 +62,7 @@ function StageStepper({ stage }: { stage: Stage }) {
 
 function GoalEditor({ project }: { project: Project }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(project.goal);
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
@@ -80,23 +83,25 @@ function GoalEditor({ project }: { project: Project }) {
   if (!editing) {
     return (
       <p className="flex min-w-0 items-start gap-2 text-xs text-slate-300">
-        <span className="min-w-0 truncate" title={project.goal}>
+        <span className={cn('min-w-0', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')} title={project.goal}>
           {project.goal || '— no goal set —'}
         </span>
+        {project.goal.length > 110 && <button type="button" className="shrink-0 text-xs text-slate-300 underline"
+          onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Less' : 'Read goal'}</button>}
         <button
           type="button"
           onClick={() => setEditing(true)}
           className="shrink-0 text-[10px] text-slate-500 underline decoration-dotted hover:text-emerald-300"
         >
-          edit
+          Edit goal
         </button>
       </p>
     );
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Input value={draft} onChange={(e) => setDraft(e.target.value)} className="h-7 text-xs" autoFocus />
+    <div className="flex flex-1 items-start gap-2">
+      <Textarea aria-label="Project goal" rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} className="text-sm" autoFocus />
       <Button size="xs" variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
         Save
       </Button>
@@ -110,7 +115,9 @@ function GoalEditor({ project }: { project: Project }) {
 function LifecycleControls({ project }: { project: Project }) {
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
-  const paused = project.status === 'paused';
+  const paused = needsResume(project);
+  const activeTabId = useTabs(state => state.activeTabId);
+  const setInternalTab = useTabs(state => state.setInternalTab);
 
   const mutate = useMutation({
     mutationFn: () => (paused ? api.resumeProject(project.id) : api.pauseProject(project.id)),
@@ -123,9 +130,12 @@ function LifecycleControls({ project }: { project: Project }) {
       setToast({ kind: 'error', message: `Lifecycle command failed: ${err instanceof Error ? err.message : err}` }),
   });
 
+  if (project.status === 'archived') return null;
+  if (!paused && !hasActiveRun(project)) return <Button size="xs" variant="secondary"
+    onClick={() => { if (activeTabId) setInternalTab(activeTabId, 'overview'); }}>Start a run</Button>;
   return (
     <Button size="xs" variant="secondary" loading={mutate.isPending} onClick={() => mutate.mutate()}>
-      {paused ? '▶ Resume' : '⏸ Pause'}
+      {paused ? hasActiveRun(project) ? '▶ Resume run' : '▶ Resume project' : '⏸ Pause run'}
     </Button>
   );
 }
@@ -187,8 +197,9 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
           </>
         )}
         <h1 className="text-sm font-semibold text-slate-100">{p.name}</h1>
-        <Badge tone={p.status === 'active' ? 'success' : p.status === 'paused' ? 'warning' : 'muted'}>
-          {p.status}
+        <Badge tone={p.run_status === 'failed' ? 'danger' : p.run_status === 'completed' ? 'success'
+          : p.status === 'paused' || p.run_status?.startsWith('paused') ? 'warning' : 'muted'}>
+          {isCompany ? p.status : runLabel(p)}
         </Badge>
         {isCompany && <Badge tone="info">company</Badge>}
         {!isCompany && <StageStepper stage={p.stage} />}

@@ -16,19 +16,20 @@ import { useTabs } from '../stores/tabs';
 export function Shell() {
   const tabs = useTabs((s) => s.tabs);
   const activeTabId = useTabs((s) => s.activeTabId);
+  const homeOpen = useTabs(state => state.homeOpen);
   const setActive = useTabs((s) => s.setActive);
   const clearBadge = useTabs((s) => s.clearBadge);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  const activeTab = homeOpen ? null : tabs.find((t) => t.id === activeTabId) ?? null;
 
   // If the active tab was closed (or never set), fall back to the first one.
   useEffect(() => {
-    if (!activeTab && tabs.length > 0) setActive(tabs[0].id);
-  }, [activeTab, tabs, setActive]);
+    if (!homeOpen && !activeTab && tabs.length > 0) setActive(tabs[0].id);
+  }, [activeTab, tabs, setActive, homeOpen]);
 
   useEffect(() => {
-    if (activeTabId) clearBadge(activeTabId);
-  }, [activeTabId, clearBadge]);
+    if (activeTabId && !homeOpen) clearBadge(activeTabId);
+  }, [activeTabId, clearBadge, homeOpen]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950">

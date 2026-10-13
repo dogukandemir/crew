@@ -9,6 +9,7 @@ export interface GettingStartedStep {
 }
 
 export interface GettingStartedInput {
+  demo?: boolean;
   /** From the onboarding state: true when a provider can actually run agents. */
   providerReady: boolean;
   companies: number;
@@ -18,7 +19,7 @@ export interface GettingStartedInput {
 }
 
 export function gettingStartedSteps(input: GettingStartedInput): GettingStartedStep[] {
-  return [
+  const steps: GettingStartedStep[] = [
     {
       key: 'provider',
       label: 'Connect a model provider',
@@ -44,6 +45,7 @@ export function gettingStartedSteps(input: GettingStartedInput): GettingStartedS
       done: input.runs > 0,
     },
   ];
+  return input.demo ? steps.filter(step => step.key !== 'provider') : steps;
 }
 
 export function allDone(steps: GettingStartedStep[]): boolean {

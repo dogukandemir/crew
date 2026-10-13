@@ -8,7 +8,7 @@ import { Field, Select, Unknown } from '../../components/ui/Field';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatMicros } from '../../lib/format';
-import { useOrg, useTasks } from '../../app/hooks';
+import { useOrg, useProject, useTasks } from '../../app/hooks';
 import { flattenOrg } from '../org/orgUtils';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
@@ -46,9 +46,12 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
   const openDrawer = useUi((s) => s.openDrawer);
 
   const stateFilter = tab?.filters.taskState ?? '';
+  const runScope = tab?.filters.taskRun ?? 'latest';
+  const project = useProject(projectId);
   const [sort, setSort] = useState<SortState>({ key: 'state', dir: 'asc' });
 
-  const tasks = useTasks(projectId, stateFilter ? { state: stateFilter } : undefined);
+  const tasks = useTasks(projectId, { state: stateFilter || undefined,
+    run: runScope === 'latest' ? project.data?.latest_run_id ?? undefined : undefined });
   const rows = tasks.data?.items ?? [];
 
   // the roster turns raw ids into names — a table of agent ids reads like machine output
@@ -87,7 +90,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
             const nm = nameById.get(t.assignee_agent_id);
             return (
               <span className="text-[11px] text-slate-300" title={t.assignee_agent_id}>
-                {nm ?? `${t.assignee_agent_id.slice(0, 8)}…`}
+                {nm ?? 'Agent unavailable'}
               </span>
             );
           }
@@ -112,7 +115,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
       },
       {
         key: 'cost',
-        header: 'Cost',
+        header: 'Est. cost',
         width: '5.5rem',
         align: 'right',
         render: (t) => (
@@ -134,7 +137,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         width: '7rem',
         render: (t) =>
           t.verification?.verdict ? (
-            <Badge tone={t.verification.verdict === 'fail' ? 'danger' : 'success'}>
+            <Badge tone={t.verification.verdict === 'pass' ? 'success' : t.verification.verdict === 'fail' ? 'danger' : 'warning'}>
               {t.verification.verdict}
             </Badge>
           ) : (
@@ -152,6 +155,11 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
+        {project.data?.latest_run_id && <Field label="Run" className="w-40">
+          <Select aria-label="Task run" value={runScope} onChange={event => setFilters(tabId, { taskRun: event.target.value as 'latest' | 'all' })}>
+            <option value="latest">Latest run</option><option value="all">All runs</option>
+          </Select>
+        </Field>}
         <Field label="state" className="w-40">
           <Select
             value={stateFilter}
@@ -179,7 +187,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
           ))}
         </div>
         <span className="ml-auto text-[11px] text-slate-500 tabular-nums">
-          {rows.length} shown{tasks.data ? ` / ${tasks.data.total} total` : ''}
+          {rows.length} tasks shown
         </span>
         <Button size="xs" variant="ghost" onClick={() => void tasks.refetch()}>
           refresh
@@ -196,11 +204,11 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         onRowClick={(t) => openDrawer(tabId, { kind: 'task', id: t.id, name: t.title })}
         empty={
           <EmptyState
-            title="No tasks"
-            description="Ask the Orchestrator to plan — start a run on Overview and the task DAG appears here as the goal is decomposed."
+            title={stateFilter ? 'No matching tasks' : 'No tasks yet'}
+            description={stateFilter ? 'Choose All states to see the other tasks in this view.' : 'Start a run from Overview. Your company manager will turn the goal into a plan and assign tasks to the team.'}
             action={
-              <Button size="sm" variant="primary" onClick={() => setInternalTab(tabId, 'overview')}>
-                Go to Overview
+              <Button size="sm" variant="primary" onClick={() => stateFilter ? setFilters(tabId, { taskState: undefined }) : setInternalTab(tabId, 'overview')}>
+                {stateFilter ? 'Clear state filter' : 'Go to Overview'}
               </Button>
             }
           />

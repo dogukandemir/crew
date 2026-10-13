@@ -43,6 +43,7 @@ function ConnectionIndicator() {
     );
   }
   const mismatch = data.contract !== CONTRACT_VERSION;
+  const scenario = data.version.endsWith('-mock');
   return (
     <span
       className="flex flex-wrap items-center gap-1.5 text-xs text-slate-300"
@@ -51,9 +52,9 @@ function ConnectionIndicator() {
       <StatusDot state={total === 0 || live > 0 ? 'ok' : 'warning'} pulse />
       <span className="hidden sm:inline">Backend online</span>
       <Badge tone={data.offline_llm ? 'warning' : 'accent'}>
-        {data.offline_llm ? 'Demo · no model spend' : 'Live · paid usage'}
+        {scenario ? 'Demo scenario · simulated' : data.offline_llm ? 'Demo · no model spend' : 'Live · paid usage'}
       </Badge>
-      <ProviderStatus state={onboarding.data} unavailable={onboarding.isError} />
+      {!scenario && <ProviderStatus state={onboarding.data} unavailable={onboarding.isError} />}
       {total > 0 && (
         <span className="text-slate-500" title="open project tabs with a live stream">
           {live}/{total}
@@ -188,15 +189,17 @@ function SignOut() {
 }
 
 export function Header() {
+  const goHome = useTabs(state => state.goHome);
   const newProjectOpen = useUi((s) => s.newProjectOpen);
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 bg-slate-950/80 px-3 py-1.5">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold tracking-tight text-slate-100">
+        <button type="button" onClick={goHome} aria-label="Home — companies and projects" title="Home: companies and projects"
+          className="rounded px-1 py-1 text-sm font-semibold tracking-tight text-slate-100 hover:bg-slate-800">
           <span className="mr-1 text-emerald-400">◈</span>Crew
-        </span>
+        </button>
         <Button variant="secondary" size="xs" onClick={() => setNewProjectOpen(!newProjectOpen)}>
           ＋ New project
         </Button>

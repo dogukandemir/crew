@@ -14,6 +14,7 @@ const STORAGE_KEY = 'crew.gettingStarted.dismissed';
  */
 export function GettingStarted({
   providerReady,
+  demo = false,
   companies,
   projects,
   runs,
@@ -21,6 +22,7 @@ export function GettingStarted({
   onNewProject,
 }: {
   providerReady: boolean;
+  demo?: boolean;
   companies: number;
   projects: number;
   runs: number;
@@ -35,7 +37,7 @@ export function GettingStarted({
     }
   });
 
-  const steps = gettingStartedSteps({ providerReady, companies, projects, runs });
+  const steps = gettingStartedSteps({ providerReady, demo, companies, projects, runs });
   if (dismissed || allDone(steps)) return null;
 
   const doneCount = steps.filter((s) => s.done).length;

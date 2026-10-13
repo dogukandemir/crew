@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCompanies, useOnboardingState, useProjects } from '../../app/hooks';
+import { useCompanies, useHealth, useOnboardingState, useProjects } from '../../app/hooks';
 import { CompaniesSection } from '../companies/CompaniesSection';
 import { FoundCompanyWizard } from '../companies/FoundCompanyWizard';
 import { GettingStarted } from '../companies/GettingStartedCard';
@@ -38,6 +38,9 @@ export function WelcomeScreen() {
   const setNewProjectOpen = useUi((s) => s.setNewProjectOpen);
   const setToast = useUi((s) => s.setToast);
   const onboarding = useOnboardingState();
+  const health = useHealth();
+  const scenario = health.data?.version.endsWith('-mock');
+  const demo = onboarding.data?.offline_llm || scenario;
   const [dismissed, setDismissed] = useState(() => onboardingDismissed());
   const [hideCard, setHideCard] = useState(false);
   const [providerOpen, setProviderOpen] = useState(false);
@@ -45,7 +48,7 @@ export function WelcomeScreen() {
   // CTAs all open THE SAME one — there is no second way to create a company.
   const wizardOpen = useUi((s) => s.foundWizardOpen);
   const setWizardOpen = useUi((s) => s.setFoundWizardOpen);
-  const showCard = providerOpen || (!hideCard && shouldShowOnboarding(onboarding.data, dismissed));
+  const showCard = !scenario && (providerOpen || (!hideCard && !!health.data && !demo && onboarding.data?.offline_llm === false && shouldShowOnboarding(onboarding.data, dismissed)));
 
   const hasCompanies = (companies.data?.items.length ?? 0) > 0;
 
@@ -53,11 +56,11 @@ export function WelcomeScreen() {
     <div className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="text-lg font-semibold text-slate-100">Crew control room</h1>
       <p className="mt-1 text-sm text-slate-400">
-        Open a project tab to watch its org form itself, execute, verify and pay out rewards. Each tab keeps
-        its own route, filters and scroll position.
+        Give your company a clear goal. Watch the team work in its office, review tasks and approvals,
+        then inspect the files it delivers. Start with Demo or connect a provider for real work.
       </p>
 
-      {onboarding.data?.needed && dismissed && (
+      {!scenario && onboarding.data?.needed && dismissed && (
         <button
           type="button"
           onClick={() => {
@@ -74,6 +77,7 @@ export function WelcomeScreen() {
       <ExecutionModeControl onConfigure={() => setProviderOpen(true)} />
 
       <GettingStarted
+        demo={demo}
         providerReady={onboarding.data?.providers?.some(p => p.id === onboarding.data?.provider && p.configured) ?? false}
         companies={companies.data?.items.length ?? 0}
         projects={projects.data?.items.length ?? 0}

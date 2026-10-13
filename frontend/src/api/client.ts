@@ -400,7 +400,10 @@ export const api = {
   listTasks: (
     id: string,
     filter?: { state?: string; dept?: string; squad?: string; agent?: string; run?: string },
-  ) => request<Paged<Task>>(`/api/projects/${id}/tasks`, { query: filter }),
+  ) => request<Paged<Task>>(`/api/projects/${id}/tasks`, { query: {
+    state: filter?.state, department_id: filter?.dept, squad_id: filter?.squad,
+    agent_id: filter?.agent, run_id: filter?.run,
+  } }),
   createTask: (
     id: string,
     input: {

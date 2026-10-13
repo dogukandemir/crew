@@ -73,18 +73,19 @@ export const WORKSPACE_TAB_LABEL: Record<WorkspaceTab, string> = {
   projects: 'Projects',
   office: 'Office',
   overview: 'Overview',
-  org: 'Org',
+  org: 'Team structure',
   tasks: 'Tasks',
   board: 'Board',
   deliverables: 'Deliverables',
   agents: 'Agents',
-  brains: 'Brains',
-  rewards: 'Reward',
+  brains: 'Memory',
+  rewards: 'Growth & scores',
   events: 'Events',
   settings: 'Settings',
 };
 
 export interface TabFilters {
+  taskRun?: 'latest' | 'all';
   taskState?: string;
   taskQuery?: string;
   agentDept?: string;
@@ -111,6 +112,8 @@ export function tabKey(projectId: string, viewKey = 'main'): string {
 }
 
 interface TabsState {
+  homeOpen: boolean;
+  goHome: () => void;
   tabs: ProjectTab[];
   activeTabId: string | null;
   openTab: (projectId: string, viewKey?: string, internalTab?: WorkspaceTab) => string;
@@ -134,13 +137,15 @@ export const useTabs = create<TabsState>()(
     (set, get) => ({
       tabs: [],
       activeTabId: null,
+      homeOpen: false,
+      goHome: () => set({ homeOpen: true }),
       names: {},
 
       openTab: (projectId, viewKey = 'main', internalTab = 'office') => {
         const id = tabKey(projectId, viewKey);
         const existing = get().tabs.find((t) => t.id === id);
         if (existing) {
-          set({ activeTabId: id });
+          set({ activeTabId: id, homeOpen: false });
           return id;
         }
         const tab: ProjectTab = {
@@ -152,7 +157,7 @@ export const useTabs = create<TabsState>()(
           scroll: 0,
           badge: 0,
         };
-        set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+        set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id, homeOpen: false }));
         return id;
       },
 
@@ -171,11 +176,12 @@ export const useTabs = create<TabsState>()(
 
       closeOthers: (id) =>
         set((s) => ({
+          homeOpen: false,
           tabs: s.tabs.filter((t) => t.id === id),
           activeTabId: s.tabs.some((t) => t.id === id) ? id : s.activeTabId,
         })),
 
-      setActive: (id) => set({ activeTabId: id }),
+      setActive: (id) => set({ activeTabId: id, homeOpen: false }),
 
       setInternalTab: (id, internalTab) =>
         set((s) => ({
@@ -201,7 +207,7 @@ export const useTabs = create<TabsState>()(
         set((s) => ({
           tabs: s.tabs.map((t) =>
             // Only the active tab is "seen"; background tabs accumulate.
-            t.projectId === projectId && t.id !== s.activeTabId
+            t.projectId === projectId && (s.homeOpen || t.id !== s.activeTabId)
               ? { ...t, badge: t.badge + by }
               : t,
           ),
@@ -220,7 +226,7 @@ export const useTabs = create<TabsState>()(
     }),
     {
       name: 'crew.tabs.v1',
-      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, names: s.names }),
+      partialize: (s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, names: s.names, homeOpen: s.homeOpen }),
     },
   ),
 );

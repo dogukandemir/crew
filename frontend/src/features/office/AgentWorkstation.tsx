@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Task } from '../../api/types';
-import { useAgent, useAgentRewards, useTaskArtifacts, useTasks } from '../../app/hooks';
+import { useAgent, useAgentRewards, useProject, useTaskArtifacts, useTasks } from '../../app/hooks';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { Badge, severityTone } from '../../components/ui/Badge';
 import { StatusDot, dotForState } from '../../components/ui/StatusDot';
@@ -41,7 +41,8 @@ export function AgentWorkstation({
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const agent = useAgent(agentId);
-  const tasks = useTasks(projectId);
+  const project = useProject(projectId);
+  const tasks = useTasks(projectId, { run: project.data?.latest_run_id ?? undefined });
   const log = useEventLog(selectEventLog(projectId));
 
   const task: Task | undefined = useMemo(
@@ -95,7 +96,7 @@ export function AgentWorkstation({
       <div className="station-tabs" role="tablist">
         {(
           [
-            ['thinking', `Thinking ${stream.length ? `(${stream.length})` : ''}`],
+            ['thinking', `Activity ${stream.length ? `(${stream.length})` : ''}`],
             ['output', 'Output'],
             ['stats', 'Scorecard'],
           ] as Array<[StationTab, string]>
@@ -175,10 +176,10 @@ export function AgentWorkstation({
         {tab === 'output' && (
           <>
             <div className="station-section">
-              <h4>Current task</h4>
+              <h4>{project.data?.latest_run_id ? 'Latest run task' : 'Current task'}</h4>
               {!task ? (
                 <div className="station-card text-[11px] text-slate-400">
-                  No task assigned right now.
+                  {project.data?.latest_run_id ? 'This agent has no task in the latest run. Earlier work is available in Deliverables under All runs.' : 'No task assigned right now.'}
                 </div>
               ) : (
                 <div className="station-card">

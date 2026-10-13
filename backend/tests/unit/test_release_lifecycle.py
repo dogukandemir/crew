@@ -268,10 +268,12 @@ async def test_project_summaries_follow_real_run_status_instead_of_stored_idle_s
     for p in [await org.get_project(project["id"]), next(p for p in await org.list_projects() if p["id"] == project["id"])]:
         assert p["stage"] == "INTAKE"
         assert p["active_run"] is True
+        assert p["latest_run_id"] == run["id"]
     await orchestrator.cancel_run(run["id"])
     p = await org.get_project(project["id"])
     assert p["stage"] == "ABORTED"
     assert p["active_run"] is False
+    assert p["latest_run_id"] == run["id"]
 
 
 @pytest.mark.asyncio

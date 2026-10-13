@@ -9,9 +9,10 @@ import {
 } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
 import { useProject } from '../../app/hooks';
-import { TabBar } from '../../components/ui/Tabs';
+import { WorkspaceNavigation } from './WorkspaceNavigation';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { ProjectHeader } from './ProjectHeader';
+import { RunSummary } from './RunSummary';
 const Overview = lazy(() => import('../overview/Overview').then(m => ({ default: m.Overview })));
 const OrgPanel = lazy(() => import('../org/OrgPanel').then(m => ({ default: m.OrgPanel })));
 const TasksPanel = lazy(() => import('../tasks/TasksPanel').then(m => ({ default: m.TasksPanel })));
@@ -28,6 +29,7 @@ const CompanyBrains = lazy(() => import('../hq/CompanyBrains').then(m => ({ defa
 const BoardTab = lazy(() => import('../board/BoardTab').then(m => ({ default: m.BoardTab })));
 const DeliverablesPanel = lazy(() => import('../deliverables/DeliverablesPanel').then(m => ({ default: m.DeliverablesPanel })));
 import { cn } from '../../lib/cn';
+import { PanelError } from '../../components/PanelError';
 
 /**
  * One workspace (docs/09 §2, ADR 0015): the internal tabs follow the tab's SCOPE —
@@ -75,11 +77,12 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ProjectHeader projectId={tab.projectId} />
+      {project.data && project.data.kind !== 'company' && <RunSummary project={project.data} navigate={id => setInternalTab(tab.id, id)} />}
       <div className="flex items-center justify-between border-b border-slate-800/70 px-2">
         {project.data ? (
-          <TabBar
-            tabs={allowed.map((id) => ({ id, label: WORKSPACE_TAB_LABEL[id] }))}
-            value={current}
+          <WorkspaceNavigation
+            allowed={allowed}
+            current={current}
             onChange={(id) => setInternalTab(tab.id, id)}
           />
         ) : (
@@ -98,13 +101,14 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
       </div>
       <div
         ref={scrollRef}
+        role="tabpanel" aria-label={WORKSPACE_TAB_LABEL[current]}
         className={cn(
           'min-h-0 flex-1',
           // The office owns its own canvas and panning; the data panels scroll.
-          current === 'office' ? 'overflow-hidden' : 'overflow-y-auto px-3 py-3',
+          current === 'office' || current === 'hq' ? 'overflow-y-auto' : 'overflow-y-auto px-3 py-3',
         )}
       >
-        {project.data ? (
+        {project.isError ? <PanelError error={project.error} onRetry={() => void project.refetch()} label="Project" /> : project.data ? (
           <Suspense fallback={<p className="p-4" role="status">Loading view…</p>}><Panel tab={tab} current={current} kind={project.data.kind} /></Suspense>
         ) : (
           <div className="space-y-2 pt-1">

@@ -12,9 +12,11 @@ import {
   useCompanyArtifacts,
   useOrg,
   useProjectArtifacts,
+  useProject,
 } from '../../app/hooks';
 import { useUi } from '../../stores/ui';
 import { flattenOrg } from '../org/orgUtils';
+import { latestFiles } from './versions';
 
 /**
  * The deliverables surface, readable at every level of the org:
@@ -74,9 +76,12 @@ export function DeliverablesPanel({
   const [agent, setAgent] = useState('');
   const [proj, setProj] = useState('');
   const [search, setSearch] = useState('');
+  const [versions, setVersions] = useState('latest');
+  const [runScope, setRunScope] = useState('current');
   const [preview, setPreview] = useState<DeliverableRow | null>(null);
 
   const org = useOrg(isCompany ? null : id);
+  const project = useProject(isCompany ? null : id);
   const projectArt = useProjectArtifacts(isCompany ? null : id, {
     agent_id: agent || undefined,
     department_id: dept || undefined,
@@ -95,6 +100,8 @@ export function DeliverablesPanel({
   const rows = useMemo(() => {
     let out = q.data?.items ?? [];
     if (isCompany && proj) out = out.filter((r) => r.project_id === proj);
+    if (!isCompany && runScope === 'current' && project.data?.latest_run_id) out = out.filter(row => row.run_id === project.data?.latest_run_id);
+    if (versions === 'latest') out = latestFiles(out);
     if (search.trim()) {
       const s = search.trim().toLowerCase();
       out = out.filter((r) =>
@@ -104,7 +111,7 @@ export function DeliverablesPanel({
       );
     }
     return out;
-  }, [q.data, isCompany, proj, search]);
+  }, [q.data, isCompany, proj, search, versions, runScope, project.data]);
 
   const projOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -121,7 +128,15 @@ export function DeliverablesPanel({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
+        {!isCompany && project.data?.latest_run_id && <Select aria-label="Deliverable run" className="w-40"
+          value={runScope} onChange={event => setRunScope(event.target.value)}>
+          <option value="current">Latest run</option><option value="all">All runs</option>
+        </Select>}
+        <Select aria-label="File versions" className="w-40" value={versions} onChange={event => setVersions(event.target.value)}>
+          <option value="latest">Latest files</option><option value="all">All versions</option>
+        </Select>
         <Input
+          aria-label="Search deliverables"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, agent, task…"
@@ -129,7 +144,7 @@ export function DeliverablesPanel({
         />
         {!isCompany && (
           <>
-            <Select value={dept} onChange={(e) => setDept(e.target.value)} className="w-44">
+            <Select aria-label="Filter by department" value={dept} onChange={(e) => setDept(e.target.value)} className="w-44">
               <option value="">All departments</option>
               {depts.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -137,7 +152,7 @@ export function DeliverablesPanel({
                 </option>
               ))}
             </Select>
-            <Select value={agent} onChange={(e) => setAgent(e.target.value)} className="w-48">
+            <Select aria-label="Filter by agent" value={agent} onChange={(e) => setAgent(e.target.value)} className="w-48">
               <option value="">All agents</option>
               {agents.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -148,7 +163,7 @@ export function DeliverablesPanel({
           </>
         )}
         {isCompany && (
-          <Select value={proj} onChange={(e) => setProj(e.target.value)} className="w-52">
+          <Select aria-label="Filter by project" value={proj} onChange={(e) => setProj(e.target.value)} className="w-52">
             <option value="">All projects</option>
             {projOptions.map(([pid, name]) => (
               <option key={pid} value={pid}>
@@ -159,28 +174,31 @@ export function DeliverablesPanel({
         )}
         {rows.length > 0 && (
           <DownloadButton
-            path={packDownloadUrl(scope, id, isCompany ? { project_id: proj || undefined } : { agent_id: agent || undefined, department_id: dept || undefined })}
+            path={packDownloadUrl(scope, id, { artifact_ids: rows.map(row => row.id).join(',') })}
             filename={`${scope}-deliverables.zip`}
             className="rounded border border-slate-700/70 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800/60"
             title={
               isCompany
-                ? 'Download every listed deliverable as one zip, filed per project'
-                : 'Download every listed deliverable as one zip'
+                ? 'Download visible files as one zip, filed per project'
+                : 'Download visible files as one zip'
             }
           >
-            ↓ Download all
+            ↓ Download visible files
           </DownloadButton>
         )}
         <span className="ml-auto text-[11px] tabular-nums text-slate-500">
           {rows.length} deliverable{rows.length === 1 ? '' : 's'}
         </span>
       </div>
+      <p className="text-xs text-slate-400">{versions === 'latest'
+        ? 'Showing the newest published copy of each file in this view. Choose All versions for earlier copies, or All runs for previous work.'
+        : 'Showing publication history, including older copies. Check task results before using a file.'}</p>
 
       {rows.length === 0 ? (
         <EmptyState
-          title="No deliverables yet"
+          title={(q.data?.items.length ?? 0) > 0 ? 'No matching files' : 'No deliverables yet'}
           description={
-            isCompany
+            (q.data?.items.length ?? 0) > 0 ? 'Try another search or clear the filters.' : isCompany
               ? 'Outputs published by the member projects land here — every row names its agent.'
               : agent || dept
                 ? 'Nothing matches this filter yet.'

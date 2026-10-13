@@ -356,7 +356,8 @@ def task_dict(t: Task) -> dict:
         "effort": t.effort, "effort_weight": {"S": 1.0, "M": 1.6, "L": 2.6, "XL": 4.0}.get(t.effort, 1.6),
         "priority": t.priority, "assignee_agent_id": t.assignee_agent_id,
         "assignee_squad_id": t.assignee_squad_id, "attempts": t.attempts,
-        "cost_usd": micros_to_usd(t.cost_micros), "tokens_in": t.tokens_in, "tokens_out": t.tokens_out,
+        "cost_usd": micros_to_usd(t.cost_micros), "cost_micros": t.cost_micros,
+        "tokens_in": t.tokens_in, "tokens_out": t.tokens_out,
         "escalated_to": t.escalated_to, "escalation_reason": t.escalation_reason,
         "created_at": ev.utc_iso(t.created_at),
         "started_at": ev.utc_iso(t.started_at) if t.started_at else None,
@@ -1271,7 +1272,21 @@ async def list_tasks(project_id: str, state: str | None = None, department_id: s
         if run_id:
             stmt = stmt.where(Task.run_id == run_id)
         rows = (await s.scalars(stmt.order_by(Task.priority, desc(Task.created_at)).limit(limit))).all()
-    return {"items": [task_dict(t) for t in rows]}
+        latest_verification = {}
+        if rows:
+            verifications = (await s.scalars(select(VerificationResult).where(
+                VerificationResult.task_id.in_([task.id for task in rows]))
+                .order_by(VerificationResult.created_at.desc(), VerificationResult.id.desc()))).all()
+            for verification in verifications:
+                latest_verification.setdefault(verification.task_id, verification)
+        items = []
+        for task in rows:
+            row = task_dict(task)
+            verification = latest_verification.get(task.id)
+            row["verification"] = ({"verdict": verification.verdict, "method": verification.method,
+                                    "confidence": verification.confidence} if verification else None)
+            items.append(row)
+    return {"items": items}
 
 
 @api.post("/projects/{project_id}/tasks", status_code=201)
@@ -1372,6 +1387,7 @@ def _artifact_row(a: Artifact, agents: dict, depts: dict, tasks: dict, projects:
         "department_name": dept.name if dept else None,
         "task_id": a.task_id,
         "task_title": tk.title if tk else None,
+        "run_id": tk.run_id if tk else None,
         "project_id": a.project_id,
         "project_name": pr.name if pr else None,
     }
@@ -1547,6 +1563,7 @@ async def artifact_download(artifact_id: str) -> FileResponse:
 @api.get("/projects/{project_id}/artifacts/download")
 async def project_artifacts_download(project_id: str, agent_id: str | None = None,
                                      department_id: str | None = None,
+                                     artifact_ids: str | None = Query(default=None, max_length=34_000),
                                      limit: int = Query(default=1000, ge=1, le=5000)) -> FileResponse:
     """Every matching deliverable of the project, as one zip."""
     async with session_scope() as s:
@@ -1554,9 +1571,14 @@ async def project_artifacts_download(project_id: str, agent_id: str | None = Non
         if project is None:
             raise _problem(404, "project not found", project_id)
         q = select(Artifact).where(Artifact.project_id == project_id)
+        selected = set(artifact_ids.split(',')) if artifact_ids is not None else None
+        if selected is not None:
+            q = q.where(Artifact.id.in_(selected))
         if agent_id:
             q = q.where(Artifact.agent_id == agent_id)
         arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+        if selected is not None and selected != {artifact.id for artifact in arts}:
+            raise _problem(404, "selected files are unavailable", project_id)
         agents, depts, tasks, projects = await _artifact_context(s, [project_id], arts)
         slugs = {project_id: _slug(project.name)}
     if department_id:
@@ -1571,6 +1593,7 @@ async def project_artifacts_download(project_id: str, agent_id: str | None = Non
 @api.get("/companies/{company_id}/artifacts/download")
 async def company_artifacts_download(company_id: str, project_id: str | None = None,
                                      agent_id: str | None = None,
+                                     artifact_ids: str | None = Query(default=None, max_length=34_000),
                                      limit: int = Query(default=1000, ge=1, le=5000)) -> FileResponse:
     """Every matching deliverable across the company's member projects, as one zip,
     filed per project."""
@@ -1586,9 +1609,14 @@ async def company_artifacts_download(company_id: str, project_id: str | None = N
         if not member_ids:
             raise _problem(404, "no deliverables", company_id)
         q = select(Artifact).where(Artifact.project_id.in_(member_ids))
+        selected = set(artifact_ids.split(',')) if artifact_ids is not None else None
+        if selected is not None:
+            q = q.where(Artifact.id.in_(selected))
         if agent_id:
             q = q.where(Artifact.agent_id == agent_id)
         arts = list((await s.scalars(q.order_by(Artifact.created_at.desc()).limit(limit))).all())
+        if selected is not None and selected != {artifact.id for artifact in arts}:
+            raise _problem(404, "selected files are unavailable", company_id)
         projects = {x.id: x for x in (await s.scalars(
             select(Project).where(Project.id.in_(member_ids)))).all()}
         slugs = {pid: _slug(p.name) for pid, p in projects.items()}

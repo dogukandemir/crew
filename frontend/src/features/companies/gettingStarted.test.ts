@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { allDone, gettingStartedSteps } from './gettingStarted';
 
 describe('gettingStartedSteps', () => {
+  it('Demo does not require a provider before founding and running a company', () => {
+    const steps = gettingStartedSteps({ demo: true, providerReady: false, companies: 1, projects: 1, runs: 1 });
+    expect(steps.map(step => step.key)).toEqual(['company', 'project', 'run']);
+    expect(allDone(steps)).toBe(true);
+  });
   it('reads the record honestly when everything is empty', () => {
     const steps = gettingStartedSteps({ providerReady: false, companies: 0, projects: 0, runs: 0 });
     expect(steps.map((s) => s.key)).toEqual(['provider', 'company', 'project', 'run']);

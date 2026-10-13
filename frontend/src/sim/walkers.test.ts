@@ -108,7 +108,7 @@ describe('walkers', () => {
     expect(left.facing).toBe(-1);
   });
 
-  it('does not flip facing on pure vertical movement', () => {
+  it('faces screen-left when walking down the isometric y axis', () => {
     const w = step(
       setRoute(newWalker(0, 0), [
         { x: 0, y: 0 },
@@ -117,7 +117,12 @@ describe('walkers', () => {
       0.2,
       100,
     );
-    expect(w.facing).toBe(1);
+    expect(w.facing).toBe(-1);
+  });
+
+  it('keeps facing when walking vertically on screen', () => {
+    const walker = step(setRoute(newWalker(0, 0), [{ x: 0, y: 0 }, { x: 100, y: 100 }]), 0.2);
+    expect(walker.facing).toBe(1);
   });
 
   it('sets off from where it stands when the route starts elsewhere', () => {

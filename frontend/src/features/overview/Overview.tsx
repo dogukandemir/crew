@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../../api/client';
@@ -20,6 +20,8 @@ import {
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { useUi } from '../../stores/ui';
 import { flattenOrg, orgCounts } from '../org/orgUtils';
+import { latestRunTasks } from '../../sim/currentWork';
+import { hasActiveRun } from '../projects/runState';
 
 /** Mission control (docs/09 §2.1). */
 export function Overview({ projectId, tabId }: { projectId: string; tabId: string }) {
@@ -34,9 +36,9 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
   const units = useMemo(() => flattenOrg(org.data?.root), [org.data]);
   const counts = useMemo(() => orgCounts(units), [units]);
 
-  const taskItems = tasks.data?.items ?? [];
+  const taskItems = latestRunTasks(tasks.data?.items ?? [], project.data);
   const done = taskItems.filter((t) => t.state === 'completed').length;
-  const total = tasks.data?.total ?? taskItems.length;
+  const total = taskItems.length;
   const pending = approvals.data?.items.length ?? project.data?.pending_approvals ?? 0;
 
   const successRate =
@@ -62,7 +64,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <StatCard
-          label="Tasks"
+          label="Latest run tasks"
           value={`${done}/${total || '—'}`}
           hint={total ? formatPercent(total ? done / total : 0) + ' complete' : 'no plan yet'}
           tone={total > 0 && done === total ? 'success' : 'neutral'}
@@ -186,6 +188,8 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
 
 function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGoal: string }) {
   const [goal, setGoal] = useState(defaultGoal);
+  const editedGoal = useRef(false);
+  useEffect(() => { if (!editedGoal.current) setGoal(defaultGoal); }, [defaultGoal]);
   const [mode, setMode] = useState<'interactive' | 'autonomous'>('interactive');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [skipAsk, setSkipAsk] = useState(false);
@@ -193,11 +197,11 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
   const setToast = useUi((s) => s.setToast);
   const project = useProject(projectId);
   const tasks = useTasks(projectId);
-  const items = tasks.data?.items ?? [];
+  const items = latestRunTasks(tasks.data?.items ?? [], project.data);
   const done = items.filter((t) => t.state === 'completed').length;
-  const total = tasks.data?.total ?? items.length;
+  const total = items.length;
   const stage = project.data?.stage ?? 'IDLE';
-  const runActive = !['IDLE', 'DONE', ''].includes(stage);
+  const runActive = project.data ? hasActiveRun(project.data) : false;
   const needsConfirm = !skipAsk && (runActive || done > 0);
 
   const start = useMutation({
@@ -215,6 +219,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
+          if (runActive) return;
           if (needsConfirm) {
             setConfirmOpen(true);   // a fresh run re-plans from scratch — say so first
             return;
@@ -223,22 +228,23 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
         }}
       >
         <Field label="Goal">
-          <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="What should the org achieve?" />
+          <Textarea value={goal} onChange={(e) => { editedGoal.current = true; setGoal(e.target.value); }} placeholder="What should the org achieve?" />
         </Field>
         <Field
           label="Mode"
           hint={
             mode === 'autonomous'
-              ? 'Runs without asking you for confirmation.'
-              : 'Pauses for your confirmation at key gates.'
+              ? 'Plans and schedules work automatically. Tool approvals and spending caps still apply.'
+              : 'Keeps you involved at run checkpoints. Tool approvals and spending caps still apply.'
           }
         >
           <Select value={mode} onChange={(e) => setMode(e.target.value as 'interactive' | 'autonomous')}>
-            <option value="interactive">interactive</option>
-            <option value="autonomous">autonomous</option>
+            <option value="interactive">Guided</option>
+            <option value="autonomous">Autonomous</option>
           </Select>
         </Field>
-        <Button type="submit" variant="primary" loading={start.isPending} disabled={!(goal.trim() || defaultGoal)}>
+        {runActive && <p className="text-xs text-amber-200" role="status">A run is already in progress. Review or resume it before starting another.</p>}
+        <Button type="submit" variant="primary" loading={start.isPending} disabled={runActive || !(goal.trim() || defaultGoal)}>
           ▶ Start run
         </Button>
         <ProgressHint projectId={projectId} />
@@ -260,7 +266,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
                 start.mutate();
               }}
             >
-              Start anyway
+              Start new run
             </Button>
           </>
         }

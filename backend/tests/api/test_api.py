@@ -45,6 +45,31 @@ async def test_health_and_contract(client):
     assert body["contract"] == 1 and body["version"]
 
 
+async def test_task_run_scope_exposes_exact_cost_and_latest_verification(client):
+    from datetime import UTC, datetime, timedelta
+
+    from crew.core.db import session_scope
+    from crew.core.models import Task, VerificationResult
+
+    project = await _create_project(client, "Task summary contract")
+    async with session_scope() as session:
+        old = Task(project_id=project["id"], run_id="older-run", title="Past failure", state="failed")
+        current = Task(project_id=project["id"], run_id="current-run", title="Current result", state="completed",
+                       cost_micros=27100)
+        session.add_all([old, current])
+        await session.flush()
+        session.add_all([
+            VerificationResult(project_id=project["id"], task_id=current.id, verdict="fail", method="judge",
+                               created_at=datetime.now(UTC) - timedelta(seconds=10)),
+            VerificationResult(project_id=project["id"], task_id=current.id, verdict="pass", method="judge", confidence=0.95),
+        ])
+    response = await client.get(f"/api/projects/{project['id']}/tasks", params={"run_id": "current-run"})
+    rows = response.json()["items"]
+    assert len(rows) == 1 and rows[0]["title"] == "Current result"
+    assert rows[0]["cost_micros"] == 27100 and rows[0]["cost_usd"] == 0.0271
+    assert rows[0]["verification"] == {"verdict": "pass", "method": "judge", "confidence": 0.95}
+
+
 async def test_project_lifecycle(client):
     p = await _create_project(client, "API Lifecycle")
     assert p["status"] == "active" and p["spend_usd"] == 0
@@ -436,6 +461,8 @@ async def test_deliverables_at_three_levels(client):
     items = (await client.get(f"/api/projects/{project['id']}/artifacts")).json()["items"]
     assert items, f"the offline run must publish artifacts (run {status})"
     a = items[0]
+    latest = (await client.get(f"/api/projects/{project['id']}")).json()
+    assert a["run_id"] == latest["latest_run_id"]
     for k in ("id", "name", "mime", "bytes", "sha256", "created_at", "agent_id",
               "agent_name", "department_id", "department_name", "task_id",
               "task_title", "project_id", "project_name"):
@@ -547,6 +574,17 @@ async def test_deliverable_downloads_single_and_packs(client):
     assert cz.status_code == 200, cz.text
     cnames = zipfile.ZipFile(io.BytesIO(cz.content)).namelist()
     assert any(n == f"bundle/{a['name']}" for n in cnames), cnames
+
+    # The UI's visible-file selection must be exactly what the archive contains.
+    for url in (f"/api/projects/{project['id']}/artifacts/download",
+                f"/api/companies/{company['id']}/artifacts/download"):
+        selected = await client.get(url, params={"artifact_ids": a["id"]})
+        assert selected.status_code == 200, selected.text
+        with zipfile.ZipFile(io.BytesIO(selected.content)) as pack:
+            assert len(pack.namelist()) == 1
+            assert pack.read(pack.namelist()[0]) == d.content
+        missing = await client.get(url, params={"artifact_ids": f"{a['id']},missing-artifact"})
+        assert missing.status_code == 404
 
     # a file outside the data directory refuses with 410, not a broken download
     from crew.core.db import session_scope

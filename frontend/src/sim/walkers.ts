@@ -81,7 +81,8 @@ export function step(w: Walker, dt: number, speed: number = WALK_SPEED): Walker 
     const nx = x + (target.x - x) * ratio;
     const ny = y + (target.y - y) * ratio;
     // Mirror the sprite only for genuine horizontal travel.
-    if (Math.abs(nx - x) > 0.4) facing = nx < x ? -1 : 1;
+    const screenTravel = (nx - x) - (ny - y);
+    if (Math.abs(screenTravel) > 0.4) facing = screenTravel < 0 ? -1 : 1;
     x = nx;
     y = ny;
     budget -= take;

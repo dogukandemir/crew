@@ -574,6 +574,9 @@ function Sprite({
       onClick={onSelect}
       role="button"
       tabIndex={-1}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onSelect(); }
+      }}
       aria-label={`${agent.name} — ${agent.role ?? 'agent'} — ${activity.note}`}
     >
       <title>{`${agent.name}${agent.grade !== undefined ? ` · G${agent.grade}` : ''} — ${
@@ -808,7 +811,7 @@ export function OfficeScene({
       className={cn('office-scene', far && 'is-far')}
       width={viewport.w}
       height={viewport.h}
-      role="img"
+      role="group"
       aria-label="Office floor"
     >
       <defs>

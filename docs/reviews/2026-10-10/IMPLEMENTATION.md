@@ -2,6 +2,8 @@
 
 Updated 13 October 2026. Current implementation record for F01–F20 in [REPORT.md](REPORT.md). The original report describes the baseline; this tracker describes the fixes. This is work in progress; remaining gates below have not been cleared.
 
+The subsequent [UI/UX and game review](../2026-10-13/UI-UX.md) records animation, navigation, current-run, task-contract, onboarding and result-history improvements verified on 13 October.
+
 **Release decision: experimental; not yet cleared for a broad Live launch.** Core defects have been addressed and tested, and a bounded DeepSeek project has passed real-provider acceptance. Remaining concurrency/contract work and dependency advisories are separate gates. Artwork ownership is confirmed by the maintainer. This single coding example does not prove autonomous business success.
 
 ## Findings
@@ -31,15 +33,15 @@ Updated 13 October 2026. Current implementation record for F01–F20 in [REPORT.
 
 ## Verified evidence
 
-- Final full backend suite: **297 passed, 1 skipped, 1 paid Live test deselected**, on Windows/Python 3.12. Completed after approval expiry, strict judge parsing, learning finalization, per-run spending/recovery, name-collision and board/manual-task/archive transaction fixes. Collection independently confirmed 298 selected of 299 total cases. The skipped case requires host symlink support; paid tests are excluded by default.
+- Final full backend suite: **298 passed, 1 skipped, 1 paid Live test deselected**, on Windows/Python 3.12. Includes the subsequent UI task-summary cost/latest-verification contract regression. The skipped case requires host symlink support; paid tests are excluded by default.
 - Real CrewAI loop: **six cases passed**, including premature final answers, normalized SDK model identities, a provider ignoring stop markers, actual filesystem tools and accounted generations. This deterministic-provider check makes no paid request.
-- Frontend: **295 passed across 36 files**, including provider status, authenticated downloads, dialogs and session tests.
-- Production frontend container build: **passed**, including type checking. Main JS approximately **364.11 KB / 112.65 KB gzip**. A shared deliverables import prevents that individual panel being split into its own chunk.
+- Frontend: **322 passed across 45 files**, including provider status, authenticated downloads, dialogs, session tests and the subsequent game/UI regressions.
+- Production frontend container build: **passed**, including type checking. Main JS approximately **372 KB / 115 KB gzip** after the UI pass. A shared deliverables import prevents that individual panel being split into its own chunk.
 - Isolated Compose installation: images built, services started, actual sandbox execution/path rejection passed, database and project file survived forced container recreation.
 - Full recovery: **passed** in separate Demo installations using a stopped-source archive restored to fresh volumes; database, workspace bytes and vault decryption all survived. The configured Live installation was not used as the recovery fixture.
 - Latest backend lint: **passed**. Final backend image built and deployed to the isolated review app; its API passed the readiness check. Completed status, both reconciled ledgers and unchanged spend were checked after deployment. CrewAI emits callback/checkpoint serialization and deprecation warnings; these are not hidden or counted as functional failures.
 - Final browser: **DeepSeek connected**, Live mode, completed project stage, no obsolete pending approvals, and the actual TEST-RESULTS.md preview verified. Screenshots: [provider configuration](assets/provider-configured-verified.png), [actual Live test output](assets/live-acceptance-verified.png).
-- Final dependency audits: frontend **zero advisories**; backend **four unique Chroma advisories / five scanner records**, no patched versions. The backend security gate remains failing. Final backend image: `sha256:e49d582bd03106ba9f4c49a03a939b1fee52985795619a25752fe4a85cb5b9bb`.
+- Final dependency audits: frontend **zero advisories**; backend **four unique Chroma advisories / five scanner records**, no patched versions. The backend security gate remains failing. Backend image after the UI pass: `sha256:ae5567f8dc384bc26603bf0b1c2c9fdf359e6677d8f7c90c5f5a345875fc50f0`.
 - GitHub-hosted Linux/Windows/Compose and security workflows are configured, **not yet observed running**.
 
 Automatic approval review briefly exhausted its account allowance on 11 October and resumed by 13 October. Paid DeepSeek acceptance attempts were authorized up to **US$5 in aggregate**, with both company and project caps enforcing that limit. Final estimated cumulative settled spend is **US$3.626132**, with no held reservation and both ledgers reconciled. Earlier failed/aborted runs remain recorded. No additional paid calls were made for the final hardening checks. No repository or product release has been published.

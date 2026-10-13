@@ -1,7 +1,11 @@
-import { animateFrames } from '../../app/animation';
+import { animateFrames, useCalmMotion } from '../../app/animation';
+import { MotionControl } from '../../app/MotionControl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EventRow, Task } from '../../api/types';
-import { useOrg, useTasks } from '../../app/hooks';
+import { useOrg, useProject, useTasks } from '../../app/hooks';
+import { currentWork } from '../../sim/currentWork';
+import { Select } from '../../components/ui/Field';
+import { Modal } from '../../components/ui/Drawer';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { Button } from '../../components/ui/Button';
 import { Chip } from '../../components/ui/Chip';
@@ -61,6 +65,8 @@ function useNow(intervalMs: number): number {
  */
 export function OfficeFloor({ projectId }: { projectId: string; tabId: string }) {
   const org = useOrg(projectId);
+  const projectQuery = useProject(projectId);
+  const calm = useCalmMotion();
   const tasksQuery = useTasks(projectId);
   const log = useEventLog(selectEventLog(projectId));
   const now = useNow(1000);
@@ -77,6 +83,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const [focusRoomId, setFocusRoomId] = useState<string | null>(null);
   const [panning, setPanning] = useState(false);
   const [newRoomIds, setNewRoomIds] = useState<Set<string>>(new Set());
+  const newRoomAt = useRef(new Map<string, number>());
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -171,7 +178,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const visibleIds = useMemo(() => Object.keys(office.deskOf).sort(), [office]);
   const rosterKey = visibleIds.join(',');
   const seenRooms = useRef<Set<string>>(new Set());
-  const tasks = tasksQuery.data?.items;
+  const tasks = useMemo(() => currentWork(tasksQuery.data?.items ?? [], projectQuery.data), [tasksQuery.data, projectQuery.data]);
 
   /** The screen box the whole building occupies, signage included. */
   const bounds = useMemo(
@@ -222,16 +229,15 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     const fresh = ids.filter((id) => !known.has(id));
     if (fresh.length === 0) return;
     ids.forEach((id) => known.add(id));
+    fresh.forEach(id => newRoomAt.current.set(id, Date.now()));
     setNewRoomIds((prev) => new Set([...prev, ...fresh]));
-    const timer = window.setTimeout(() => {
-      setNewRoomIds((prev) => {
-        const next = new Set(prev);
-        fresh.forEach((id) => next.delete(id));
-        return next;
-      });
-    }, NEW_ROOM_MS);
-    return () => window.clearTimeout(timer);
   }, [office.rooms]);
+  useEffect(() => {
+    setNewRoomIds(previous => {
+      const next = new Set([...previous].filter(id => now - (newRoomAt.current.get(id) ?? 0) < NEW_ROOM_MS));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [now]);
 
   useEffect(() => {
     setSelected(null);
@@ -359,6 +365,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         walkers.current.delete(id);
         lastTargetKey.current.delete(id);
         lastRoom.current.delete(id);
+        motions.current.delete(id);
+        idleSince.current.delete(id);
       }
     }
   }, [targets, visibleIds, office, arrivingIds]);
@@ -404,7 +412,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         const flip = facingAt ? (facingAt.x >= next.x ? 1 : -1) : next.facing;
         // Only the position is written here. The figure mirrors itself, so the
         // name tag and the speech bubble above it stay readable.
-        el.setAttribute('transform', `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`);
+        const transform = `translate(${p.x.toFixed(2)} ${p.y.toFixed(2)})`;
+        if (el.getAttribute('transform') !== transform) el.setAttribute('transform', transform);
         if (next.moving !== el.classList.contains('is-walking')) {
           el.classList.toggle('is-walking', next.moving);
         }
@@ -424,9 +433,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
                 })
                 .join(' '),
             );
-            trail.setAttribute('opacity', '0.75');
-          } else if (trail.getAttribute('opacity') !== '0') {
-            trail.setAttribute('opacity', '0');
+            // CSS owns the default opacity; an SVG presentation attribute cannot
+            // override it. Use inline style so a walking route is actually visible.
+            if (trail.style.opacity !== '0.75') trail.style.opacity = '0.75';
+          } else if (trail.style.opacity !== '0') {
+            trail.style.opacity = '0';
           }
         }
 
@@ -441,7 +452,9 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         // where positions are written — here, and not in React.
         m.current.x = next.x;
         m.current.y = next.y;
-        el.setAttribute('data-depth', String(next.x + next.y));
+        m.current.seated = !next.moving && !!targetsRef.current[id]?.seated;
+        const depth = String(next.x + next.y);
+        if (el.getAttribute('data-depth') !== depth) el.setAttribute('data-depth', depth);
       }
       sortDepthLayer();
     };
@@ -482,7 +495,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     for (const e of log.items.slice(-80)) {
       if (!e.agent_id || !office.deskOf[e.agent_id]) continue;
       const ts = Date.parse(e.ts);
-      if (Number.isNaN(ts)) continue;
+      if (Number.isNaN(ts) || Date.now() - ts > EVENT_LOOKBACK_MS) continue;
       if (!best || ts > best.ts) best = { id: e.agent_id, ts };
     }
     if (!best) return;
@@ -579,16 +592,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       const walker = walkers.current.get(id);
       const pos = walker ? { x: walker.x, y: walker.y } : at;
       if (!pos || size.w === 0) return;
-      const screen = screenOf(pos.x, pos.y, cam);
-      const visibleW = Math.max(160, size.w - PANEL_W);
-      const margin = 120;
-      let dx = 0;
-      let dy = 0;
-      if (screen.x > visibleW - margin) dx = visibleW - margin - screen.x;
-      else if (screen.x < margin) dx = margin - screen.x;
-      if (screen.y > size.h - margin) dy = size.h - margin - screen.y;
-      else if (screen.y < margin) dy = margin - screen.y;
-      if (dx !== 0 || dy !== 0) setCam((c) => panBy(c, dx, dy));
+      // Zoom to an inspectable size, preserving the selected person's location.
+      const visibleW = size.w < 640 ? size.w : Math.max(160, size.w - PANEL_W);
+      const scale = Math.max(cam.scale, 0.55);
+      const projected = project(pos.x, pos.y);
+      setCam({ scale, x: visibleW / 2 - projected.x * scale, y: size.h / 2 - projected.y * scale });
     },
     [office, size.w, size.h, cam],
   );
@@ -677,7 +685,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const shipped = Object.values(pulse.rooms).reduce((sum, room) => sum + room.shipped, 0);
 
   return (
-    <div className="office">
+    <div className={cn('office', calm ? 'is-calm' : 'is-animated')}>
+      {tasksQuery.isError && <PanelError error={tasksQuery.error} label="Task status" onRetry={() => void tasksQuery.refetch()} />}
       <div className="office-toolbar">
         <Button
           size="xs"
@@ -705,42 +714,29 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         {/* How big the sprites are drawn. Every option is the same geometry at a
             different size — one factor on both axes — so this is a choice about
             scale, never about shape. */}
-        {SPRITE_SCALES.map((s) => (
-          <Chip
-            key={s.name}
-            tone={spriteScale === s.name ? 'success' : 'neutral'}
-            selected={spriteScale === s.name}
-            onClick={() => setSpriteScale(s.name)}
-            title={s.hint}
-          >
-            {s.label}
-          </Chip>
-        ))}
+        <Select aria-label="Character size" className="w-32 text-xs" value={spriteScale}
+          onChange={event => setSpriteScale(event.target.value as typeof spriteScale)}>
+          {SPRITE_SCALES.map(scale => <option key={scale.name} value={scale.name}>{scale.label.replace('Sprite · ', '')}</option>)}
+        </Select>
+        <MotionControl />
+        <Select aria-label="Inspect an agent" className="w-44 text-xs" value={selected ?? ''}
+          onChange={event => { if (event.target.value) selectAgent(event.target.value); else setSelected(null); }}>
+          <option value="">Inspect an agent…</option>
+          {visibleIds.map(id => <option key={id} value={id}>{office.agentOf[id]?.name}</option>)}
+        </Select>
 
         <span className="office-sep" />
 
-        {office.rooms
-          .filter((r) => r.kind !== 'bench')
-          .map((r) => (
-            <Chip
-              key={r.id}
-              tone={focusRoomId === r.id ? 'success' : 'neutral'}
-              selected={focusRoomId === r.id}
-              onClick={() => focusRoom(r)}
-            >
-              <span
-                aria-hidden
-                className="mr-1 inline-block h-1.5 w-1.5 rounded-full"
-                style={{ background: r.accent }}
-              />
-              {r.name}
-              {(pulse.rooms[r.id]?.producing ?? 0) > 0 && (
-                <span className="ml-1 text-emerald-300" title="producing now">
-                  ●
-                </span>
-              )}
-            </Chip>
-          ))}
+        <Select aria-label="Focus a room" className="w-44 text-xs" value={focusRoomId ?? ''}
+          onChange={event => {
+            const room = office.rooms.find(room => room.id === event.target.value);
+            if (room) focusRoom(room); else { setFocusRoomId(null); fit(); }
+          }}>
+          <option value="">Whole office</option>
+          {office.rooms.filter(room => room.kind !== 'bench').map(room => <option key={room.id} value={room.id}>
+            {room.name}{(pulse.rooms[room.id]?.producing ?? 0) > 0 ? ' · working' : ''}
+          </option>)}
+        </Select>
 
         <span className="office-sep" />
 
@@ -792,8 +788,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           ref={attachCanvas}
           className={cn('office-canvas', panning && 'is-panning')}
           tabIndex={0}
-          role="application"
-          aria-label="Office floor — drag to pan, scroll to zoom, click a character to see their thinking"
+          role="region"
+          aria-label="Office floor — drag or use arrow keys to pan, Alt plus scroll to zoom, inspect an agent for activity and output"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -847,22 +843,26 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
               <EmptyState
                 icon="🏢"
                 title="The office is empty"
-                description="Nobody has been hired yet. Start a run on Overview — the orchestrator works out the capabilities the goal needs, then hires the agents and their desks appear here. If nothing can be hired at all, the backend has no model provider key: set one in .env, or start it with CREW_OFFLINE_LLM=true to run the same pipeline against the deterministic fake runner."
+                description="Start a run from Overview. Your company manager will plan the work and hire the agents it needs. Try Demo first, or connect a provider and enable Live for real work."
               />
             </div>
           )}
         </div>
 
-        {selected && (
+        {selected && size.w >= 640 && (
           <div className="w-[380px] shrink-0 border-l border-slate-700/60 bg-slate-950/50">
             <AgentWorkstation
-              agentId={selected}
+              key={selected} agentId={selected}
               projectId={projectId}
               activity={activities[selected]}
               onClose={() => setSelected(null)}
             />
           </div>
         )}
+        <Modal open={!!selected && size.w < 640} title="Agent activity and output" onClose={() => setSelected(null)}>
+          {selected && <div className="h-[60dvh]"><AgentWorkstation key={selected} agentId={selected}
+            projectId={projectId} activity={activities[selected]} onClose={() => setSelected(null)} /></div>}
+        </Modal>
       </div>
     </div>
   );

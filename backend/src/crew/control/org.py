@@ -217,7 +217,7 @@ async def get_project(project_id: str) -> dict:
         d = serialize_project(p)
         latest = await s.scalar(select(Run).where(Run.project_id == project_id)
                                 .order_by(Run.started_at.desc(), Run.id.desc()).limit(1))
-        d.update(_run_summary(latest.stage, latest.status) if latest else _run_summary(None, None))
+        d.update(_run_summary(latest.stage, latest.status, latest.id) if latest else _run_summary(None, None))
         d["runs"] = int(await s.scalar(select(func.count(Run.id)).where(
             Run.project_id == project_id)) or 0)
         if p.company_id:
@@ -248,11 +248,11 @@ def serialize_project(p: Project) -> dict:
     }
 
 
-def _run_summary(stage: str | None, status: str | None) -> dict:
+def _run_summary(stage: str | None, status: str | None, run_id: str | None = None) -> dict:
     terminal = {"completed": "DONE", "failed": "FAILED", "aborted": "ABORTED"}
     return {"stage": terminal.get(status, stage or "IDLE"),
             "active_run": status is not None and status not in terminal,
-            "run_status": status}
+            "run_status": status, "latest_run_id": run_id}
 
 
 async def list_projects() -> list[dict]:
@@ -266,12 +266,13 @@ async def list_projects() -> list[dict]:
             run_counts = {pid: int(n) for pid, n in (await s.execute(
                 select(Run.project_id, func.count(Run.id)).where(Run.project_id.in_(ids))
                 .group_by(Run.project_id))).all()}
-            ranked = select(Run.project_id, Run.stage, Run.status,
+            ranked = select(Run.project_id, Run.stage, Run.status, Run.id.label("run_id"),
                             func.row_number().over(partition_by=Run.project_id,
                                                    order_by=(Run.started_at.desc(), Run.id.desc())).label("position"))\
                 .where(Run.project_id.in_(ids)).subquery()
-            latest_runs = {pid: _run_summary(stage, status) for pid, stage, status in (await s.execute(
-                select(ranked.c.project_id, ranked.c.stage, ranked.c.status).where(ranked.c.position == 1))).all()}
+            latest_runs = {pid: _run_summary(stage, status, run_id) for pid, stage, status, run_id in (await s.execute(
+                select(ranked.c.project_id, ranked.c.stage, ranked.c.status, ranked.c.run_id)
+                .where(ranked.c.position == 1))).all()}
     out = []
     for p in rows:
         d = serialize_project(p)

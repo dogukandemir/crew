@@ -1,4 +1,5 @@
-import { animateFrames } from '../../app/animation';
+import { animateFrames, useCalmMotion } from '../../app/animation';
+import { MotionControl } from '../../app/MotionControl';
 /**
  * The HQ floor (ADR 0011): the whole company drawn on one isometric plate.
  *
@@ -47,6 +48,7 @@ const newWalker = (person: HqPerson): Walker => ({
 });
 
 export function HqFloor({ hq }: { hq: Hq }) {
+  const calm = useCalmMotion();
   const world = useMemo(() => buildHqWorld(hq), [hq]);
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SVGGElement>(null);
@@ -57,6 +59,8 @@ export function HqFloor({ hq }: { hq: Hq }) {
   const fitScaleRef = useRef(0.35);
   const [zoomPct, setZoomPct] = useState(100);
   const [dragging, setDragging] = useState(false);
+  const fittedViewport = useRef('');
+  const castRef = useRef<SVGGElement>(null);
 
   // Resize → keep the fit honest.
   useEffect(() => {
@@ -68,12 +72,16 @@ export function HqFloor({ hq }: { hq: Hq }) {
       setSize({ w, h });
       const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), { w, h });
       fitScaleRef.current = c.scale;
-      setCam(c);
-      setZoomPct(100);
+      const key = `${hq.company.id}:${w}:${h}`;
+      if (fittedViewport.current !== key) {
+        fittedViewport.current = key;
+        setCam(c);
+        setZoomPct(100);
+      }
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [world]);
+  }, [world.w, world.h, hq.company.id]);
 
   const fitView = useCallback(() => {
     const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), size);
@@ -185,10 +193,22 @@ export function HqFloor({ hq }: { hq: Hq }) {
         w.motion.current.y = w.pos.y;
         w.motion.current.moving = w.moving;
         w.motion.current.facing = w.facing;
+        w.motion.current.seated = !w.moving && ((!!person.anchors && w.pos.x === person.home.x && w.pos.y === person.home.y)
+          || (person.kind === 'board' && world.inSession));
         const el = gRefs.current.get(person.id);
         if (el) {
           const p = project(w.pos.x, w.pos.y);
-          el.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+          const transform = `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`;
+          if (el.getAttribute('transform') !== transform) el.setAttribute('transform', transform);
+          el.setAttribute('data-depth', String(w.pos.x + w.pos.y));
+        }
+      }
+      const layer = castRef.current;
+      if (layer) {
+        const children = [...layer.children];
+        const depth = (element: Element) => Number(element.getAttribute('data-depth') ?? 0);
+        if (children.some((element, index) => index > 0 && depth(element) < depth(children[index - 1]))) {
+          children.sort((a, b) => depth(a) - depth(b)).forEach(element => layer.appendChild(element));
         }
       }
     };
@@ -236,16 +256,18 @@ export function HqFloor({ hq }: { hq: Hq }) {
   }, [world, cam.scale]);
 
   const onWheel = (e: RWheelEvent) => {
-    e.preventDefault();
     const rect = hostRef.current?.getBoundingClientRect();
     if (!rect) return;
-    zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
+    // Match the project floor: scroll pans, Alt+scroll zooms.
+    if (e.altKey || e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
+    else setCam(camera => ({ ...camera, x: camera.x - e.deltaX, y: camera.y - e.deltaY }));
   };
   const dragRef = useRef<{ px: number; py: number } | null>(null);
   const onPointerDown = (e: RPointerEvent) => {
+    if ((e.target as Element).closest('button')) return;
     dragRef.current = { px: e.clientX, py: e.clientY };
     setDragging(true);
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: RPointerEvent) => {
     const d = dragRef.current;
@@ -264,12 +286,26 @@ export function HqFloor({ hq }: { hq: Hq }) {
   return (
     <div
       ref={hostRef}
-      className="relative h-full w-full touch-none overflow-hidden bg-[#0a0d13]"
+      className={`relative h-full min-h-[280px] w-full touch-none overflow-hidden bg-[#0a0d13] ${calm ? 'is-calm' : 'is-animated'}`}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onLostPointerCapture={onPointerUp}
       onPointerLeave={onPointerUp}
+      tabIndex={0} role="region" aria-label="Company floor — arrow keys pan, plus and minus zoom, F fits"
+      onKeyDown={event => {
+        if ((event.target as Element).closest('button')) return;
+        const shifts: Record<string, [number, number]> = { ArrowLeft: [70, 0], ArrowRight: [-70, 0], ArrowUp: [0, 70], ArrowDown: [0, -70] };
+        if (shifts[event.key]) {
+          const [x, y] = shifts[event.key]; setCam(camera => ({ ...camera, x: camera.x + x, y: camera.y + y }));
+        } else if (event.key === 'f' || event.key === '0') fitView();
+        else if (event.key === '+' || event.key === '=') zoomAt(1.25, size.w / 2, size.h / 2);
+        else if (event.key === '-') zoomAt(1 / 1.25, size.w / 2, size.h / 2);
+        else return;
+        event.preventDefault();
+      }}
       style={{ cursor: dragging ? 'grabbing' : 'grab' }}
     >
       <svg width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} role="img"
@@ -290,14 +326,14 @@ export function HqFloor({ hq }: { hq: Hq }) {
           ))}
 
           {/* the board table: the very chairs the model seats the board on */}
-          <MeetingTable x={BOARD_TABLE.x} y={BOARD_TABLE.y} w={BOARD_TABLE.w} seats={4} />
+          <g ref={castRef}>
+          <g data-depth={BOARD_TABLE.x + BOARD_TABLE.y + BOARD_TABLE.w / 2}><MeetingTable x={BOARD_TABLE.x} y={BOARD_TABLE.y} w={BOARD_TABLE.w} seats={4} /></g>
 
           {/* owned desks: one per anchored person, the seat is their home point */}
           {world.people.filter((p) => p.anchors).map((p) => (
-            <Workstation key={`desk-${p.id}`} x={p.home.x - DESK_W / 2} y={p.home.y - 74}
-                         seat={p.home} busy />
+            <g key={`desk-${p.id}`} data-depth={p.home.x + p.home.y}><Workstation x={p.home.x - DESK_W / 2} y={p.home.y - 74}
+                         seat={p.home} busy /></g>
           ))}
-
           {/* the cast */}
           {world.people.map((person) => (
             <Person
@@ -316,6 +352,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
               }}
             />
           ))}
+          </g>
         </g>
       </svg>
 
@@ -326,6 +363,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
       )}
 
       <div className="absolute bottom-16 right-3 flex items-center gap-1 text-xs text-slate-400">
+        <MotionControl />
         <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1 / 1.25, size.w / 2, size.h / 2)} aria-label="Zoom out">−</button>
         <span className="w-10 text-center tabular-nums">{zoomPct}%</span>
         <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1.25, size.w / 2, size.h / 2)} aria-label="Zoom in">＋</button>
@@ -365,7 +403,7 @@ function Person({
   // just collided with it. Show the tag only while they move.
   const showTag = !(hideTagAtHome && !walker.moving);
   return (
-    <g ref={register} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} opacity={offFloor ? 0.35 : 1}>
+    <g ref={register} data-depth={walker.pos.x + walker.pos.y} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} opacity={offFloor ? 0.35 : 1}>
       <ellipse cx={0} cy={0} rx={16} ry={8} fill="#05070c" opacity={0.35} />
       <g transform={`translate(0 ${FEET_SINK})`}>
         <SpriteCharacter name={person.id} activity={activity} atDesk={atDesk}

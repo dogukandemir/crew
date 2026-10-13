@@ -12,7 +12,7 @@ export interface Transform {
   scale: number;
 }
 
-export const MIN_SCALE = 0.3;
+export const MIN_SCALE = 0.05;
 export const MAX_SCALE = 2.2;
 
 export function clampScale(scale: number): number {
@@ -26,7 +26,10 @@ export function panBy(t: Transform, dx: number, dy: number): Transform {
 
 /** Zoom by `factor` keeping the world point under (px, py) pinned. */
 export function zoomAt(t: Transform, factor: number, px: number, py: number): Transform {
-  const scale = clampScale(t.scale * factor);
+  const requested = t.scale * factor;
+  // Fitting an exceptionally large floor may go below the manual zoom minimum.
+  // An outward gesture must never turn into an inward zoom.
+  const scale = requested < t.scale ? Math.max(Math.min(MIN_SCALE, t.scale), requested) : clampScale(requested);
   if (scale === t.scale) return t;
   // world = (screen - t) / scale  → keep world fixed for the new scale
   const k = scale / t.scale;

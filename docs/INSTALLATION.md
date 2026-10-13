@@ -30,7 +30,7 @@ The API stores its database and vault in `/data`. Project files live under `/wor
 
 ## Native development
 
-Use Python 3.12, uv, Node 22 and Docker for command tools. In separate terminals:
+Use Python 3.13, uv, Node 26 and Docker for command tools. In separate terminals:
 
 ```sh
 cd backend

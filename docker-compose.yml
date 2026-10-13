@@ -67,7 +67,7 @@ services:
     restart: unless-stopped
 
   mock:
-    image: node:22-slim
+    image: node:26-slim
     working_dir: /app
     volumes: [./dev/mock:/app:ro]
     command: ["node", "server.mjs"]

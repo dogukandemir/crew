@@ -49,7 +49,7 @@ The picker offers DeepSeek, OpenAI, Anthropic, OpenRouter, and local Ollama. The
 
 Keys are encrypted locally. Model requests send task context to the selected provider. Web tools can access approved public destinations even when the model itself is local. Read [privacy and security](SECURITY.md) before giving agents private work.
 
-For development, use Python 3.12, uv, Node 22, and Docker for command tools. In separate terminals:
+For development, use Python 3.13, uv, Node 26, and Docker for command tools. In separate terminals:
 
 ```sh
 cd backend

@@ -1,6 +1,6 @@
 # Contributing to Crew
 
-Use Python 3.12 and Node 22. Install locked dependencies with `uv sync --frozen` in `backend` and `npm ci` in `frontend`. Docker is required only when exercising real shell/Python tools or the container distribution. Never commit provider keys, databases, generated workspaces or private deliverables.
+Use Python 3.13 and Node 26. Install locked dependencies with `uv sync --frozen` in `backend` and `npm ci` in `frontend`. Docker is required only when exercising real shell/Python tools or the container distribution. Never commit provider keys, databases, generated workspaces or private deliverables.
 
 ## Development loop
 

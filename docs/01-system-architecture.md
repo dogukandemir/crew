@@ -78,7 +78,7 @@ never talks to CrewAI. Nothing above `core` knows that CrewAI exists except
 
 | Concern | Choice | Why |
 |---------|--------|-----|
-| Language (backend) | Python 3.12 | CrewAI is Python; keeps one runtime for agents |
+| Language (backend) | Python 3.13 | CrewAI is Python; keeps one runtime for agents (crewai 1.15.27 itself caps below 3.14) |
 | Web framework | FastAPI + Pydantic v2 | Async, typed, generates OpenAPI for the frontend |
 | ORM | SQLAlchemy 2.x async + Alembic | Mature, switchable between SQLite/Postgres |
 | Agent runtime | CrewAI (+ crewai-tools) | Agents/Tasks/Crews/Flows + memory + guardrails |

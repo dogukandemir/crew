@@ -40,7 +40,7 @@ from crew.domain.enums import Capability, PolicyOutcome
 log = logging.getLogger("crew.tools")
 
 MAX_BYTES = 20_000
-SANDBOX_IMAGE = "python:3.12-slim"
+SANDBOX_IMAGE = "python:3.13-slim"
 
 
 @dataclass

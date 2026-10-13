@@ -1,6 +1,6 @@
 # Dependency assessment
 
-Initial assessment: 2026-10-10; upstream advisory status rechecked 2026-10-13, including after the same-day dependency refresh (crewai 1.15.27, fastapi 0.143.0, vite 8, TypeScript 7, recharts 3). Install using `backend/uv.lock` and `frontend/package-lock.json`; avoid treating a range in a manifest as the tested version.
+Initial assessment: 2026-10-10; upstream advisory status rechecked 2026-10-13, including after the same-day dependency refresh (crewai 1.15.27, fastapi 0.143.0, vite 8, TypeScript 7, recharts 3). Install using `backend/uv.lock` and `frontend/package-lock.json`; avoid treating a range in a manifest as the tested version. The tested runtime is Python 3.13 and Node 26; `requires-python` is declared as `>=3.13,<3.14` because the pinned CrewAI does not support 3.14, so the manifest cannot claim a runtime the dependencies cannot run on.
 
 The initial review found no npm audit advisories and four unique Chroma advisories (five scanner records). Those observations apply to the recorded review snapshot, not all future installs. The unused `crewai-tools` dependency was removed, including its extra document-processing dependencies. CrewAI's Anthropic extra and the directly used JSON Schema validator are now declared explicitly.
 

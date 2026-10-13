@@ -16,7 +16,7 @@ from pathlib import Path
 
 from crew.execution.process import run_bounded
 
-IMAGE = "python:3.12-slim"
+IMAGE = "python:3.13-slim"
 ROOT = Path("/workspaces")
 VOLUME = os.environ.get("CREW_WORKSPACE_VOLUME", "crew-workspaces")
 TOKEN_FILE = Path(os.environ.get("CREW_SANDBOX_TOKEN_FILE", "/sandbox-auth/token"))

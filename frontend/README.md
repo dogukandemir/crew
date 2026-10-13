@@ -4,7 +4,7 @@ React and TypeScript control room for Crew. The backend owns project state, budg
 
 ## Develop
 
-Use Node 22. From this directory:
+Use Node 26. From this directory:
 
 ```sh
 npm ci

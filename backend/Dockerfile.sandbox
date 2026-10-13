@@ -1,5 +1,5 @@
-FROM docker:28-cli AS dockercli
-FROM python:3.12-slim
+FROM docker:29-cli AS dockercli
+FROM python:3.13-slim
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 WORKDIR /app
 COPY src/crew/__init__.py /app/crew/__init__.py

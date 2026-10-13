@@ -606,3 +606,31 @@ async def test_deliverable_downloads_single_and_packs(client):
     refused = await client.get(f"/api/artifacts/{rogue['id']}/download")
     assert refused.status_code == 410, refused.text
     assert (await client.get("/api/artifacts/nope/download")).status_code == 404
+
+async def test_ui_contract_shapes_extended(client):
+    """The §1a rows added in the 2026-10 review: org counters, the leaderboard row the
+    roster joins on, and the agent drawer's soul — asserted against the REAL app."""
+    p = await _create_project(client, "Contract Ext", budget=2.0)
+
+    org = (await client.get(f"/api/projects/{p['id']}/org")).json()
+    agent_id = None
+    stack = [org["root"]]
+    while stack:
+        n = stack.pop()
+        if n["kind"] == "agent":
+            for key in ("grade_label", "success_rate", "open_tasks", "tasks_done", "tasks_failed"):
+                assert key in n, f"agent node lost `{key}`"
+            agent_id = agent_id or n["id"]
+        stack.extend(n.get("children", []))
+    assert agent_id, "an agent node exists (the orchestrator)"
+
+    lb = (await client.get(f"/api/projects/{p['id']}/leaderboard")).json()["items"]
+    row = next(r for r in lb if r["id"] == agent_id)
+    for key in ("id", "agent_id", "name", "grade", "grade_label", "state", "score",
+                "score_100", "success_rate", "tasks_done", "tasks_failed", "cost_micros"):
+        assert key in row, f"leaderboard row lost `{key}`"
+
+    detail = (await client.get(f"/api/agents/{agent_id}")).json()
+    for key in ("soul", "soul_md", "success_rate", "tasks_done", "tasks_failed"):
+        assert key in detail, f"agent detail lost `{key}`"
+

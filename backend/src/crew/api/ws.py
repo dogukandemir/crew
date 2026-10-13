@@ -31,6 +31,14 @@ async def project_socket(websocket: WebSocket, project_id: str) -> None:
         return
     protocols = [p.strip() for p in websocket.headers.get("sec-websocket-protocol", "").split(",")]
     token = next((p.removeprefix("crew.auth.") for p in protocols if p.startswith("crew.auth.")), None)
+    # docs/11 §0: the handshake also accepts ?token= and Authorization — browsers cannot
+    # set headers on a WebSocket, so query is the working browser path (review 2026-10-14).
+    if not token:
+        token = websocket.query_params.get("token")
+    if not token:
+        auth_header = websocket.headers.get("authorization") or ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:]
     user = await authenticate_socket(token)
     if user is None:
         await websocket.close(code=4401)

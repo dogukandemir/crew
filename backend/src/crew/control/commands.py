@@ -251,6 +251,12 @@ async def handle_command(*, project_id: str, text: str, actor: str = "user") -> 
     except Exception as e:  # never a silent failure: the desk says what went wrong
         log.exception("command desk failed: %s", e)
         ok, reply = False, f"I couldn't carry that out: {e}"
+    if parsed.note.startswith("unknown mentions"):
+        # A name that matches nobody must not vanish silently — the Captain needs to know
+        # WHY the order found no one (names resolve against this project's roster).
+        names = parsed.note.removeprefix("unknown mentions: ")
+        reply = (f"{reply} — I couldn't match {names} here: names resolve against "
+                 f"this project's roster (Agents tab).")
 
     # `executed` keeps the record honest downstream: only a message whose desk answer
     # says it landed may come back to the floor as a directive (ADR 0012).
@@ -513,10 +519,14 @@ async def _goal(project_id: str, parsed: Command, raw: str, actor: str) -> tuple
 
 async def _budget(project_id: str, parsed: Command, actor: str) -> tuple[str, list[dict], bool]:
     from crew.core.security import audit
+    from crew.core.settings import settings as _settings
 
     async with session_scope() as s:
         project = await s.get(Project, project_id)
         old_cap = project.budget_cap_micros
+        committed = project.spend_micros + project.reserved_micros
+        parent = await s.get(Project, project.company_id) if project.company_id else None
+        company_cap = parent.budget_cap_micros if parent is not None else None
     if parsed.amount_usd is not None:
         new_cap = int(parsed.amount_usd * 1_000_000)
     elif parsed.percent is not None:
@@ -525,12 +535,25 @@ async def _budget(project_id: str, parsed: Command, actor: str) -> tuple[str, li
         return ("Give me a number: “set the budget to $25” or “raise the budget "
                 "by 20%”.", [], False)
     new_cap = max(new_cap, 0)
+    # Same guarantees as PATCH /projects/{id} (docs/08 §5): never above the deployment's
+    # hard ceiling, never above the parent company's cap, never below committed usage.
+    hard = int(_settings.hard_budget_usd * 1_000_000)
+    if new_cap > hard:
+        return (f"That's above the deployment's hard ceiling of "
+                f"${_settings.hard_budget_usd:,.0f} — the cap stays "
+                f"${old_cap / 1_000_000:.2f}.", [], False)
+    if new_cap < committed:
+        return (f"That's below what's already committed (${committed / 1_000_000:.2f} "
+                f"spent + reserved) — the cap stays ${old_cap / 1_000_000:.2f}.", [], False)
+    if company_cap is not None and new_cap > company_cap:
+        return (f"That's above the company cap of ${company_cap / 1_000_000:.2f} — "
+                f"the cap stays ${old_cap / 1_000_000:.2f}.", [], False)
     async with session_scope() as s:
         project = await s.get(Project, project_id)
         project.budget_cap_micros = new_cap
         s.add(project)
     await audit(actor_kind="user", actor_id=actor, action="budget.updated",
-                resource_kind="project", resource_id=project_id,
+                resource_kind="project", resource_id=project_id, project_id=project_id,
                 reason=f"cap ${old_cap / 1_000_000:.2f} → ${new_cap / 1_000_000:.2f}")
     return (f"Budget set: ${old_cap / 1_000_000:.2f} → ${new_cap / 1_000_000:.2f} "
             f"(what's already spent stays spent).", [], True)

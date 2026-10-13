@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from datetime import UTC, datetime
@@ -116,8 +117,18 @@ async def active_session(token: str) -> dict | None:
         return {"id": user.id, "role": user.role, "email": user.email, "name": user.name}
 
 
+_DEV_ORIGIN_RE = re.compile(r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$")
+
+
 def origin_allowed(origin: str | None) -> bool:
-    return origin is None or origin.rstrip("/") in settings.cors_list
+    if origin is None:
+        return True
+    o = origin.rstrip("/")
+    if o in settings.cors_list:
+        return True
+    # Dev DX (docs/13): any loopback port while CREW_ENV=dev. The shipped default allows
+    # only :5173, so a Vite port bump used to read as "backend unreachable".
+    return bool(settings.is_dev and _DEV_ORIGIN_RE.fullmatch(o))
 
 
 async def create_user(*, email: str, name: str, password: str, role: str = "admin") -> dict:
@@ -142,10 +153,16 @@ async def login(*, email: str, password: str, ua: str = "", ip: str = "") -> dic
         _login_attempts[key] = [t for t in _login_attempts[key] if now - t < 60]
         if not _login_attempts[key]:
             del _login_attempts[key]
-    bucket = ip or email.casefold()
-    if len(_login_attempts.get(bucket, [])) >= 20 or len(_login_attempts) >= 5000:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too many sign-in attempts; retry in a minute")
-    _login_attempts.setdefault(bucket, []).append(now)
+    # Per-account AND per-IP buckets: keying on the IP alone collapsed to one shared
+    # bucket behind the shipped nginx proxy (every user locked out together), while an
+    # empty IP left nothing to slow a spray. Both windows are 60 s (pruned above).
+    buckets = (("email", email.casefold(), 20), ("ip", ip or "local", 120))
+    for kind, value, cap in buckets:
+        if len(_login_attempts.get(f"{kind}:{value}", [])) >= cap or len(_login_attempts) >= 5000:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                                "too many sign-in attempts; retry in a minute")
+    for kind, value, _cap in buckets:
+        _login_attempts.setdefault(f"{kind}:{value}", []).append(now)
     async with session_scope() as s:
         u = await s.scalar(select(User).where(User.email == email, User.disabled_at.is_(None)))
         if u is None or not await asyncio.to_thread(verify_password, password, u.password_hash):
@@ -200,8 +217,8 @@ async def require_user(
     # Read-only users may inspect it; operators/admins may execute commands.
     if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path != "/api/auth/logout" and user["role"] not in ("admin", "operator"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "operator role required")
-    if any(part in request.url.path for part in ("/secrets", "/onboarding/key", "/onboarding/mode", "/system/config")) and user["role"] != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "admin role required")
+    # Admin gating lives on the routes themselves (Depends(require_admin)): the old URL
+    # substring match was under- and over-inclusive at once (review 2026-10-14).
     return user
 
 

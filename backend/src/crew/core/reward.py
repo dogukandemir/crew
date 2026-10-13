@@ -363,10 +363,11 @@ async def leaderboard(project_id: str, limit: int = 50) -> list[dict]:
             .order_by(desc(Agent.score)).limit(limit)
         )).all()
     return [{
-        "id": a.id, "name": a.name, "role": a.role, "grade": int(a.grade),
+        "id": a.id, "agent_id": a.id, "name": a.name, "role": a.role, "grade": int(a.grade),
         "grade_label": Grade(int(a.grade)).label, "state": a.state, "score": a.score,
         "score_100": a.score_100, "confidence": a.score_confidence,
         "success_rate": a.success_rate, "tasks_done": a.tasks_done, "tasks_failed": a.tasks_failed,
+        "cost_micros": a.spend_today_micros,
         "evidence_count": a.evidence_count, "model_tier": a.model_tier,
         "company_knowledge": round(float(a.company_knowledge or 0.0), 3),
         "department_id": a.department_id,

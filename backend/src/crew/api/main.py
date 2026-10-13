@@ -75,6 +75,11 @@ async def lifespan(app: FastAPI):
         loaded = await onboarding.load_vault_provider_keys()
         if loaded:
             log.info("provider keys restored from the vault: %s", ", ".join(loaded))
+        from crew.core.security import vault as _vault
+
+        relearned = await _vault.load_all_into_redactor()
+        if relearned:
+            log.info("redactor re-learned %d stored secret(s) after restart", relearned)
         from crew.core.security import budget, expire_inactive_approvals
 
         await budget.recover_reservations()
@@ -92,9 +97,13 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Crew", version=__version__, lifespan=lifespan,
                   description="Autonomous agent organization platform. See docs/ for the specification.")
     # Only explicitly configured browser origins may control the local service.
+    # Dev DX (docs/13 troubleshooting): while CREW_ENV=dev any loopback port is allowed,
+    # so a Vite port bump does not read as "backend unreachable". Pinned list otherwise.
     app.add_middleware(
         CORSMiddleware, allow_origins=settings.cors_list, allow_credentials=True,
         allow_methods=["*"], allow_headers=["*"],
+        allow_origin_regex=(r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+                            if settings.is_dev else None),
     )
     if settings.auth_mode == "local":
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]"])
@@ -104,6 +113,13 @@ def create_app() -> FastAPI:
         if not origin_allowed(request.headers.get("origin")):
             return JSONResponse(status_code=403, content={"detail": "untrusted browser origin"})
         return await call_next(request)
+
+    @app.middleware("http")
+    async def contract_version_header(request: Request, call_next):
+        # docs/11 §0: every response names the contract it speaks.
+        response = await call_next(request)
+        response.headers["X-Crew-Contract"] = str(CONTRACT_VERSION)
+        return response
 
     app.include_router(public_api)
     app.include_router(api)

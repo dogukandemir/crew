@@ -146,6 +146,7 @@ def _add_missing_columns(sync_conn) -> None:
     from sqlalchemy import inspect
 
     wanted = {
+        "audit_log": {"project_id": "VARCHAR(32)"},
         "projects": {"kind": "VARCHAR(16) DEFAULT 'project'",
                      "company_id": "VARCHAR(32)"},
         "tasks": {"helpers": "JSON DEFAULT '[]'"},

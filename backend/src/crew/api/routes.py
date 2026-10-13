@@ -23,7 +23,8 @@ from sqlalchemy import desc, func, select
 from starlette.background import BackgroundTask
 
 from crew import CONTRACT_VERSION, __version__
-from crew.api.auth import require_user
+from crew.api import limits
+from crew.api.auth import require_admin, require_user
 from crew.api.commands import drive_after_commit, replayable
 from crew.control import backlog, commands, company, onboarding, org, security_review
 from crew.control.council import council
@@ -100,7 +101,7 @@ class ProjectSettingsInput(APIModel):
             raise ValueError("settings exceed 32 KiB")
         integer_limits = {"max_agents": (1, settings.max_agents_per_project),
                           "max_departments": (1, settings.max_departments_per_project),
-                          "layoff_idle_days": (1, 3650), "cadence_max_runs": (1, 100)}
+                          "layoff_idle_days": (1, 3650), "cadence_max_runs": (1, 10)}
         for name, (low, high) in integer_limits.items():
             if name in value and (type(value[name]) is not int or not low <= value[name] <= high):
                 raise ValueError(f"{name} must be an integer between {low} and {high}")
@@ -329,8 +330,8 @@ class AnswerBody(APIModel):
 
 
 class LoginBody(APIModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=512)
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────────────
@@ -455,7 +456,7 @@ class ExecutionModeBody(APIModel):
     mode: Literal["demo", "live"]
 
 
-@api.post("/onboarding/mode")
+@api.post("/onboarding/mode", dependencies=[Depends(require_admin)])
 async def post_execution_mode(body: ExecutionModeBody) -> dict:
     try:
         return await onboarding.set_mode(body.mode)
@@ -465,7 +466,7 @@ async def post_execution_mode(body: ExecutionModeBody) -> dict:
 
 @api.post("/onboarding/key", status_code=201)
 async def post_onboarding_key(body: OnboardingKeyBody,
-                              user: dict = Depends(require_user)) -> dict:
+                              user: dict = Depends(require_admin)) -> dict:
     try:
         return await onboarding.save_provider_key(provider=body.provider, key=body.key,
                                                   actor=f"user:{user['id']}")
@@ -541,12 +542,13 @@ def pick_directory(request: Request, user: dict = Depends(require_user)) -> dict
     Supports the founding wizard's Browse button (ADR 0017). Returns `{path: null,
     supported: false}` where no desktop picker exists so the UI can say "type it".
     """
-    if not settings.is_dev:
-        host = (request.client.host if request.client else "") or ""
-        if host not in ("127.0.0.1", "::1", "localhost"):
-            raise _problem(403, "the directory picker is available on the local machine only")
     if not _picker_available():
         return {"path": None, "supported": False}
+    # Loopback-only in EVERY mode (review 2026-10-14): a dev build used to skip this, so
+    # any allow-listed local origin could pop a native dialog on the operator's desktop.
+    host = (request.client.host if request.client else "") or ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        raise _problem(403, "the directory picker is available on the local machine only")
     if not _picker_lock.acquire(blocking=False):
         raise _problem(409, "a directory picker is already open")
     try:
@@ -798,6 +800,7 @@ async def patch_board_item(item_id: str, body: BoardItemPatch,
 async def post_command(project_id: str, body: CommandBody,
                        user: dict = Depends(require_user)) -> dict:
     project = await _project_or_404(project_id)
+    limits.hit(f"command:{project_id}", limit=60, window_s=60)
     try:
         return await commands.handle_command(project_id=project.id, text=body.text,
                                              actor=f"user:{user['id']}")
@@ -806,7 +809,7 @@ async def post_command(project_id: str, body: CommandBody,
 
 
 @api.get("/projects/{project_id}/commands")
-async def get_commands(project_id: str, limit: int = 60) -> dict:
+async def get_commands(project_id: str, limit: int = Query(60, ge=1, le=200)) -> dict:
     return await commands.transcript(project_id=project_id, limit=limit)
 
 
@@ -923,6 +926,7 @@ async def project_report(project_id: str) -> dict:
 @replayable
 async def start_run(project_id: str, body: RunCreate, user: dict = Depends(require_user)) -> dict:
     await _project_or_404(project_id)
+    limits.hit(f"run:{project_id}", limit=12, window_s=60)
     try:
         run = await orchestrator.start_run(project_id=project_id, goal=body.goal, mode=body.mode,
                                            actor=user["id"])
@@ -1258,7 +1262,7 @@ async def message_agent(agent_id: str, body: SteerBody, user: dict = Depends(req
 @api.get("/projects/{project_id}/tasks")
 async def list_tasks(project_id: str, state: str | None = None, department_id: str | None = None,
                      squad_id: str | None = None, agent_id: str | None = None, run_id: str | None = None,
-                     limit: int = Query(200, le=1000)) -> dict:
+                     limit: int = Query(200, ge=1, le=1000)) -> dict:
     async with session_scope() as s:
         stmt = select(Task).where(Task.project_id == project_id)
         if state:
@@ -1480,6 +1484,8 @@ async def artifact_content(artifact_id: str) -> dict:
 
 def _safe_filename(name: str, fallback: str = "artifact") -> str:
     keep = re.sub(r"[^\w.\- ()]+", "_", name).strip() or fallback
+    # No dot-traversal in zip entry names or Content-Disposition (review 2026-10-14).
+    keep = keep.lstrip(".").replace("..", "_") or fallback
     return keep[:120]
 
 
@@ -1642,7 +1648,14 @@ async def _task_control(task_id: str, action: str, user: dict, body: dict | None
             t.state = "aborted"
             t.escalation_reason = body.get("reason", "manually cancelled")
         elif action == "reassign":
-            t.assignee_agent_id = body.get("agent_id")
+            agent_id = body.get("agent_id")
+            target = await s.get(Agent, agent_id) if agent_id else None
+            if target is None or target.project_id != project_id or target.archived_at is not None:
+                # Review 2026-10-14: foreign/archived ids were accepted silently and died
+                # later as internal errors inside the run.
+                raise _problem(409, "assignee must be an active agent of this project",
+                               str(agent_id or ""))
+            t.assignee_agent_id = agent_id
             t.state = "assigned"
         elif action == "escalate":
             t.state = "escalated"
@@ -1769,10 +1782,11 @@ async def council_decide(session_id: str, user: dict = Depends(require_user)) ->
 
 
 @api.get("/decisions")
-async def list_decisions(project_id: str = Query(...)) -> dict:
+async def list_decisions(project_id: str = Query(...),
+                         limit: int = Query(200, ge=1, le=1000)) -> dict:
     async with session_scope() as s:
         rows = (await s.scalars(select(Decision).where(Decision.project_id == project_id)
-                                .order_by(desc(Decision.created_at)))).all()
+                                .order_by(desc(Decision.created_at)).limit(limit))).all()
     return {"items": [{"id": d.id, "session_id": d.session_id, "task_id": d.task_id,
                        "question": d.question, "chosen_option": d.chosen_option,
                        "rationale": d.rationale, "dissent": d.dissent, "confidence": d.confidence,
@@ -1809,7 +1823,7 @@ async def list_brains(project_id: str) -> dict:
 
 @api.get("/brains/{brain_id}/entries")
 async def brain_entries(brain_id: str, q: str | None = None, kind: str | None = None,
-                        limit: int = Query(100, le=500)) -> dict:
+                        limit: int = Query(100, ge=1, le=500)) -> dict:
     async with session_scope() as s:
         b = await s.get(Brain, brain_id)
         if b is None:
@@ -1880,12 +1894,22 @@ async def supersede_entry(entry_id: str, body: SupersedeBody, user: dict = Depen
 
 @api.post("/projects/{project_id}/brains/search")
 async def brain_search(project_id: str, body: dict) -> dict:
+    allowed = {b["id"] for b in await brain_service.list_brains(project_id)}
     ids = body.get("brain_ids")
     if not ids:
-        ids = [b["id"] for b in await brain_service.list_brains(project_id)]
+        ids = sorted(allowed)
+    else:
+        foreign = [i for i in ids if i not in allowed]
+        if foreign:
+            # Review 2026-10-14: caller-supplied ids used to bypass the project filter
+            # entirely — memory is never readable across projects.
+            raise _problem(403, "brain not in this project's scope", str(foreign[0]))
+    try:
+        top_k = max(1, min(100, int(body.get("top_k", 8))))
+    except (TypeError, ValueError) as e:
+        raise _problem(422, "top_k must be an integer", str(body.get("top_k"))) from e
     hits = await brain_service.search(project_id=project_id, brain_ids=ids,
-                                      query=str(body.get("query", "")),
-                                      top_k=int(body.get("top_k", 8)))
+                                      query=str(body.get("query", "")), top_k=top_k)
     return {"items": hits}
 
 
@@ -1896,7 +1920,7 @@ async def get_leaderboard(project_id: str) -> dict:
 
 
 @api.get("/agents/{agent_id}/rewards")
-async def agent_rewards(agent_id: str, limit: int = Query(100, le=1000)) -> dict:
+async def agent_rewards(agent_id: str, limit: int = Query(100, ge=1, le=1000)) -> dict:
     async with session_scope() as s:
         rows = (await s.scalars(select(RewardEvent).where(RewardEvent.agent_id == agent_id)
                                 .order_by(desc(RewardEvent.created_at)).limit(limit))).all()
@@ -1960,7 +1984,7 @@ async def reward_preview(project_id: str, body: WeightsBody) -> dict:
 @api.get("/projects/{project_id}/events")
 async def get_events(project_id: str, from_seq: int = 0, to_seq: int | None = None,
                      type: str | None = None, agent_id: str | None = None, task_id: str | None = None,
-                     severity_min: str | None = None, limit: int = Query(500, le=5000)) -> dict:
+                     severity_min: str | None = None, limit: int = Query(500, ge=1, le=5000)) -> dict:
     async with session_scope() as s:
         stmt = select(Event).where(Event.project_id == project_id, Event.seq > from_seq)
         if to_seq:
@@ -1978,6 +2002,8 @@ async def get_events(project_id: str, from_seq: int = 0, to_seq: int | None = No
     out = [ev.event_to_dict(e) for e in rows]
     if severity_min:
         order = ["debug", "info", "notice", "warning", "error", "critical"]
+        if severity_min not in order:
+            raise _problem(422, "severity_min must be one of " + ", ".join(order), severity_min)
         out = [e for e in out if order.index(e["severity"]) >= order.index(severity_min)]
     return {"items": out, "seq_head": out[-1]["seq"] if out else from_seq}
 
@@ -2029,7 +2055,8 @@ async def list_approvals(project_id: str, state: str | None = None) -> dict:
 @api.post("/approvals/{approval_id}/grant")
 @replayable
 async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = Depends(require_user)) -> dict:
-    row = await decide_approval(approval_id, grant=True, decided_by=user["id"], reason=body.reason)
+    row = await decide_approval(approval_id, grant=True, decided_by=user["id"],
+                                reason=body.reason, ttl_minutes=body.ttl_minutes)
     if row is None:
         raise _problem(409, "approval is not pending", approval_id)
     await ev.emit("policy.approval.granted", project_id=row.project_id, agent_id=row.agent_id,
@@ -2085,24 +2112,40 @@ async def revoke_command_allow(allow_id: str, body: AllowRevoke | None = None,
 
 
 @api.get("/projects/{project_id}/audit")
-async def get_audit(project_id: str, limit: int = Query(200, le=1000)) -> dict:
+async def get_audit(project_id: str, limit: int = Query(200, ge=1, le=1000)) -> dict:
+    # Review 2026-10-14: this used to return the GLOBAL chain under any project's URL.
     async with session_scope() as s:
-        rows = (await s.scalars(select(AuditLog).order_by(desc(AuditLog.seq)).limit(limit))).all()
+        rows = (await s.scalars(select(AuditLog).where(AuditLog.project_id == project_id)
+                                .order_by(desc(AuditLog.seq)).limit(limit))).all()
     return {"items": [{"seq": r.seq, "ts": ev.utc_iso(r.ts), "actor_kind": r.actor_kind,
                        "actor_id": r.actor_id, "action": r.action, "resource_kind": r.resource_kind,
                        "resource_id": r.resource_id, "outcome": r.outcome, "reason": r.reason,
                        "hash": r.hash[:16]} for r in rows]}
 
 
-@api.get("/secrets")
+@api.get("/audit", dependencies=[Depends(require_admin)])
+async def get_global_audit(limit: int = Query(200, ge=1, le=1000)) -> dict:
+    """The whole chain across projects (and rows without a project): admin only."""
+    async with session_scope() as s:
+        rows = (await s.scalars(select(AuditLog).order_by(desc(AuditLog.seq)).limit(limit))).all()
+    return {"items": [{"seq": r.seq, "ts": ev.utc_iso(r.ts), "actor_kind": r.actor_kind,
+                       "actor_id": r.actor_id, "action": r.action, "resource_kind": r.resource_kind,
+                       "resource_id": r.resource_id, "outcome": r.outcome, "reason": r.reason,
+                       "project_id": r.project_id, "hash": r.hash[:16]} for r in rows]}
+
+
+@api.get("/secrets", dependencies=[Depends(require_admin)])
 async def list_secrets() -> dict:
     return {"items": await vault.list_handles()}
 
 
 @api.post("/secrets", status_code=201)
-async def create_secret(body: SecretCreate, user: dict = Depends(require_user)) -> dict:
-    sid = await vault.create(body.name, body.value, scope_kind=body.scope_kind, scope_id=body.scope_id,
-                             actor=user["id"])
+async def create_secret(body: SecretCreate, user: dict = Depends(require_admin)) -> dict:
+    try:
+        sid = await vault.create(body.name, body.value, scope_kind=body.scope_kind,
+                                 scope_id=body.scope_id, actor=user["id"])
+    except ValueError as e:
+        raise _problem(409, "secret rejected", str(e)) from e
     return {"id": sid, "name": body.name, "stored": True}
 
 

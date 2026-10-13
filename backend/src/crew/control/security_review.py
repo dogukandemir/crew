@@ -133,6 +133,15 @@ COMMAND_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"[\s;|&'\"]/(etc|root|home|boot|sys|proc|dev|var|usr|bin|sbin|opt)\b", "path-escape"),
     (r"[a-z]:\\(windows|users|program)", "path-escape"),
     (r"[\s;|&](>|>>)\s*/(etc|root|home|boot|usr|bin|var)\b", "suspicious-write"),
+    # Python / inline destruction is the same act behind different words (audit finding:
+    # fs_delete demanded approval while shutil.rmtree('.') sailed through clean).
+    (r"(^|[\s;|&])rm\s+", "destructive-delete"),
+    (r"\bos\.(remove|unlink|rmdir)\s*\(", "destructive-delete"),
+    (r"\bshutil\.rmtree\s*\(", "destructive-delete"),
+    (r"\.unlink\s*\(|\btruncate\b", "destructive-delete"),
+    (r"\bfind\b[^|;]*\s-delete\b", "destructive-delete"),
+    (r"\bopen\s*\([^)]*['\"]w", "destructive-write"),
+    (r"\bdo\s*>\s*['\"]?\$?\w", "destructive-write"),
 )
 
 

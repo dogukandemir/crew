@@ -26,7 +26,9 @@ async def client():
     bind_loop(asyncio.get_running_loop())
     await init_db()
     app = create_app()
-    transport = httpx.ASGITransport(app=app)
+    # Loopback client: the pick-directory route is loopback-only in every mode now, and
+    # the ASGI default ("testclient") is not a real socket address.
+    transport = httpx.ASGITransport(app=app, client=("127.0.0.1", 55000))
     async with httpx.AsyncClient(transport=transport, base_url="http://localhost") as c:
         yield c
 

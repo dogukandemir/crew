@@ -221,11 +221,17 @@ class CredentialVault:
                      scope_id: str = "", actor: str = "user") -> str:
         aad = f"{name}:{scope_kind}:{scope_id}".encode()
         ct = self._fernet.encrypt(value.encode()).decode()
-        digest = hashlib.sha256(value.encode()).hexdigest()
+        digest = hashlib.sha256(ct.encode()).hexdigest()  # integrity over the stored blob
         async with session_scope() as s:
             existing = await s.scalar(select(Secret).where(Secret.name == name))
             if existing:
-                existing.ciphertext, existing.sha256, existing.rotated_at = ct, digest, datetime.now(UTC)
+                if (existing.scope_kind, existing.scope_id) != (scope_kind, scope_id):
+                    raise ValueError(
+                        f"a secret named {name!r} already exists in scope "
+                        f"{existing.scope_kind}/{existing.scope_id or '-'}; it is never silently "
+                        f"re-scoped or overwritten — pick another name or rotate it in place")
+                existing.ciphertext, existing.sha256, existing.aad = ct, digest, aad.decode()
+                existing.rotated_at = datetime.now(UTC)
                 sid = existing.id
             else:
                 row = Secret(name=name, scope_kind=scope_kind, scope_id=scope_id, ciphertext=ct,
@@ -252,6 +258,15 @@ class CredentialVault:
                 row.last_used_at = datetime.now(UTC)
                 s.add(SecretLease(secret_id=row.id, agent_id=agent_id, capability=capability,
                                   expires_at=datetime.now(UTC) + timedelta(minutes=5)))
+                lease_id: str | None = row.id
+            else:
+                lease_id = None
+        if lease_id is not None:
+            # docs/08 §9: every secret lease is on the record, not only in the mutable
+            # events table — the audit chain is the evidence trail for releases.
+            await audit(actor_kind="agent", actor_id=agent_id or "", action="secret.leased",
+                        resource_kind="secret", resource_id=lease_id,
+                        reason=capability or "inject")
         return value
 
     async def list_handles(self) -> list[dict]:
@@ -260,6 +275,21 @@ class CredentialVault:
         return [{"id": r.id, "name": r.name, "scope_kind": r.scope_kind, "scope_id": r.scope_id,
                  "sha256_prefix": (r.sha256 or "")[:12], "rotated_at": r.rotated_at.isoformat() if r.rotated_at else None}
                 for r in rows]
+
+    async def load_all_into_redactor(self) -> int:
+        """Boot-time re-teach (docs/08 §3): the redactor is process memory, so after a
+        restart every stored value must be re-learned or the event/log sinks silently
+        stop masking it."""
+        n = 0
+        async with session_scope() as s:
+            rows = (await s.scalars(select(Secret))).all()
+        for r in rows:
+            try:
+                redactor.learn(self._fernet.decrypt(r.ciphertext.encode()).decode())
+                n += 1
+            except Exception:  # one corrupt row must not stop boot
+                continue
+        return n
 
     def import_env_secret(self, name: str, value: str) -> None:
         """Register an env-provided secret with the redactor without storing it."""
@@ -568,7 +598,7 @@ def _canonical(entry: dict) -> str:
 
 async def audit(*, actor_kind: str, actor_id: str, action: str, resource_kind: str = "",
                 resource_id: str = "", outcome: str = "ok", reason: str = "",
-                trace_id: str = "") -> str:
+                trace_id: str = "", project_id: str | None = None) -> str:
     reason = redactor.redact(reason)[0]
     async with session_scope(write_lock=True) as s:
         prev = await s.scalar(select(AuditLog).order_by(AuditLog.seq.desc()).limit(1))
@@ -581,6 +611,9 @@ async def audit(*, actor_kind: str, actor_id: str, action: str, resource_kind: s
             "resource_id": resource_id, "outcome": outcome, "reason": reason,
             "prev_hash": prev_hash, "trace_id": trace_id,
         }
+        if project_id:
+            # Rows bound to a project carry it (and hash it); pre-column rows hash unchanged.
+            body["project_id"] = project_id
         digest = hashlib.sha256((_canonical(body) + prev_hash).encode()).hexdigest()
         row = {k: v for k, v in body.items() if k != "ts"}
         s.add(AuditLog(**row, ts=ts, hash=digest))
@@ -604,6 +637,8 @@ async def verify_audit_chain() -> dict:
             "action": r.action, "resource_kind": r.resource_kind, "resource_id": r.resource_id,
             "outcome": r.outcome, "reason": r.reason, "prev_hash": prev_hash, "trace_id": r.trace_id,
         }
+        if r.project_id:
+            body["project_id"] = r.project_id
         if r.prev_hash != prev_hash:
             return {"ok": False, "broken_at": r.seq, "reason": "prev_hash mismatch"}
         want = hashlib.sha256((_canonical(body) + prev_hash).encode()).hexdigest()
@@ -631,11 +666,13 @@ async def request_approval(project_id: str, *, capability: str, agent_id: str | 
         await s.flush()
         aid = row.id
     await audit(actor_kind="agent", actor_id=agent_id or "", action="approval.requested",
-                resource_kind="approval", resource_id=aid, outcome="pending", reason=capability)
+                resource_kind="approval", resource_id=aid, outcome="pending", reason=capability,
+                project_id=project_id)
     return aid
 
 
-async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, reason: str = "") -> Approval | None:
+async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, reason: str = "",
+                          ttl_minutes: int | None = None) -> Approval | None:
     async with session_scope(write_lock=True) as s:
         row = await s.get(Approval, approval_id)
         if not row or row.state != "pending":
@@ -645,9 +682,14 @@ async def decide_approval(approval_id: str, *, grant: bool, decided_by: str, rea
             return None
         row.state = "granted" if grant else "denied"
         row.decided_by, row.decided_at, row.reason = decided_by, datetime.now(UTC), reason
+        if grant and ttl_minutes is not None:
+            # The human's chosen window is the window in force (clamped 1 min – 24 h).
+            row.expires_at = datetime.now(UTC) + timedelta(minutes=max(1, min(1440, int(ttl_minutes))))
         s.add(row)
-    await audit(actor_kind="user", actor_id=decided_by, action="approval.granted" if grant else "approval.denied",
-                resource_kind="approval", resource_id=approval_id, reason=reason)
+    await audit(actor_kind="user", actor_id=decided_by,
+                action="approval.granted" if grant else "approval.denied",
+                resource_kind="approval", resource_id=approval_id, reason=reason,
+                project_id=row.project_id)
     return row
 
 

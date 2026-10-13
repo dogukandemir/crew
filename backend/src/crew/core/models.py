@@ -573,6 +573,9 @@ class AuditLog(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
     seq: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
     ts: Mapped[datetime] = mapped_column(default=now)
+    # Audit scoping (review 2026-10-14): rows bound to a project are filterable; rows
+    # without one (auth, bootstrap) stay global. NULL for rows written before the column.
+    project_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     actor_kind: Mapped[str] = mapped_column(String(12), default="system")
     actor_id: Mapped[str] = mapped_column(String(40), default="")
     action: Mapped[str] = mapped_column(String(80))

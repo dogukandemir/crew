@@ -86,6 +86,17 @@ def tool_context():
     return make
 
 
+@pytest.fixture(autouse=True)
+def _host_without_a_picker(monkeypatch):
+    """The suite runs as a host with NO desktop directory picker (docs/13, ubuntu CI).
+
+    Availability is machine state, so pin it OFF for every test; picker tests opt back
+    in explicitly. (F-33: CI used to never exercise the pickerless path.)"""
+    from crew.api import routes as routes_mod
+
+    monkeypatch.setattr(routes_mod, "_picker_available", lambda: False)
+
+
 @pytest_asyncio.fixture
 async def bound_loop():
     import asyncio

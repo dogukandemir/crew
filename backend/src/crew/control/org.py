@@ -402,6 +402,17 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
     if not chosen_name:
         raise ValueError("hire needs a name — the soul carried none and none was given")
     grade = grade_pre
+    async with session_scope() as s0:
+        # Review 2026-10-14: department/squad ids used to be stored unchecked — a foreign
+        # id put the agent in another project's roster and stalled this one's budget.
+        if department_id:
+            dept = await s0.get(Department, department_id)
+            if dept is None or dept.project_id != project_id:
+                raise ValueError("department does not belong to this project")
+        if squad_id:
+            squad = await s0.get(Squad, squad_id)
+            if squad is None or squad.project_id != project_id:
+                raise ValueError("squad does not belong to this project")
     async with session_scope() as s:
         a = Agent(
             project_id=project_id, department_id=department_id, squad_id=squad_id, manager_id=manager_id,
@@ -1192,6 +1203,7 @@ async def org_tree(project_id: str) -> dict:
             "model_tier": a.model_tier, "skills": list(a.responsibilities or []),
             "manager_id": a.manager_id, "department_id": a.department_id, "squad_id": a.squad_id,
             "open_tasks": int(task_counts.get(a.id, 0)),
+            "tasks_done": int(a.tasks_done or 0), "tasks_failed": int(a.tasks_failed or 0),
             "spend_usd": round(a.spend_today_micros / 1e6, 4),
             "spend_micros": a.spend_today_micros, "cost_micros": a.spend_today_micros,
             "children": [],

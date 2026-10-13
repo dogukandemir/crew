@@ -27,9 +27,6 @@ interface UiState {
   foundWizardOpen: boolean;
   setFoundWizardOpen: (open: boolean) => void;
 
-  killConfirmOpen: boolean;
-  setKillConfirmOpen: (open: boolean) => void;
-
   /** Backend-reachability banner, driven by React Query's error cache. */
   backendDown: boolean;
   backendDetail?: string;
@@ -61,9 +58,6 @@ export const useUi = create<UiState>((set) => ({
   foundWizardOpen: false,
   setFoundWizardOpen: (foundWizardOpen) => set({ foundWizardOpen }),
 
-  killConfirmOpen: false,
-  setKillConfirmOpen: (killConfirmOpen) => set({ killConfirmOpen }),
-
   backendDown: false,
   backendDetail: undefined,
   setBackendDown: (backendDown, backendDetail) =>
@@ -73,6 +67,3 @@ export const useUi = create<UiState>((set) => ({
   setToast: (toast) => set({ toast }),
 }));
 
-export function drawerFor(tabId: string): DrawerTarget | undefined {
-  return useUi.getState().drawers[tabId];
-}

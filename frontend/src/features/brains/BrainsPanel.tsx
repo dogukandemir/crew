@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Brain, BrainEntry } from '../../api/types';
 import { api } from '../../api/client';
 import { Badge } from '../../components/ui/Badge';
@@ -233,8 +233,18 @@ function RetrievalDebug({ projectId, query }: { projectId: string; query: string
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Esc closes the score panel while it is open — it is an overlay, not a tray.
+  useEffect(() => {
+    if (result === null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setResult(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [result]);
+
   return (
-    <div className="flex items-center gap-2 pb-0.5">
+    <div className="relative flex items-center gap-2 pb-0.5">
       <Button
         size="xs"
         variant="secondary"
@@ -256,6 +266,18 @@ function RetrievalDebug({ projectId, query }: { projectId: string; query: string
       {error && <span className="text-[11px] text-rose-300">{error}</span>}
       {result !== null && (
         <div className="absolute z-20 mt-2 w-[28rem] translate-y-6 rounded-md border border-slate-600/70 bg-slate-950 p-2 shadow-xl">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">retrieval result</span>
+            <button
+              type="button"
+              aria-label="Close retrieval result"
+              title="Close (Esc)"
+              onClick={() => setResult(null)}
+              className="text-slate-500 hover:text-slate-200"
+            >
+              ✕
+            </button>
+          </div>
           <JsonView value={result} maxHeight="14rem" />
         </div>
       )}

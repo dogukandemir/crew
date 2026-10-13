@@ -18,6 +18,8 @@ import { clearSinceSeq, type ConnectionState } from '../../lib/socket';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { selectConnection, useConnection } from '../../stores/connection';
 import { useProjectSocket } from '../../app/useProjectSocket';
+import { useOrg, useTasks } from '../../app/hooks';
+import { flattenOrg } from '../org/orgUtils';
 import { cn } from '../../lib/cn';
 
 const ROW_HEIGHT = 26;
@@ -27,10 +29,17 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
   const log = useEventLog(selectEventLog(projectId));
   const conn = useConnection(selectConnection(projectId));
   const socket = useProjectSocket(projectId);
+  const org = useOrg(projectId);
+  const tasks = useTasks(projectId);
 
   const [query, setQuery] = useState<EventQuery>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // History is backfilled once per project by the socket provider.
+
+  const agents = useMemo(
+    () => flattenOrg(org.data?.root).filter((u) => u.kind === 'agent'),
+    [org.data],
+  );
 
   const namespaces = useMemo(() => {
     const set = new Set<string>();
@@ -91,21 +100,33 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
             ))}
           </Select>
         </Field>
-        <Field label="agent id" className="w-40">
-          <Input
+        <Field label="agent" className="w-40">
+          <Select
             value={query.agent_id ?? ''}
             onChange={(e) => setQuery((q) => ({ ...q, agent_id: e.target.value || undefined }))}
-            placeholder="uuid"
-            className="h-7 font-mono text-[11px]"
-          />
+            className="h-7 text-xs"
+          >
+            <option value="">all</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <Field label="task id" className="w-40">
-          <Input
+        <Field label="task" className="w-40">
+          <Select
             value={query.task_id ?? ''}
             onChange={(e) => setQuery((q) => ({ ...q, task_id: e.target.value || undefined }))}
-            placeholder="uuid"
-            className="h-7 font-mono text-[11px]"
-          />
+            className="h-7 text-xs"
+          >
+            <option value="">all</option>
+            {(tasks.data?.items ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </Select>
         </Field>
         <Button
           size="xs"
@@ -263,7 +284,10 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
               <JsonView value={selected.payload} maxHeight="18rem" />
               {selected.trace_id && (
                 <p className="text-[11px] text-slate-500">
-                  trace link: <code className="font-mono">/api/traces/{selected.trace_id}</code>
+                  trace{' '}
+                  <code className="font-mono" title="correlation id for this event">
+                    {selected.trace_id}
+                  </code>
                 </p>
               )}
             </div>

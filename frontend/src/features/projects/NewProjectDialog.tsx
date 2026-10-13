@@ -23,7 +23,7 @@ export function NewProjectDialog() {
   const setOpen = useUi((s) => s.setNewProjectOpen);
   const setToast = useUi((s) => s.setToast);
   const openTab = useTabs((s) => s.openTab);
-  const setName = useTabs((s) => s.setName);
+  const rename = useTabs((s) => s.rename);
   const qc = useQueryClient();
   const companies = useCompanies();
 
@@ -55,7 +55,7 @@ export function NewProjectDialog() {
         company_id: effective === STANDALONE ? null : effective,
       }),
     onSuccess: (project) => {
-      setName(project.id, project.name);
+      rename(project.id, project.name);
       openTab(project.id, 'main', 'office');
       setOpen(false);
       setLocalName('');

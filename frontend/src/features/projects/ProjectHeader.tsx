@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Textarea } from '../../components/ui/Field';
 import { hasActiveRun, needsResume, runLabel } from './runState';
+import { STAGE_LABELS } from './stageLabels';
 import { ProgressBar } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { cn } from '../../lib/cn';
@@ -18,7 +19,6 @@ import { Menu } from '../../components/ui/Menu';
 import { switchTargets } from './projectSwitch';
 
 function StageStepper({ stage }: { stage: Stage }) {
-  const labels: Record<string, string> = { INTAKE: 'Brief', PLANNING: 'Plan', STAFFING: 'Team', EXECUTING: 'Work', VERIFYING: 'Check', REWARDING: 'Learn', DONE: 'Done' };
   const current = STAGES.indexOf(stage);
   const idle = current < 0;
   return (
@@ -50,7 +50,7 @@ function StageStepper({ stage }: { stage: Stage }) {
               )}
               aria-current={active ? 'step' : undefined}
             >
-              {labels[s] ?? s}
+              {STAGE_LABELS[s] ?? s}
             </span>
             {i < STAGES.length - 1 && <span className="text-slate-700">›</span>}
           </li>
@@ -147,6 +147,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
   const openTab = useTabs((s) => s.openTab);
   const rename = useTabs((s) => s.rename);
   const activeTabId = useTabs((s) => s.activeTabId);
+  const names = useTabs((s) => s.names);
   const openDrawer = useUi((s) => s.openDrawer);
 
   useEffect(() => {
@@ -169,8 +170,11 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
 
   if (project.isError || !project.data) {
     return (
-      <div className="border-b border-slate-800/70 px-3 py-2 text-xs text-slate-400">
-        Project {projectId.slice(0, 8)} — detail unavailable.
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800/70 px-3 py-2 text-xs text-slate-400">
+        <span>Project {names[projectId] ?? projectId.slice(0, 8)} — detail unavailable.</span>
+        <Button size="xs" variant="secondary" onClick={() => void project.refetch()}>
+          Retry
+        </Button>
       </div>
     );
   }

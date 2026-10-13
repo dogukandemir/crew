@@ -10,7 +10,7 @@ import { JsonView } from '../../components/ui/JsonView';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatDuration, formatMicros, formatPercent, formatTokens } from '../../lib/format';
-import { useOrg, useTask, useTaskArtifacts } from '../../app/hooks';
+import { useOrg, useTask, useTaskArtifacts, useTasks } from '../../app/hooks';
 import { flattenOrg } from '../org/orgUtils';
 import { useUi } from '../../stores/ui';
 
@@ -34,11 +34,21 @@ export function TaskDrawer({
   const task = useTask(taskId);
   const artifacts = useTaskArtifacts(taskId);
   const org = useOrg(projectId);
+  const tasks = useTasks(projectId);
   const nameById = useMemo(() => {
     const m = new Map<string, string>();
     for (const u of flattenOrg(org.data?.root)) m.set(u.id, u.name);
     return m;
   }, [org.data]);
+  const agents = useMemo(
+    () => flattenOrg(org.data?.root).filter((u) => u.kind === 'agent'),
+    [org.data],
+  );
+  const titleById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of tasks.data?.items ?? []) m.set(t.id, t.title);
+    return m;
+  }, [tasks.data]);
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
   const [reassignTo, setReassignTo] = useState('');
@@ -98,12 +108,19 @@ export function TaskDrawer({
             >
               ▲ Escalate
             </Button>
-            <Input
+            <select
               value={reassignTo}
               onChange={(e) => setReassignTo(e.target.value)}
-              placeholder="agent id"
-              className="h-6 w-40 text-[11px]"
-            />
+              aria-label="Reassign to agent"
+              className="h-6 w-40 rounded border border-slate-700 bg-slate-900 px-1.5 text-[11px] text-slate-300"
+            >
+              <option value="">agent…</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
             <Button
               size="xs"
               variant="secondary"
@@ -178,8 +195,8 @@ export function TaskDrawer({
               <div className="mt-2 flex flex-wrap gap-1">
                 <span className="text-[11px] text-slate-500">depends on:</span>
                 {t.depends_on!.map((d) => (
-                  <Badge key={d} tone="muted">
-                    {d.slice(0, 8)}
+                  <Badge key={d} tone="muted" title={d}>
+                    {titleById.get(d) ?? d.slice(0, 8)}
                   </Badge>
                 ))}
               </div>
@@ -263,7 +280,7 @@ export function TaskDrawer({
                         {(r.reward ?? 0).toFixed(3)}
                       </Badge>
                       <span className="text-slate-400">{r.role_in_task ?? 'producer'}</span>
-                      <span className="text-slate-500">{r.agent_id.slice(0, 8)}</span>
+                      <span className="text-slate-500">{nameById.get(r.agent_id) ?? r.agent_id.slice(0, 8)}</span>
                     </div>
                     {r.components && (
                       <div className="mt-0.5 font-mono text-[10px] text-slate-500">

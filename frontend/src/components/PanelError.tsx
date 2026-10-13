@@ -55,8 +55,10 @@ export function PanelError({
         title="Backend unreachable"
         description={
           <>
-            {label} needs the Crew backend at <code className="font-mono">{API_BASE}</code>. Start it
-            with <code className="font-mono">uvicorn</code> and retry.
+            The Crew service isn’t responding.{' '}
+            <code className="font-mono" title={API_BASE}>
+              {label}
+            </code>
           </>
         }
         action={

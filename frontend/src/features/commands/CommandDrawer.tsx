@@ -59,7 +59,10 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
 
   const roster = useMemo<RosterAgent[]>(() => {
     const seen = new Map<string, RosterAgent>();
-    for (const a of agents.data ?? []) seen.set(a.agent_id, { id: a.agent_id, name: a.name, role: a.role });
+    for (const a of agents.data ?? []) {
+      const id = a.agent_id ?? a.id;
+      seen.set(id, { id, name: a.name, role: a.role });
+    }
     for (const a of agentsFromOrg(org.data)) seen.set(a.id, a);
     return [...seen.values()].sort((x, y) => x.name.localeCompare(y.name));
   }, [agents.data, org.data]);
@@ -252,6 +255,7 @@ function Composer({
         value={draft}
         rows={2}
         placeholder="Write to the company… (Enter sends · Shift+Enter for a new line)"
+        aria-label="Command to the company"
         onChange={(e) => {
           onDraft(e.target.value);
           onCaret(e.target.selectionStart ?? e.target.value.length);

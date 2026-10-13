@@ -18,7 +18,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     fetch(`${API_BASE}/api/auth/config`, { signal: controller.signal })
       .then(async r => { if (!r.ok) throw new Error('Cannot reach Crew'); return r.json(); })
       .then(config => { setTokenMode(config.mode !== 'local'); setMode(config.mode === 'local' ? 'ready' : 'login'); })
-      .catch(err => { if (!controller.signal.aborted) { setError(String(err)); setMode('error'); } });
+      .catch(() => { if (!controller.signal.aborted) { setError(`Cannot reach the Crew backend at ${API_BASE}.`); setMode('error'); } });
     return () => controller.abort();
   }, []);
   useEffect(() => {

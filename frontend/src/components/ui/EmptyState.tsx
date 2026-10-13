@@ -46,20 +46,3 @@ export function SkeletonRows({ rows = 5, className }: { rows?: number; className
   );
 }
 
-export function ErrorNotice({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="rounded-lg border border-rose-800/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
-      <div className="font-medium">{title}</div>
-      {detail && <div className="mt-0.5 break-words text-xs text-rose-300/80">{detail}</div>}
-      {action && <div className="mt-2">{action}</div>}
-    </div>
-  );
-}

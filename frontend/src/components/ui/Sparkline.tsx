@@ -42,7 +42,12 @@ export function Sparkline({
     return [x, y] as const;
   });
 
-  const up = series[series.length - 1] >= series[0];
+  const first = series[0];
+  const last = series[series.length - 1];
+  const up = last >= first;
+  const direction = last > first ? 'rising' : last < first ? 'falling' : 'flat';
+  // Colour is not the only signal: the label spells the trend out.
+  const trendLabel = `trend, ${series.length} points, ${briefNumber(first)} → ${briefNumber(last)}, ${direction}`;
   const stroke =
     tone === 'danger' ? '#fb7185' : tone === 'success' ? '#34d399' : up ? '#34d399' : '#fb7185';
   const d = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
@@ -56,8 +61,10 @@ export function Sparkline({
       viewBox={`0 0 ${width} ${height}`}
       className={cn('overflow-visible', className)}
       role="img"
-      aria-label={`trend, ${series.length} points`}
+      aria-label={trendLabel}
     >
+      {/* SVG-native tooltip: hover shows the same trend sentence. */}
+      <title>{trendLabel}</title>
       {showArea && (
         <>
           <defs>
@@ -78,4 +85,9 @@ function hash(values: number[]): number {
   let h = 0;
   for (const v of values) h = (h * 31 + Math.round(v * 1000)) | 0;
   return h;
+}
+
+/** Endpoint formatting for the trend label: "0.58", "1.24", "12". */
+function briefNumber(v: number): string {
+  return String(Math.round(v * 100) / 100);
 }

@@ -118,18 +118,15 @@ interface TabsState {
   activeTabId: string | null;
   openTab: (projectId: string, viewKey?: string, internalTab?: WorkspaceTab) => string;
   closeTab: (id: string) => void;
-  closeOthers: (id: string) => void;
   setActive: (id: string) => void;
   setInternalTab: (id: string, tab: WorkspaceTab) => void;
   setFilters: (id: string, patch: Partial<TabFilters>) => void;
   setScroll: (id: string, y: number) => void;
-  setBadge: (id: string, value: number) => void;
   bumpBadge: (projectId: string, by?: number) => void;
   clearBadge: (id: string) => void;
   rename: (projectId: string, name: string) => void;
   /** Additive: display name cache so the strip renders before the list loads. */
   names: Record<string, string>;
-  setName: (projectId: string, name: string) => void;
 }
 
 export const useTabs = create<TabsState>()(
@@ -174,13 +171,6 @@ export const useTabs = create<TabsState>()(
           return { tabs, activeTabId };
         }),
 
-      closeOthers: (id) =>
-        set((s) => ({
-          homeOpen: false,
-          tabs: s.tabs.filter((t) => t.id === id),
-          activeTabId: s.tabs.some((t) => t.id === id) ? id : s.activeTabId,
-        })),
-
       setActive: (id) => set({ activeTabId: id, homeOpen: false }),
 
       setInternalTab: (id, internalTab) =>
@@ -196,11 +186,6 @@ export const useTabs = create<TabsState>()(
       setScroll: (id, y) =>
         set((s) => ({
           tabs: s.tabs.map((t) => (t.id === id ? { ...t, scroll: y } : t)),
-        })),
-
-      setBadge: (id, value) =>
-        set((s) => ({
-          tabs: s.tabs.map((t) => (t.id === id ? { ...t, badge: Math.max(0, value) } : t)),
         })),
 
       bumpBadge: (projectId, by = 1) =>
@@ -219,9 +204,6 @@ export const useTabs = create<TabsState>()(
         })),
 
       rename: (projectId, name) =>
-        set((s) => ({ names: { ...s.names, [projectId]: name } })),
-
-      setName: (projectId, name) =>
         set((s) => ({ names: { ...s.names, [projectId]: name } })),
     }),
     {

@@ -42,8 +42,6 @@ function Tab({
 
   return (
     <div
-      role="tab"
-      aria-selected={active}
       className={cn(
         'group flex max-w-[16rem] shrink-0 items-center gap-2 rounded-t-md border-x border-t px-2.5 py-1 text-xs',
         active
@@ -53,7 +51,34 @@ function Tab({
     >
       <button
         type="button"
+        role="tab"
+        aria-selected={active}
+        tabIndex={active ? 0 : -1}
+        data-tab-id={tab.id}
         onClick={() => setActive(tab.id)}
+        onKeyDown={(event) => {
+          // Roving focus within the tablist (pattern: components/ui/Tabs.tsx).
+          if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const list = event.currentTarget.closest('[role="tablist"]');
+          const buttons = list
+            ? Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+            : [];
+          const index = buttons.indexOf(event.currentTarget);
+          if (index < 0) return;
+          const next =
+            event.key === 'ArrowRight'
+              ? (index + 1) % buttons.length
+              : event.key === 'ArrowLeft'
+                ? (index + buttons.length - 1) % buttons.length
+                : event.key === 'Home'
+                  ? 0
+                  : buttons.length - 1;
+          const target = buttons[next];
+          const targetId = target?.dataset.tabId;
+          target?.focus();
+          if (targetId) setActive(targetId);
+        }}
         className="flex min-w-0 items-center gap-2"
         title={`${parentName ? `${parentName} › ` : ''}${name}${tab.viewKey !== 'main' ? ` · view ${tab.viewKey}` : ''}`}
       >
@@ -117,7 +142,11 @@ export function TabStrip() {
   const ordered = groupTabs(tabs, groupKeyOf);
 
   return (
-    <div className="flex items-end gap-0.5 overflow-x-auto border-b border-slate-700/60 bg-slate-950/60 px-2 pt-1">
+    <div
+      role="tablist"
+      aria-label="Project tabs"
+      className="flex items-end gap-0.5 overflow-x-auto border-b border-slate-700/60 bg-slate-950/60 px-2 pt-1"
+    >
       {tabs.length === 0 && (
         <span className="px-2 py-1 text-xs text-slate-500">No project tabs open</span>
       )}

@@ -18,6 +18,7 @@ import { Badge } from '../../components/ui/Badge';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatMicros } from '../../lib/format';
+import { STAGE_LABELS } from './stageLabels';
 
 const STATUS_TONE = {
   active: 'success',
@@ -150,7 +151,7 @@ export function WelcomeScreen() {
                     )}
                     <span className="truncate text-sm font-medium text-slate-100">{p.name}</span>
                     <Badge tone={STATUS_TONE[p.status] ?? 'neutral'}>{p.status}</Badge>
-                    {p.kind !== 'company' && <Badge tone="info">{p.stage}</Badge>}
+                    {p.kind !== 'company' && <Badge tone="info">{STAGE_LABELS[p.stage] ?? p.stage}</Badge>}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-slate-500">{p.goal}</p>
                 </button>

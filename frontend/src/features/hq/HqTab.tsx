@@ -14,6 +14,7 @@ import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { HqFloor } from './HqFloor';
 import { VERDICT_TONE } from './verdict';
+import { formatUsd } from '../../lib/format';
 
 export function HqTab({ companyId }: { companyId: string }) {
   const hq = useCompanyHq(companyId);
@@ -55,18 +56,18 @@ export function HqTab({ companyId }: { companyId: string }) {
         <span className="text-sm font-medium text-slate-100">{d.company.name}</span>
         <span className="hidden text-[11px] text-slate-500 sm:inline">{d.company.mission}</span>
         <span className="text-[11px] tabular-nums text-slate-400">
-          ${d.company.spend_usd.toFixed(2)} / ${d.company.budget_usd.toFixed(2)}
+          {formatUsd(d.company.spend_usd)} / {formatUsd(d.company.budget_usd)}
         </span>
         <div className="flex flex-wrap items-center gap-1">
           {d.projects.map((p) => (
             <button
               key={p.id}
               type="button"
-              title={`Open ${p.name}`}
+              title={p.name}
               onClick={() => openTab(p.id, 'main', 'office')}
             >
               <Badge tone={VERDICT_TONE[p.verdict]}>
-                {p.name.split('—')[0].trim()} · {p.verdict.replace('_', ' ')}
+                <span className="max-w-[12rem] truncate">{p.name}</span> · {p.verdict.replace('_', ' ')}
               </Badge>
             </button>
           ))}

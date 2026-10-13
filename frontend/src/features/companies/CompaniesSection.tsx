@@ -105,11 +105,11 @@ export function CompaniesSection() {
                       key={p.id}
                       type="button"
                       onClick={() => openProjectTab(p.id, 'main', 'office')}
-                      title={`Open ${p.name}`}
-                      className="rounded-full border border-slate-700/60 bg-slate-800/50 px-2 py-0.5 text-[11px] text-slate-300 hover:border-emerald-500/50 hover:text-emerald-200"
+                      title={p.name}
+                      className="flex max-w-[14rem] items-center gap-1 rounded-full border border-slate-700/60 bg-slate-800/50 px-2 py-0.5 text-[11px] text-slate-300 hover:border-emerald-500/50 hover:text-emerald-200"
                     >
-                      {p.name.split('—')[0].trim()}
-                      <span className="ml-1 text-[10px] text-slate-500">{p.status}</span>
+                      <span className="truncate">{p.name}</span>
+                      <span className="shrink-0 text-[10px] text-slate-500">{p.status}</span>
                     </button>
                   ))}
                 </div>

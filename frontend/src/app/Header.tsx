@@ -60,7 +60,11 @@ function ConnectionIndicator() {
           {live}/{total}
         </span>
       )}
-      {mismatch && <Badge tone="warning">contract {data.contract}≠{CONTRACT_VERSION}</Badge>}
+      {mismatch && (
+        <Badge tone="warning" title={`contract ${data.contract} ≠ ${CONTRACT_VERSION}`}>
+          Backend version too old
+        </Badge>
+      )}
     </span>
   );
 }

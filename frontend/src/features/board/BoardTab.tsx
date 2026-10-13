@@ -102,6 +102,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
 
   if (board.isPending) return <SkeletonRows rows={6} />;
   if (board.isError) return <PanelError error={board.error} onRetry={() => void board.refetch()} />;
+  const mutateError = create.error ?? move.error;
   const total = board.data.columns.reduce((n, c) => n + c.items.length, 0);
   const parents = board.data.columns
     .flatMap((c) => c.items)
@@ -185,6 +186,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="New work item…"
+            aria-label="New work item title"
             className={inputCls}
           />
           <Button size="sm" disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>
@@ -192,6 +194,8 @@ export function BoardTab({ projectId }: { projectId: string }) {
           </Button>
         </div>
       </div>
+
+      {mutateError && <p className="text-xs text-rose-400">{mutateError.message}</p>}
 
       {total === 0 ? (
         <EmptyState

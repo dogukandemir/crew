@@ -65,14 +65,16 @@ export function ApprovalTray() {
 
 function ProjectApprovals({ projectId }: { projectId: string }) {
   const approvals = useApprovals(projectId, 'pending');
+  const names = useTabs((s) => s.names);
   const items = approvals.data?.items ?? [];
+  const label = names[projectId] ?? projectId.slice(0, 8);
 
   if (approvals.isLoading) return <p className="px-1 py-2 text-[11px] text-slate-500">Loading approvals…</p>;
   if (approvals.isError) {
     // A dead backend must never look like "nothing to approve".
     return (
       <p className="px-1 py-2 text-[11px] text-amber-300/80">
-        Approvals unavailable for {projectId.slice(0, 8)} — backend unreachable.
+        Approvals unavailable for {label} — backend unreachable.
       </p>
     );
   }
@@ -80,7 +82,7 @@ function ProjectApprovals({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">{projectId.slice(0, 8)}</div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       {items.map((a) => (
         <ApprovalRow key={a.id} approval={a} projectId={projectId} />
       ))}

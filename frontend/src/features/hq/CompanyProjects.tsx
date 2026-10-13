@@ -3,7 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { ProgressBar } from '../../components/ui/Card';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
-import { formatPercent, formatRelativeTime } from '../../lib/format';
+import { formatPercent, formatRelativeTime, formatUsd } from '../../lib/format';
 import { useCompanyHq } from '../../app/hooks';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
@@ -33,7 +33,7 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
           {d.projects.length} project{d.projects.length === 1 ? '' : 's'} under {d.company.name}
         </span>
         <span className="text-[11px] tabular-nums text-slate-400">
-          ${d.company.spend_usd.toFixed(2)} / ${d.company.budget_usd.toFixed(2)} company budget
+          {formatUsd(d.company.spend_usd)} / {formatUsd(d.company.budget_usd)} company budget
         </span>
         <Button
           size="xs"

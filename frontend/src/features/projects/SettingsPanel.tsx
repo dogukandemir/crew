@@ -31,6 +31,22 @@ const DEFAULT_SETTINGS: ProjectSettings = {
 
 const TIERS = ['reasoning', 'standard', 'fast', 'embed'];
 
+/** Bounded numeric settings (docs/10): out-of-range typed values are rejected
+ * before the request instead of surfacing as a server error toast. */
+function validateSettings(s: ProjectSettings): string | null {
+  if (!(s.max_agents >= 1 && s.max_agents <= 24)) return 'Max agents must be between 1 and 24.';
+  if (!(s.max_departments >= 1 && s.max_departments <= 6)) return 'Max departments must be between 1 and 6.';
+  if (!(s.layoff_idle_days >= 1 && s.layoff_idle_days <= 3650)) {
+    return 'Layoff after idle days must be between 1 and 3650.';
+  }
+  const cadence = s.cadence_max_runs ?? 3;
+  if (!(cadence >= 1 && cadence <= 10)) return 'Max consecutive follow-on passes must be between 1 and 10.';
+  const warning = s.budget_warning_pct ?? 0.8;
+  if (!(warning >= 0 && warning <= 1)) return 'Warning threshold must be between 0 and 1.';
+  if (!(s.max_senior_ratio >= 0 && s.max_senior_ratio <= 1)) return 'Max senior ratio must be between 0 and 1.';
+  return null;
+}
+
 /** Settings (docs/09 §2.9, MVP = budget + limits + autonomy + egress + tiers + danger zone). */
 export function SettingsPanel({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
@@ -42,6 +58,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
   const [egressText, setEgressText] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveWord, setArchiveWord] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!project.data) return;
@@ -75,6 +92,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
       });
     },
     onSuccess: () => {
+      setFormError(null);
       setToast({ kind: 'success', message: 'Settings saved.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId] });
       void qc.invalidateQueries({ queryKey: ['projects'] });
@@ -120,9 +138,21 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
         title="Budget"
           subtitle="New requests reserve estimated usage against this cap. Also set billing limits with your provider."
         actions={
-          <Button variant="primary" size="sm" loading={save.isPending} onClick={() => save.mutate()}>
-            Save
-          </Button>
+          <>
+            {formError && <span className="text-xs text-rose-400">{formError}</span>}
+            <Button
+              variant="primary"
+              size="sm"
+              loading={save.isPending}
+              onClick={() => {
+                const invalid = validateSettings(settings);
+                setFormError(invalid);
+                if (!invalid) save.mutate();
+              }}
+            >
+              Save
+            </Button>
+          </>
         }
       >
         <div className="grid gap-2 sm:grid-cols-2">
@@ -256,6 +286,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             value={egressText}
             onChange={(e) => setEgressText(e.target.value)}
             placeholder={'api.example.com\nfiles.pythonhosted.org'}
+            aria-label="Egress allowlist hosts"
             className="font-mono text-xs"
             rows={5}
           />
@@ -263,7 +294,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
 
         <Section
           title="Command allowlist"
-          description="Standing approvals (ADR 0017): risky commands you chose to “Always allow” run without asking. Revoking closes the door again — every change is audited."
+          description="Standing approvals: risky commands you chose to “Always allow” run without asking. Revoking closes the door again — every change is audited."
         >
           <CommandAllowlist projectId={projectId} />
         </Section>

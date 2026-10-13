@@ -9,7 +9,7 @@ One table, append-only, monotonic `seq` per project:
 
 ```
 Event
-├─ id (uuid7), project_id, seq (bigint, per project, gapless-enough for resume)
+├─ id (uuid4().hex), project_id, seq (bigint, per project, gapless-enough for resume)
 ├─ ts (UTC ms), type (dotted), severity: debug|info|notice|warning|error|critical
 ├─ scope: department_id?, squad_id?, agent_id?, task_id?, run_id?, job_id?
 ├─ trace_id, span_id, parent_span_id

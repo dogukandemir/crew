@@ -9,9 +9,9 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
 | Adversary / risk | Vector | Control |
 |------------------|--------|---------|
 | Malicious web content | Prompt injection via fetched page/search result | Untrusted-content marking, capability isolation, verifier independence, injection detector |
-| Compromised/looping agent | Runaway spend or infinite retries | Budget reservation + circuit breaker + step/token caps + watchdog |
+| Compromised/looping agent | Runaway spend or infinite retries | Budget reservation + circuit breaker + step/token caps |
 | Credential exfiltration | Agent propagates a secret into a prompt/artifact | Vault lease injection, secret redaction in all sinks, egress allowlist |
-| Host compromise | Shell tool escapes workspace | Container sandbox, no host mounts, non-root, resource limits, network policy |
+| Host compromise | Shell tool escapes workspace | Container sandbox, no host mounts, `--cap-drop ALL`, `--no-new-privileges`, resource limits, network policy |
 | Data exfiltration | Tool uploads project data | Default-deny egress; `net.post` needs approval; payload size caps; DLP patterns |
 | Cross-project leakage | Retrieval returns another project's memory | Project-scoped repositories + namespace checks + tests |
 | Privilege escalation | Low-grade agent granting itself tools/decisions | PolicyEngine is authoritative; grade→capability map; audit chain |
@@ -21,24 +21,31 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
 ## 2. Authentication & authorization
 
 - **Modes** (`CREW_AUTH_MODE`):
-  - `local` (default, dev): single user, requests from loopback need no token; used only when
-    `CREW_ENV=dev`. Any non-loopback bind with `local` mode **MUST** refuse to start.
-  - `token`: bearer JWT (HS256, `CREW_JWT_SECRET` ≥ 32 bytes), short TTL, refresh endpoint.
-    Bootstrap: `crew auth create-user` hashes with **argon2id**; no self-registration.
+  - `local` (default): single user, requests from loopback need no token. The mode requires a
+    loopback listener — a non-loopback bind refuses to start unless the container opt-in
+    `CREW_CONTAINER_LOCAL_AUTH` is set.
+  - `token`: bearer JWT (HS256, `CREW_JWT_SECRET` ≥ 32 bytes); access tokens live 720 min by
+    default (`CREW_ACCESS_TOKEN_TTL_MIN`) — there is no refresh endpoint. Bootstrap:
+    `crew auth create-user` hashes with **scrypt** (stdlib) by default — **argon2id** only when
+    `argon2-cffi` is installed; no self-registration.
 - Every route is behind an explicit dependency (`require_user`, `require_role`); the default
   is deny — a new router without the dependency fails the security test suite
   (`tests/security/test_routes_guarded.py` enumerates `app.routes`).
-- WS handshake authenticates the same way (`?token=` or `Authorization`); sockets are bound
-  to the authenticated user's project set and re-checked on every subscribe.
-- Rate limits on auth, on run creation and on message injection (per project) to prevent
-  accidental self-DoS.
+- WS handshake takes the same token (`Authorization`, `?token=`, or the `crew.auth.<token>`
+  subprotocol). This release is **one shared workspace**: a socket is authenticated but not
+  bound to a per-user project set (there is none yet); the token is re-checked every 5 s.
+- Rate limits (in-process, single-worker): login 20/min per account + 120/min per IP; run
+  creation 12/min per project; desk commands 60/min per project — to prevent accidental
+  self-DoS.
 
 ## 3. Secret management (CredentialVault)
 
-- Master key from `CREW_VAULT_KEY` (env) or OS keyring; **MUST NOT** be stored in the DB or repo.
-- Secrets encrypted with AES-GCM, per-secret nonce, AAD = secret id + scope; a hash of the
-  ciphertext enables integrity checks.
-- Secrets are referenced by **handle** (`vault://openai/prod-key`), never by value.
+- Master key from `CREW_VAULT_KEY` (env) or the generated `data/vault.key`; **MUST NOT** be in
+  the DB or repo. There is no OS keyring backend.
+- Secrets are encrypted with **Fernet** (AES-128-CBC + HMAC); a `sha256` digest of the
+  ciphertext (stored alongside) makes tampering detectable.
+- Secrets are looked up **by name or id**; there is no `vault://` handle scheme. A cross-scope
+  overwrite of the same name is **refused**.
 - **Lease model**: a tool that needs a secret asks the vault for a short-lived lease scoped to
   `(secret, agent, capability, ttl)`. The vault injects the value into the *outbound HTTP
   call* (header/param) — the value never enters an agent's context, an artifact, an event, or
@@ -78,14 +85,16 @@ may choose **Always allow** instead of one-shot — a standing, audited, revocab
 | Capability | Enforcement (ADR 0017: the container or a refusal — never the host) |
 |-----------|-------------|
 | `fs.workspace` | realpath containment — nothing outside the (chosen or default) project workspace; no `..`, no symlinks out |
-| `shell.sandbox` | docker container: `--network none`, `--read-only` root, only the project workspace mounted (`/work`), tmpfs `/tmp`, `--memory 1g --cpus 1 --pids-limit 256`, wall-clock timeout, output cap, exit code captured |
+| `shell.sandbox` | docker container: `--network none`, `--read-only` root, `--cap-drop ALL`, `--no-new-privileges`, only the project workspace volume mounted at `/work`, tmpfs `/tmp`, `--memory 1g --cpus 1 --pids-limit 256`, wall-clock timeout, output cap, exit code captured |
 | `code.python` | the same container: the script is written into the workspace and run with `python -I -S` inside it — there is no host-interpreter path anymore |
 | `net.fetch` / `net.search` | in-process, egress-checked (allowlist + private-IP block) **and security-reviewed before the agent sees the result** (§6.7) |
 | no docker | **hard error** (`sandbox_unavailable`) — commands never fall back to the host, in dev or prod |
 
 Containers are created per call and destroyed after (`--rm`). The workspace root is chosen at
 founding (default `~/crew/workspace/{company}/{project}`, ADR 0017) and materialized once on
-the project, so the jail's target is always explicit.
+the project, so the jail's target is always explicit. In the Compose distribution
+(`CREW_SANDBOX_URL` set) the chosen root must stay inside the dedicated workspace volume; in
+host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017).
 
 ## 6. Prompt-injection defense (defense in depth)
 
@@ -126,9 +135,7 @@ the project, so the jail's target is always explicit.
   - DNS resolution checked and result IPs validated against private/reserved ranges
     (SSRF: 127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, ::1, fc00::/7, metadata IPs),
   - redirects re-validated hop by hop, max 5,
-  - response size cap (default 5 MB), content-type allowlist, timeout,
-  - every request/response metadata logged as an event (`net.request` with domain, status,
-    bytes) — bodies only for allowlisted content types.
+  - response size cap (64 KB in `execution/http.py`), timeout.
 - Blocked attempts emit `security.egress.blocked` with the full URL so you see what the org
   tried to reach.
 - `net.search` obeys the allowlist too (HTML search endpoint included, ADR 0017). Shell
@@ -162,9 +169,10 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
 
 - `audit_log`: hash-chained (`prev_hash` + canonical JSON of the entry → `hash`), so tampering
   is detectable (`crew audit verify`).
-- Audited: auth events, every hire/fire/promotion, every policy decision on a privileged
-  capability, every approval grant/deny, every secret lease, every budget cap change, every
-  override of a decision, every destructive tool call, every export/backup.
+- Audited: auth events, every hire/fire/promotion, every approval request/grant/deny, every
+  secret creation and secret **lease**, every budget cap change, every override of a decision,
+  every export/backup. Policy denials are events (`policy.denied`); destructive commands are
+  gated by approval, not audited as tool rows.
 - Each entry: actor (user/agent/system), action, resource, outcome, `trace_id`, reason, ts.
 - Audit is append-only and excluded from any agent-readable scope (no agent can read the
   audit log through `brain.read`).
@@ -174,10 +182,12 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
 - Per-project directories: `data/projects/<project_id>/{workspace,artifacts,logs,tmp}`; the
   filesystem tools are jailed per project and refuse cross-project paths.
 - No shared global mutable state between projects except the model router and the bus.
-- Backups: `crew backup` exports DB + brains + artifacts manifest (secrets excluded — they are
-  re-provisioned from the vault master key). Restore is `crew restore`, tested in CI.
-- Data deletion: `crew forget --project X --hard` requires a typed confirmation and an audit
-  entry; secret material is separately destroyed.
+- Backups: stop the server, then copy the whole data directory — including `vault.key`,
+  without which the encrypted secrets cannot be restored — plus the project workspaces, and
+  restore in place (step-by-step in INSTALLATION.md). `crew audit verify` checks a restored
+  chain.
+- Data deletion: a project is soft-archived via `DELETE /api/projects/{id}`; history is
+  preserved, never row-deleted.
 
 ## 11. Security test suite (must pass before any release)
 

@@ -57,15 +57,16 @@ clarifying questions. Two modes:
    depends_on[], estimated_effort (S/M/L/XL), priority,
    inputs_refs[], output_contract, assignee (agent|squad), status
    ```
-3. **Dependencies**: must be a DAG; cycles are rejected by the Planner (Kahn's algorithm)
-   and reported back to the Orchestrator for repair. Depth > 8 triggers a re-decomposition
-   prompt.
+3. **Dependencies**: must be a DAG; a cycle found by the planner (`_has_cycle`, Kahn's
+   algorithm, `control/org.py`) is broken deterministically — offending edges are dropped, and
+   a graph that cannot be repaired is refused as `dag_cycle`. There is no depth > 8
+   re-decomposition.
 4. **Acceptance criteria are mandatory.** A task without acceptance criteria is invalid; the
    Planner must synthesize them from the goal's success criteria. This is what makes
    verification (and therefore reward) possible.
 5. **Cost forecast**: each task gets an estimated token cost by model tier; the plan's total
    is checked against the remaining budget *before* staffing. Over budget → the plan is
-   trimmed or the user is asked (`budget.over_plan` event).
+   trimmed or the user is asked (`budget.warning` / `budget.exceeded` events).
 6. **Consequential decisions** discovered during planning (architecture choice, tech
    selection, risk trade-off) are pushed to the Council *before* execution, so the DAG is
    built on a decided foundation.
@@ -80,15 +81,18 @@ queue. Order: reuse > add worker to existing squad > new squad > new department.
 - The Scheduler keeps a ready-set (deps done, not started) ordered by (priority, critical
   path length, cost). It runs at most `CREW_MAX_CONCURRENT_CREWS` crews globally and a
   per-project limit.
-- A **crew** is built per squad per wave: the Lead as manager (hierarchical process) or as a
-  sequential pipeline when the wave is a straight line of specialists.
+- A **crew** is built per **task**: one CrewAI agent, one task, `Process.sequential`
+  (`execution/runner.py`) — squad context reaches the agent through the prompt, not a manager
+  crew; there is no per-squad hierarchical crew.
 - Each task runs with: its slice of squad context, the relevant brain retrievals (docs/06),
   its tool grants, a wall-clock and token budget, and an explicit output contract.
 - **Steering**: a user message to a running unit is delivered as an event and injected as
   additional context at the next agent step boundary (or as a manager instruction), never as
-  a mid-token interruption. It is recorded as `steering.injected` so the replay shows it.
-- **Retries**: a failed task retries with exponential backoff up to `task.max_retries`
-  (default 2) and each retry may escalate the model tier once (`retry.escalated`).
+  a mid-token interruption. It is recorded as `user.steering` so the replay shows it.
+- **Retries**: a failed task re-queues up to `MAX_TASK_ATTEMPTS = 3` (module constant). The
+  first failure goes back to the producer's Lead, who takes the retry over (a helper that
+  covers the skills takes it first); there is no `retry.escalated` event and no automatic
+  model-tier escalation.
 - **Escalation ladder**: worker fails → Lead re-plans the task → Head re-staffs it →
   Orchestrator re-plans the workstream → Council → user approval. Each rung emits
   `task.escalated` with the reason; the UI shows the escalation ribbon.
@@ -141,5 +145,5 @@ memory entries with provenance back to the run.
 | `policy` | tool denied, approval missing | request approval / re-plan without that tool |
 | `capability` | no agent covers skill, hiring refused at cap | replan with reduced scope, ask user |
 | `quality` | task failed acceptance criteria | escalate ladder |
-| `integrity` | malformed output, hallucinated file, injected instruction | reject, log `integrity.violation`, penalize, re-run with stricter contract |
+| `integrity` | malformed output, hallucinated file, injected instruction | reject, penalize via the `integrity_violation` reward component, re-run with stricter contract |
 | `internal` | bug in our code | fail job, mark run `FAILED`, surface stack trace to user only (never to agents) |

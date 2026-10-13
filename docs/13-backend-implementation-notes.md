@@ -8,13 +8,14 @@ the map a future session needs before touching code.
 ```
 backend/src/crew/
   __main__.py            CLI: serve · db init|seed|drop · auth create-user · audit verify ·
-                         brains list|search · run --project --goal · status
+                         brains list|search · run --project --goal · status · doctor
   domain/
     enums.py             the shared vocabulary (Grade, Role, TaskState, Capability, Verdict, …)
     catalog.py           GRADE_LIMITS · GRADE_CAPABILITY_CEILING · ALWAYS_APPROVAL · role
                          templates · 63-skill catalog · RoleSpec
   core/
-    settings.py          Settings (pydantic-settings, CREW_* env); refuses `local` auth outside dev
+    settings.py          Settings (pydantic-settings, CREW_* env); `local` auth requires a
+                         loopback listener
     db.py                async engine, session_scope (the unit of work), create_all bootstrap
     models.py            every table of docs/10 (JSON settings column on projects — see docs/10 note)
     events.py            EventStore (gapless seq per project) + in-process bus + emit()/emit_sync()
@@ -182,11 +183,12 @@ directory-picker tests.
 |-----|-------|-----------|
 | `test_pick_directory_returns_the_os_choice` and `test_pick_directory_cancel_and_unsupported` failed on ubuntu-latest | the tests patched `_pick_directory_native` but not `_picker_available`, so on a runner without `zenity` the route answered `supported: false` — correctly — and the assertion failed. A host assumption in the test, not a route defect | the same two tests now pin `_picker_available` (True for the dialog path, then False for the unsupported path) |
 
-The runner condition is reproducible on Windows: `backend/tests/plugins/no_picker.py`
-autouse-patches `_picker_available` to `False` for the whole session, so the pickerless
-path can be exercised with
+The runner condition is now exercised by default: an autouse fixture in
+`backend/tests/conftest.py` pins `_picker_available` to `False` for the whole session
+(picker tests opt back in explicitly). The plugin file `backend/tests/plugins/no_picker.py`
+and its explicit form
 `cd backend && PYTHONPATH=tests/plugins uv run pytest -p no_picker -q`
-(a Linux-only assertion cannot come back unnoticed).
+still work (a Linux-only assertion cannot come back unnoticed).
 
 ## The deliverables surface (three scopes) and operating cadence (2026-10)
 
@@ -206,7 +208,7 @@ on Windows and the recorded sha256/bytes would describe a file that does not exi
 demo whose deliverables surface is empty would lie.
 
 **Operating cadence.** The answer to "the run ended, now the company just sits there":
-`settings.cadence_enabled` + `settings.cadence_max_runs` (1–10, default 3). When a run
+the project's `cadence_enabled` / `cadence_max_runs` settings (1–10, default 3). When a run
 COMPLETES, the engine starts one follow-on pass (`Continue: <goal> (follow-on pass n/m)`),
 emits `run.cadence.started`, and stops at the cap with `run.cadence.held`. A person's run
 resets the streak; failures and pauses never continue. Off by default — the breakpoints are
@@ -214,7 +216,9 @@ visible in the record either way.
 
 ## Deliberate gaps (not bugs — next session's work)
 
-1. **Alembic migrations** are not generated; dev uses `create_all`. Prod requires a revision.
+1. **Postgres migrations**: the forward-only migrator (`core/migrations.py`,
+   `crew_schema_version`, pre-upgrade backups under `data/backups`) covers the supported
+   SQLite distribution; a Postgres path is future work.
 2. **Embeddings/vector search**: retrieval is lexical + recency + importance + trust. The scoring
    function is one place (`brains.score_entry`) so a vector index drops in behind it.
 3. **Docker sandbox**: shell/python run in the container or not at all (ADR 0017) — the dev
@@ -223,11 +227,37 @@ visible in the record either way.
    (docker present) — no CI job pins it yet.
 4. **`token` auth mode** is implemented and unit-level, but no integration test drives the
    login → bearer → WS handshake flow yet. `local` mode is the tested default.
-5. **Replay** exists server-side (`GET /events?from_seq&to_seq`, dossier export); the UI scrubber
-   is frontend work.
+5. **Replay** exists server-side (`GET /api/projects/{id}/events?from_seq&to_seq`, dossier
+   export); the UI scrubber is frontend work.
 6. **Live provider runs**: the CrewAI path is exercised through construction + callbacks, but a
    real end-to-end run with a provider key is still pending (needs the user's key).
 7. **Concurrency**: crews run in a thread pool with a global semaphore; there is no per-project
    fairness scheduler or job resumption across process restarts beyond the stage machine.
 8. **Tool breadth**: `net.post`, `git.push`, `data.sql` are catalogued and policy-gated but not
    implemented — an agent requesting them gets a clear "not granted/approval required" answer.
+
+## Review round 2026-10-14 — what changed and why (the memorable bits)
+
+- **The desk and `PATCH /projects/{id}` now share their budget guards.** `_budget` checks the
+  hard ceiling, the parent company cap and spent+reserved before writing (the old hole let a
+  desk order set any cap); regression-locked in `tests/security/test_review_fixes.py`.
+- **Audit rows carry `project_id` (nullable).** The hashed body gains the key ONLY when set, so
+  pre-column rows keep verifying byte-for-byte; `GET /projects/{id}/audit` filters on it and the
+  whole chain moved to `GET /api/audit` behind `require_admin` (no more URL-substring admin check).
+- **Brain search intersects requested ids with `list_brains(project_id)`** and 403s foreigners;
+  reassign/hire refuse foreign agent/department/squad ids.
+- **`COMMAND_PATTERNS` learned python/inline destruction** (`os.remove|unlink|rmdir`,
+  `shutil.rmtree`, `.unlink(`, `truncate`, `find … -delete`, `open(…,'w')`, the redirect-truncate
+  idiom, plain `rm`). Equivalent expression, equivalent act — the gate's oldest lesson.
+- **Vault**: cross-scope name collisions are refused (409), `sha256` hashes the ciphertext, every
+  lease is audited (`secret.leased`), and `load_all_into_redactor` re-teaches the in-memory
+  redactor at boot (a restart no longer disarms masking).
+- **Rate limits are real** (`api/limits.py`): runs 12/min per project, desk 60/min per project,
+  login 20/min per account + 120/min per IP. In-process only — a multi-worker deployment would
+  need a shared store (known limitation).
+- **Dev DX**: `CREW_ENV=dev` allows ANY loopback origin, so Vite port bumps stop reading as
+  "backend unreachable". The WS handshake accepts `?token=` and `Authorization` too.
+- **Additive contract fields** (`agent_id`, `cost_micros`; org nodes gained `tasks_done`/
+  `tasks_failed`) — the frontend's leaderboard join keyed on a mock-only field; the extended
+  `test_ui_contract_shapes` now asserts these rows so the drift class stays caught.
+- **The suite always runs as a pickerless host** (autouse fixture in `tests/conftest.py`).

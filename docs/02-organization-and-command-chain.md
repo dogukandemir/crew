@@ -120,8 +120,9 @@ board room, one pod per member project with its teams.
 | Request human approval | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Terminate a run | ✅ | own dept | own squad | – | – |
 
-Everything in the matrix is enforced in `control/org.py` + `core/policy.py`, not by prompt
-text. Prompts express the *intent*; the policy engine expresses the *law*.
+Everything in the matrix is enforced in `control/org.py` + the PolicyEngine
+(`core/security.py`), not by prompt text. Prompts express the *intent*; the policy engine
+expresses the *law*.
 
 ## 3. Roles (canonical set)
 
@@ -149,7 +150,7 @@ text. Prompts express the *intent*; the policy engine expresses the *law*.
 | `librarian` | Curates brains, promotes insight, prunes memory | Mid | fast |
 
 Roles are templates; a role has a **capability profile** (list of skill ids) rather than a
-hard-coded prompt. Role specs live in `backend/src/crew/domain/roles.py` and are data so the
+hard-coded prompt. Role specs live in `backend/src/crew/domain/catalog.py` and are data so the
 HiringService can compose new ones (see §5).
 
 ## 4. Skills & capability matching
@@ -159,8 +160,11 @@ HiringService can compose new ones (see §5).
   description and the tool grants normally needed to exercise it.
 - `skills` table holds the catalog; `agent_skills` holds per-agent proficiency
   (`0..1`, seeded on hire, updated by reward events — skill-specific scores).
-- Every task carries `required_skills[]` with weights. Covering a task requires:
-  `Σ (w_s × min(1, best available proficiency)) ≥ coverage_threshold` (default 0.75).
+- Every task carries `required_skills[]` with weights. A skill counts as covered once the
+  roster's best proficiency reaches 0.75 — below that it is a **capability gap**. The hiring
+  gate (`control/hiring.py`) scores a candidate on a covered/needed **ratio** (hard floor 0.5)
+  blended into a weighted total: `0.45 × coverage + 0.25 × budget fit + 0.2 × complementarity
+  + 0.1 × vision` ≥ 0.55.
 - Uncovered requirement → **capability gap** → hiring event.
 
 ## 5. How new units are born (the "self-organizing" mechanism)
@@ -202,7 +206,9 @@ Guardrails on spawning (all enforced in code, see docs/08):
   keeps the cost curve sane and makes the reward system load-bearing.
 - Anti-thrash: a hire is rejected if an identical role spec was laid off in the last N events
   without materially different requirements.
-- Every spawn emits `org.unit.created` + `audit` entry with the gap that justified it.
+- Every spawn emits its real event — `org.department.created`, `org.squad.created`,
+  `org.agent.hired` or `org.function.formed` — plus an `audit` entry with the gap that
+  justified it.
 
 ## 6. Council & decision protocol
 
@@ -237,11 +243,11 @@ disagree, a task has failed twice, or a human asks for a debate.
 | Promote | EWMA score ≥ threshold for grade, ≥ min sample size, no active penalties | Grade ↑, model tier ↑, budget cap ↑, autonomy ↑ |
 | Probation | score drop below floor, or a policy violation | Autonomy ↓ to supervised, spend cap halved |
 | Demote | sustained probation without recovery | Grade ↓, model tier ↓ |
-| Lay off | `idle` beyond `layoff_after` and no role need, or repeated failure | Archived, brain retained read-only, skills returned to catalog |
+| Lay off | `idle` beyond the project's `layoff_idle_days` (default 14) with no role need, or repeated failure | Archived, brain retained read-only, skills returned to catalog |
 | Rehire | new gap matches an archived agent with high score | Revive archived row (history preserved) |
 
-Scores, grades and their thresholds are specified in docs/05; the org consequences of a
-transition are implemented in `control/org.py::apply_grade_transition`.
+Scores, grades and their thresholds are specified in docs/05; the transition consequences are
+implemented in the reward engine (`core/reward.py`).
 
 ## 8. Org chart projection
 

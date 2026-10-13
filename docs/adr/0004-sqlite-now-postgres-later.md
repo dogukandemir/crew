@@ -12,7 +12,8 @@ multi-worker deployment (multiple schedulers, Redis bus) without a rewrite.
 - Prod/horizontal: Postgres + pgvector + Redis Streams.
 - Enforced by interfaces: repositories take a project scope and use SQLAlchemy 2.x constructs
   that are portable; JSON columns and vector access live behind adapters
-  (`core/repo/vectors.py`); migrations are Alembic with no SQLite-only DDL.
+  (`core/repo/vectors.py`); schema changes go through the forward-only migrator
+  (`core/migrations.py`) with no SQLite-only DDL.
 
 ## Consequences
 - Zero-setup local development; the whole product runs with one command.

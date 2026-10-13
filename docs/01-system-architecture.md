@@ -46,33 +46,23 @@ never talks to CrewAI. Nothing above `core` knows that CrewAI exists except
 
 ## 2. Components
 
-| Component | Module | Responsibility |
-|-----------|--------|----------------|
-| API | `api/main.py`, `api/routers/*` | HTTP surface, auth dependency, validation, error mapping |
-| WS Hub | `api/ws.py` | Per-project socket fan-out, topic filters, `since_seq` resume |
-| Orchestrator | `control/orchestrator.py` | Executive agent; owns plan, budget, arbitration |
-| OrgService | `control/org.py` | Create/mutate project, department, squad, agent; membership |
-| HiringService | `control/hiring.py` | Capability gap → role specs → new agents/departments |
-| Planner | `control/planner.py` | Goal → WBS → task DAG; dependencies & acceptance criteria |
-| CouncilService | `control/council.py` | Convene specialists, run debate rounds, collect positions |
-| Decider | `control/decider.py` | Issue final `DecisionRecord` with rationale + confidence |
-| Scheduler | `control/scheduler.py` | Async worker pool, concurrency limits, retries, resume |
-| CrewRunner | `execution/crew_runner.py` | Translate domain Task/Squad → CrewAI `Agent`/`Task`/`Crew`; run |
-| CouncilRunner | `execution/council_runner.py` | CrewAI crew in "debate" shape over a question |
-| ToolRegistry | `execution/tools/*` | Built-in tools (web, fs, shell, git, http, python, brain, comms) |
-| ToolInvoker | `execution/invoker.py` | Policy check → vault injection → sandbox → audit → result |
-| ModelRouter | `execution/models.py` | Grade/tier → LiteLLM model id, params, token caps |
-| BrainService | `core/brains.py` | 3-level memory: read scopes, write scopes, retrieval, promotion |
-| RewardEngine | `core/rewards.py` | Score outcomes, EWMA update, grade transitions, penalties |
-| Verifier | `core/verify.py` | Deterministic checks > test execution > judge model > peer vote |
-| PolicyEngine | `core/policy.py` | Capability grants, approvals, egress rules, injection guards |
-| CredentialVault | `core/vault.py` | Encrypted secrets, lease-based injection, never in prompts |
-| BudgetGuard | `core/budget.py` | Reservation + spend ledger, hard stops, circuit breaker |
-| AuditChain | `core/audit.py` | Hash-chained privileged-action log |
-| EventStore | `core/events.py` | Append-only events with monotonic `seq` per project |
-| EventBus | `core/bus.py` | In-process pub/sub now, Redis Streams later (same interface) |
-| Repositories | `core/repo/*` | Async SQLAlchemy access, unit of work |
-| TraceService | `core/trace.py` | Span tree assembly, OTEL export (optional) |
+Module map (as built); docs/13 has the file-by-file view.
+
+```
+api/        main · routes · ws · auth · commands · limits
+control/    orchestrator · org · hiring · council · verify · commands · backlog · company ·
+            workspaces · security_review · onboarding · inbox · gossip
+core/       security · reward · events · db · brains · migrations · models · settings ·
+            lease · logging
+domain/     enums · catalog · soul
+execution/  runner · models · tools · gateway · prompt · http · process · sandbox_client ·
+            sandbox_worker
+```
+
+Responsibilities: `api/` — HTTP surface, WS hub, auth, desk; `control/` — the control plane
+(runs, org, hiring, desk, board, company, jails); `core/` — policy/vault/budget, scores, event
+store, memory, schema; `domain/` — vocabulary, grade/role tables, skill catalog; `execution/` —
+CrewAI runner, model router, tools, prompts, HTTP, sandbox.
 
 ## 3. Stack decisions
 
@@ -80,7 +70,7 @@ never talks to CrewAI. Nothing above `core` knows that CrewAI exists except
 |---------|--------|-----|
 | Language (backend) | Python 3.13 | CrewAI is Python; keeps one runtime for agents (crewai 1.15.27 itself caps below 3.14) |
 | Web framework | FastAPI + Pydantic v2 | Async, typed, generates OpenAPI for the frontend |
-| ORM | SQLAlchemy 2.x async + Alembic | Mature, switchable between SQLite/Postgres |
+| ORM | SQLAlchemy 2.x async + forward-only migrator (`core/migrations.py`) | Mature, switchable between SQLite/Postgres |
 | Agent runtime | CrewAI (+ crewai-tools) | Agents/Tasks/Crews/Flows + memory + guardrails |
 | Model access | LiteLLM (via CrewAI) | One interface, many providers, cost/token metadata |
 | Vector store | sqlite-vec (dev) → pgvector (prod) | No extra service in dev |
@@ -119,8 +109,9 @@ rollups) — used in tests and after a bug fix.
 
 ## 5. How CrewAI is embedded (ADR 0002 summary)
 
-- **Crews** execute bounded work: one squad, one workstream, one wave of the DAG. Hierarchical
-  process when the squad has a distinct manager; sequential when work is a pipeline.
+- **Crews** execute bounded work: one task, one agent, one sequential CrewAI crew per task
+  (`execution/runner.py`); squad context arrives via the prompt — there is no hierarchical
+  manager crew (as-built).
 - **Flows** drive the *organization-level* control flow (intake → plan → hire → dispatch →
   verify → reward → learn), because it must be deterministic, resumable and inspectable —
   which is exactly what `@start/@listen/@router` gives us.
@@ -139,5 +130,5 @@ rollups) — used in tests and after a bug fix.
 | Idempotency | All mutating endpoints accept `Idempotency-Key`; jobs keyed by `(task_id, attempt)` |
 | Config | `pydantic-settings`, one `Settings` object, env-driven, validated at boot |
 | Errors | Typed `CrewError` tree → HTTP problem+json; agent-visible errors are sanitized (no stack traces to models) |
-| Migrations | Alembic autogenerate, one head, checked in CI |
+| Migrations | Versioned forward-only migrator (`core/migrations.py`); pre-upgrade SQLite backups under `data/backups` |
 | Feature flags | `settings` table per project (e.g. `council.enabled`, `hiring.auto`) |

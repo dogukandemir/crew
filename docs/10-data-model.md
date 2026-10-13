@@ -1,7 +1,7 @@
 # 10 — Data Model
 
 SQLAlchemy 2.x declarative, async. SQLite in dev (WAL), Postgres in prod. All ids are
-`uuid7` strings (sortable). All timestamps UTC. Money = `cost_micros` BIGINT (1 USD = 1e6).
+`uuid4().hex` strings (32-char, not sortable). All timestamps UTC. Money = `cost_micros` BIGINT (1 USD = 1e6).
 
 ## 1. Entities & relationships
 
@@ -69,8 +69,7 @@ applied, their interview scores, and why they walked — the record keeps them; 
 never does.
 
 ### skills / agent_skills
-`skills: id, label, category, description, typical_tools(json), verification_hints(json),
-related(json)` — global catalog
+`skills: id, label, category, description, typical_tools(json), related(json)` — global catalog
 `agent_skills: agent_id, skill_id, proficiency(float), evidence_count, last_used_at`
 
 ### runs
@@ -161,8 +160,8 @@ only through an explicit human grant; every add/revoke is audited.
 outcome, reason, trace_id, prev_hash, hash`
 
 ### users / sessions / secrets / secret_leases
-`users: id, email, name, password_hash(argon2id), role(admin|operator|viewer), created_at,
-disabled_at`
+`users: id, email, name, password_hash(scrypt; argon2id when installed),
+role(admin|operator|viewer), created_at, disabled_at`
 `sessions: id, user_id, token_hash, issued_at, expires_at, revoked_at, ua, ip`
 `secrets: id, name, scope_kind, scope_id, ciphertext, nonce, aad, sha256, created_at,
 rotated_at, last_used_at`
@@ -177,8 +176,8 @@ revoked_at`
    `verification_results`, `council_positions`, `brain_links`) have **no UPDATE/DELETE** paths
    in the repository layer; supersession replaces mutation.
 3. A task's `depends_on` forms a DAG (checked in the Planner before insert).
-4. `agents.department_id` is not null for non-archived agents; exactly one agent per project has
-   `role='orchestrator'` and state != archived.
+4. `agents.department_id` MAY be null — the "unassigned" roster is a real feature; exactly one
+   agent per project has `role='orchestrator'` and state != archived.
 5. `budget_ledger` sums per scope must equal `spend_micros` (reconciled by a startup check).
 6. Every `brain_entries` row has non-empty `source`.
 7. Every table with `project_id` filters by it in the repository layer; cross-project queries
@@ -187,17 +186,20 @@ revoked_at`
 
 ## 4. Migrations & seeding
 
-- Alembic, single head; `0001_initial` matches this document.
+- A custom forward-only migrator (`core/migrations.py`, `crew_schema_version` table) applies in
+  dev and prod alike and writes a pre-upgrade backup under `data/backups`.
 - Seed data: skill catalog, role templates, default project settings, baseline egress
   allowlist, model tier map. Seeding is idempotent (`crew db seed`).
 - `create_all` is allowed only in tests and `CREW_ENV=dev`; prod requires migrations.
 
 ## 5. Retention & size control
 
+Rows marked **planned** do not run yet in 0.1.0 — they are the target.
+
 | Table | Growth | Policy |
 |-------|--------|--------|
-| events | high (thousands per run) | keep forever in dev; prod: 90d then monthly rollups; payload compaction for `agent.thought` (headline + hash) |
+| events | high (thousands per run) | keep forever in dev; **planned**: prod 90d + monthly rollups; `agent.thought` keeps up to 1500 chars of step text today, not a headline + hash |
 | llm.* events | high | never store prompt/response bodies in `events`; bodies go to artifact store, referenced by hash (privacy + size) |
 | brain_entries | medium | archived by decay rule, never deleted |
-| jobs | medium | pruned when `state=done` and older than 30d |
+| jobs | medium | **planned**: prune when `state=done` and older than 30d |
 | artifacts | disk | content-addressed (sha256), deduped, quota per project |

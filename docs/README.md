@@ -66,7 +66,8 @@ Decisions that were expensive to make and would be expensive to reverse:
 
 - Every mutation of meaningful state emits exactly one **domain event** (docs/07) and one
   **audit entry** if privileged (docs/08).
-- Identifiers are `uuid7`/ULID strings; timestamps are UTC ISO-8601 with milliseconds.
+- Identifiers are `uuid4().hex` strings (32-char, not sortable); timestamps are UTC ISO-8601
+  with milliseconds.
 - Money is stored as **micro-USD integers** (`cost_micros`) to avoid float drift.
 - Docs use "must" for invariants enforced by code/tests, "should" for defaults that config
   may override.

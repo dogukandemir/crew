@@ -69,11 +69,10 @@ cheap model, preventing "gaming the decider" with an under-powered agent.
 
 ## 3. Skill registry
 
-- Catalog in `skills` table, seeded from `backend/src/crew/domain/skills.py` (~60 skills
+- Catalog in `skills` table, seeded from `backend/src/crew/domain/catalog.py` (~60 skills
   covering research, engineering, data, design, media, writing, ops, security, domain
   verticals).
-- Each skill has: `id`, `label`, `description`, `category`, `typical_tools[]`,
-  `verification_hints[]` (how to prove work in this skill), `related[]`.
+- Each skill has: `id`, `label`, `description`, `category`, `typical_tools[]`, `related[]`.
 - Proficiency is **evidence-based**: seeded on hire from the role spec, then updated from
   reward events scoped to tasks that required the skill
   (`p ← p + α·(reward − expected(p))`), α default 0.15. Skills decay slowly toward the

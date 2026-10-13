@@ -74,7 +74,11 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
         header: 'Success',
         width: '5.5rem',
         align: 'right',
-        render: (e) => <span className="tabular-nums">{e.success_rate === undefined ? '—' : formatPercent(e.success_rate)}</span>,
+        render: (e) => (
+          <span className="tabular-nums" title={!(e.tasks_done ?? 0) ? 'No completed tasks yet' : undefined}>
+            {!(e.tasks_done ?? 0) || e.success_rate === undefined ? '—' : formatPercent(e.success_rate)}
+          </span>
+        ),
         sortValue: (e) => e.success_rate ?? -1,
       },
       {
@@ -110,10 +114,10 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
             <DataTable
               columns={columns}
               rows={rows}
-              rowKey={(e) => e.agent_id}
+              rowKey={(e) => e.agent_id ?? e.id}
               sort={sort}
               onSortChange={setSort}
-              onRowClick={(e) => openDrawer(tabId, { kind: 'agent', id: e.agent_id, name: e.name })}
+              onRowClick={(e) => openDrawer(tabId, { kind: 'agent', id: e.agent_id ?? e.id, name: e.name })}
               empty={
                 <EmptyState
                   title="No scores yet"

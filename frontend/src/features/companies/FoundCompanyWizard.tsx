@@ -260,7 +260,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
 
         <p className="rounded border border-slate-800 bg-slate-950/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
           Will create: <span className="text-slate-300">{name.trim() || '—'}</span> (company, CEO +
-          board), <span className="text-slate-300">{projectName.trim() || '—'}</span> under it, and
+          board), <span className="text-slate-300">{projectName.trim() || '—'}</span> under it, and{' '}
           {startRun ? 'start its first run' : 'wait for you to start its first run'}{runMode === 'autonomous' ? '' : ' (interactive)'}. Agents work inside{' '}
           <span className="font-mono text-slate-400">
             {workspacePath.trim() || 'a dedicated project folder'}

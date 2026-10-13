@@ -457,6 +457,7 @@ export interface OrgNode {
   open_tasks?: number;
   tasks_total?: number;
   tasks_done?: number;
+  tasks_failed?: number;
   success_rate?: number;
   department_id?: string | null;
   squad_id?: string | null;
@@ -727,15 +728,26 @@ export interface RewardEvent {
 
 export interface LeaderboardEntry {
   rank?: number;
-  agent_id: string;
+  /** The agent id (canonical). `agent_id` rides along as an additive alias. */
+  id: string;
+  agent_id?: string;
   name: string;
   role?: string;
   grade?: Grade;
+  grade_label?: string;
+  state?: string;
   score: number;
+  score_100?: number;
   score_confidence?: number;
+  confidence?: number;
   cost_micros?: number;
   success_rate?: number;
   tasks_done?: number;
+  tasks_failed?: number;
+  evidence_count?: number;
+  model_tier?: string;
+  department_id?: string | null;
+  company_knowledge?: number;
   score_trend?: number[];
 }
 

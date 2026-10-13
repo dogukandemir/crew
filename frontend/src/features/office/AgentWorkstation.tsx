@@ -106,8 +106,24 @@ export function AgentWorkstation({
             role="tab"
             type="button"
             aria-selected={tab === id}
+            tabIndex={tab === id ? 0 : -1}
             className="station-tab"
             onClick={() => setTab(id)}
+            onKeyDown={(e) => {
+              const order = ['thinking', 'output', 'stats'] as StationTab[];
+              const i = order.indexOf(tab);
+              let next: StationTab | null = null;
+              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = order[(i + 1) % order.length];
+              else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = order[(i - 1 + order.length) % order.length];
+              else if (e.key === 'Home') next = order[0];
+              else if (e.key === 'End') next = order[order.length - 1];
+              if (next) {
+                e.preventDefault();
+                setTab(next);
+                const tabs = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                tabs?.[order.indexOf(next)]?.focus();
+              }
+            }}
           >
             {label}
           </button>
@@ -287,7 +303,9 @@ export function AgentWorkstation({
               <dl className="station-card grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1 text-[11px]">
                 <dt className="text-slate-500">success rate</dt>
                 <dd className="tabular-nums text-slate-200">
-                  {a.success_rate !== undefined ? formatPercent(a.success_rate) : '—'}
+                  {(a.tasks_done ?? 0) > 0 && a.success_rate !== undefined
+                    ? formatPercent(a.success_rate)
+                    : '—'}
                 </dd>
                 <dt className="text-slate-500">tasks</dt>
                 <dd className="tabular-nums text-slate-200">

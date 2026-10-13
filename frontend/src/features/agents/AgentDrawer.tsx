@@ -11,7 +11,7 @@ import { KeyValue } from '../../components/ui/Tabs';
 import { Sparkline } from '../../components/ui/Sparkline';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
-import { formatClock, formatMicros, formatPercent, formatRelativeTime, formatTokens } from '../../lib/format';
+import { formatClock, formatDateTime, formatMicros, formatPercent, formatRelativeTime, formatTokens } from '../../lib/format';
 import { useAgent, useAgentContext, useAgentRewards, useProjectArtifacts } from '../../app/hooks';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { useUi } from '../../stores/ui';
@@ -93,7 +93,12 @@ export function AgentDrawer({
                       ? `${formatPercent(agent.data.company_knowledge)} · ${agent.data.tenure_days ?? 0}d tenure`
                       : '—',
                   ],
-                  ['success rate', agent.data.success_rate !== undefined ? formatPercent(agent.data.success_rate) : '—'],
+                  [
+                    'success rate',
+                    (agent.data.tasks_done ?? 0) > 0 && agent.data.success_rate !== undefined
+                      ? formatPercent(agent.data.success_rate)
+                      : '—',
+                  ],
                   ['tasks', `${agent.data.tasks_done ?? 0} done / ${agent.data.tasks_failed ?? 0} failed`],
                   ['evidence', agent.data.evidence_count ?? 0],
                   ['penalties', agent.data.penalty_count ?? 0],
@@ -326,25 +331,24 @@ function DeliverablesSection({ projectId, agentId }: { projectId: string; agentI
           {items.map((r) => (
             <li key={r.id}>
               <div
-                role="button"
-                tabIndex={0}
-                onClick={() => setPreview(r)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setPreview(r);
-                  }
-                }}
-                className="flex w-full cursor-pointer items-center gap-2 border-b border-slate-800/60 px-2 py-1 text-left text-[11px] last:border-0 hover:bg-slate-900/60"
+                className="flex w-full items-center gap-2 border-b border-slate-800/60 px-2 py-1 text-[11px] last:border-0 hover:bg-slate-900/60"
                 title={r.task_title ? `From the task: ${r.task_title}` : r.path}
               >
-                <span className="min-w-0 flex-1 truncate text-slate-300">{r.name}</span>
-                <span className="shrink-0 tabular-nums text-slate-500">
-                  {formatDeliverableSize(r.bytes)}
-                </span>
+                {/* One interactive element per row: the open button. Nested buttons inside
+                    a role=button row break screen readers (review 2026-10-14). */}
+                <button
+                  type="button"
+                  onClick={() => setPreview(r)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <span className="min-w-0 flex-1 truncate text-slate-300">{r.name}</span>
+                  <span className="shrink-0 tabular-nums text-slate-500">
+                    {formatDeliverableSize(r.bytes)}
+                  </span>
+                </button>
                 <span
                   className="shrink-0 text-slate-500"
-                  title={new Date(r.created_at).toLocaleString()}
+                  title={formatDateTime(r.created_at)}
                 >
                   {formatRelativeTime(r.created_at)}
                 </span>

@@ -129,12 +129,14 @@ export function layoutOrg(
   return { nodes, edges };
 }
 
+/** Fallback names for the backend's Grade enum (domain/enums.py `label`, name.capitalize()).
+ * Prefer the API's `grade_label` when a payload carries it; this is the one local map. */
 export function gradeLabel(grade: number | undefined): string {
   switch (grade) {
     case 5:
-      return 'Principal';
+      return 'Chief';
     case 4:
-      return 'Staff';
+      return 'Principal';
     case 3:
       return 'Senior';
     case 2:

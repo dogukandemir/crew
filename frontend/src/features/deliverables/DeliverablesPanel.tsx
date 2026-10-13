@@ -6,7 +6,7 @@ import { Input, Select } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Drawer';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
-import { formatRelativeTime } from '../../lib/format';
+import { formatDateTime, formatRelativeTime } from '../../lib/format';
 import {
   useArtifactContent,
   useCompanyArtifacts,
@@ -191,7 +191,7 @@ export function DeliverablesPanel({
         </span>
       </div>
       <p className="text-xs text-slate-400">{versions === 'latest'
-        ? 'Showing the newest published copy of each file in this view. Choose All versions for earlier copies, or All runs for previous work.'
+        ? 'Showing the newest published copy of each file per agent in this view. Choose All versions for earlier copies, or All runs for previous work.'
         : 'Showing publication history, including older copies. Check task results before using a file.'}</p>
 
       {rows.length === 0 ? (
@@ -242,22 +242,21 @@ function DeliverableItem({
   return (
     <li>
       <div
-        role="button"
-        tabIndex={0}
-        onClick={onOpen}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        className="flex cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-slate-900/60"
+        className="flex items-center gap-3 px-3 py-2 hover:bg-slate-900/60"
         title={row.task_title ? `From the task: ${row.task_title}` : row.path}
       >
-        <span className="w-9 shrink-0 rounded bg-slate-800/80 px-1 py-0.5 text-center text-[10px] font-semibold tracking-wide text-slate-400">
-          {typeTag(row.name, row.mime)}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-slate-200">{row.name}</span>
+        {/* One interactive element per row: the open button (nested buttons inside a
+            role=button row break screen readers — review 2026-10-14). */}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <span className="w-9 shrink-0 rounded bg-slate-800/80 px-1 py-0.5 text-center text-[10px] font-semibold tracking-wide text-slate-400">
+            {typeTag(row.name, row.mime)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-slate-200">{row.name}</span>
+        </button>
         {isCompany && row.project_name && (
           <Chip tone="neutral" title="Project" className="hidden sm:inline-flex">
             {row.project_name}
@@ -274,10 +273,7 @@ function DeliverableItem({
             <button
               type="button"
               className="font-medium text-slate-200 underline-offset-2 hover:underline"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAgent();
-              }}
+              onClick={onAgent}
             >
               {row.agent_name ?? 'unknown'}
             </button>
@@ -290,7 +286,7 @@ function DeliverableItem({
         </span>
         <span
           className="hidden w-20 shrink-0 text-right text-[11px] text-slate-500 sm:inline"
-          title={new Date(row.created_at).toLocaleString()}
+          title={formatDateTime(row.created_at)}
         >
           {formatRelativeTime(row.created_at)}
         </span>

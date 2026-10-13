@@ -1038,8 +1038,14 @@ const routes = [
     (m[1] === 'p2' ? P2_AGENTS : m[1] === 'p3' ? P3_AGENTS : m[1] === 'p1' ? Object.values(agentsNow()) : [])
       .slice()
       .sort((x, y) => y.score - x.score)
-      .map((a) => ({ agent_id: a.id, name: a.name, role: a.role, grade: a.grade, score: a.score,
-                     success_rate: a.success_rate, cost_micros: a.spend_micros, score_trend: a.score_trend,
+      .map((a) => ({ id: a.id, agent_id: a.id, name: a.name, role: a.role, grade: a.grade,
+                     grade_label: { 0: 'Trainee', 1: 'Junior', 2: 'Mid', 3: 'Senior',
+                                    4: 'Principal', 5: 'Chief' }[a.grade] ?? null,
+                     state: a.state ?? 'idle', score: a.score, score_100: a.score_100,
+                     confidence: a.confidence, success_rate: a.success_rate,
+                     tasks_done: a.tasks_done, tasks_failed: a.tasks_failed,
+                     evidence_count: a.evidence_count, model_tier: a.model_tier,
+                     cost_micros: a.spend_micros, score_trend: a.score_trend,
                      company_knowledge: a.company_knowledge })))],
   [/^\/api\/projects\/([^/]+)\/reward-transitions$/, (m) => paged(m[1] === 'p1' ? [
     { id: 'rt1', agent_id: 'a3', agent_name: 'Elena Rossi', from_grade: 3, to_grade: 4, kind: 'promotion', rule: 'score > 0.9 sustained across 5 releases', score_after: 0.91, created_at: daysAgo(3) },

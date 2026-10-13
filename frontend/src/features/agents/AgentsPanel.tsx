@@ -13,7 +13,7 @@ import { formatMicros, formatPercent } from '../../lib/format';
 import { useLeaderboard, useOrg, useTasks } from '../../app/hooks';
 import { useTabs } from '../../stores/tabs';
 import { useUi } from '../../stores/ui';
-import { flattenOrg } from '../org/orgUtils';
+import { flattenOrg, gradeLabel } from '../org/orgUtils';
 
 interface AgentRow {
   id: string;
@@ -31,16 +31,6 @@ interface AgentRow {
   currentTask?: string;
   lastActive?: string | null;
 }
-
-/** Class names for the grade chip — G-numbers mean nothing to a new user. */
-const GRADE_LABEL: Record<number, string> = {
-  0: 'Trainee',
-  1: 'Junior',
-  2: 'Mid',
-  3: 'Senior',
-  4: 'Principal',
-  5: 'Chief',
-};
 
 type View = 'all' | 'top' | 'at-risk';
 
@@ -66,7 +56,8 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
   const rows = useMemo<AgentRow[]>(() => {
     const agents = flattenOrg(org.data?.root).filter((n) => n.kind === 'agent');
     const lb = new Map<string, LeaderboardEntry>(
-      (leaderboard.data?.items ?? []).map((e) => [e.agent_id, e]),
+      // Join on the canonical id; `agent_id` rides along as an additive alias (review 2026-10-14).
+      (leaderboard.data?.items ?? []).map((e) => [e.agent_id ?? e.id, e]),
     );
     const taskItems = tasks.data?.items ?? [];
 
@@ -134,7 +125,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         align: 'center',
         render: (r) =>
           r.grade === undefined ? '—' : (
-            <Badge tone="accent" title={GRADE_LABEL[r.grade] ?? `grade ${r.grade}`}>
+            <Badge tone="accent" title={gradeLabel(r.grade)}>
               {`G${r.grade}`}
             </Badge>
           ),

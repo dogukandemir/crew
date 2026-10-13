@@ -42,8 +42,12 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
   const total = taskItems.length;
   const pending = approvals.data?.items.length ?? project.data?.pending_approvals ?? 0;
 
-  const successRate =
-    metrics.data?.task_success_rate ?? metrics.data?.success_rate ?? project.data?.success_rate;
+  // Never a fabricated 0%: with no finished task history the rate is unknown, not zero
+  // (review 2026-10-14 — the API reports 0.0 for an empty denominator).
+  const hasTaskHistory = (metrics.data?.tasks_total ?? total) > 0;
+  const successRate = hasTaskHistory
+    ? metrics.data?.task_success_rate ?? metrics.data?.success_rate ?? project.data?.success_rate
+    : undefined;
   const spend = project.data?.spend_micros ?? metrics.data?.cost_micros ?? 0;
   const cap = project.data?.budget_cap_micros ?? 0;
 
@@ -304,8 +308,11 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
 function ProgressHint({ projectId }: { projectId: string }) {
   const tasks = useTasks(projectId);
   const project = useProject(projectId);
-  const items = tasks.data?.items ?? [];
-  const total = tasks.data?.total ?? items.length;
+  // Both numbers from ONE source: the latest run's tasks. The page envelope's `total`
+  // covers the whole project, which made "previous run: 80/430" un-reachable and false
+  // (review 2026-10-14).
+  const items = latestRunTasks(tasks.data?.items ?? [], project.data);
+  const total = items.length;
   if (total === 0) return null;
   const done = items.filter((t) => t.state === 'completed').length;
   return (

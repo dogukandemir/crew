@@ -106,10 +106,19 @@ export function UnitDrawer({
               'budget envelope',
               unit.budget_envelope_micros !== undefined ? formatMicros(unit.budget_envelope_micros) : '—',
             ],
-            ['success rate', unit.success_rate !== undefined ? formatPercent(unit.success_rate) : '—'],
+            [
+              'success rate',
+              (unit.tasks_done ?? 0) > 0 && unit.success_rate !== undefined
+                ? formatPercent(unit.success_rate)
+                : '—',
+            ],
             [
               'tasks',
-              unit.tasks_total !== undefined ? `${unit.tasks_done ?? 0} / ${unit.tasks_total}` : '—',
+              unit.tasks_total !== undefined
+                ? `${unit.tasks_done ?? 0} / ${unit.tasks_total}`
+                : unit.tasks_done !== undefined
+                  ? `${unit.tasks_done} done / ${unit.tasks_failed ?? 0} failed`
+                  : '—',
             ],
             ['open tasks', unit.open_tasks ?? 0],
             ['mission', unit.mission ?? '—'],

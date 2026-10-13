@@ -172,6 +172,22 @@ fails a test instead of the product. Also this round: the founding wizard is the
 company creation path, command-desk examples are English, and vitest 3 → 5 cleared
 `npm audit` (dev-only advisories).
 
+## Fixed after the first CI observation (2026-10)
+
+The hosted workflows ran for this tree for the first time on 13 October (`cba4531`):
+both Windows legs and the Compose job passed, and the ubuntu backend leg failed on two
+directory-picker tests.
+
+| Bug | Cause | Guard test |
+|-----|-------|-----------|
+| `test_pick_directory_returns_the_os_choice` and `test_pick_directory_cancel_and_unsupported` failed on ubuntu-latest | the tests patched `_pick_directory_native` but not `_picker_available`, so on a runner without `zenity` the route answered `supported: false` — correctly — and the assertion failed. A host assumption in the test, not a route defect | the same two tests now pin `_picker_available` (True for the dialog path, then False for the unsupported path) |
+
+The runner condition is reproducible on Windows: `backend/tests/plugins/no_picker.py`
+autouse-patches `_picker_available` to `False` for the whole session, so the pickerless
+path can be exercised with
+`cd backend && PYTHONPATH=tests/plugins uv run pytest -p no_picker -q`
+(a Linux-only assertion cannot come back unnoticed).
+
 ## The deliverables surface (three scopes) and operating cadence (2026-10)
 
 **Deliverables.** One artifact record, three readable scopes — individual agent, department,

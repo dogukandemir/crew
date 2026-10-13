@@ -411,6 +411,10 @@ async def test_pick_directory_returns_the_os_choice(client, monkeypatch):
     back as an absolute path — the browser never touches the filesystem itself."""
     from crew.api import routes as routes_mod
 
+    # Host availability (powershell / osascript / zenity) is a property of the machine, not
+    # of this contract — pin it, or the test asserts whatever the CI image happens to ship
+    # (the ubuntu runner has no zenity and the route honestly answers supported=false).
+    monkeypatch.setattr(routes_mod, "_picker_available", lambda: True)
     monkeypatch.setattr(routes_mod, "_pick_directory_native", lambda: "C:/picked/root")
     r = await client.post("/api/system/pick-directory")
     assert r.status_code == 200
@@ -420,6 +424,7 @@ async def test_pick_directory_returns_the_os_choice(client, monkeypatch):
 async def test_pick_directory_cancel_and_unsupported(client, monkeypatch):
     from crew.api import routes as routes_mod
 
+    monkeypatch.setattr(routes_mod, "_picker_available", lambda: True)
     monkeypatch.setattr(routes_mod, "_pick_directory_native", lambda: None)
     r = await client.post("/api/system/pick-directory")
     body = r.json()

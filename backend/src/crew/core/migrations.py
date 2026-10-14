@@ -2,6 +2,11 @@
 
 Revision 1 adopts the pre-release schema and its known additive upgrades. Future
 schema changes must add a revision; never edit an already released revision.
+
+Revision 3 (2026-10 review round) is purely additive: the audit scope column
+(`audit_log.project_id`) for databases that predate it. Caught live when the app was
+started against a real pre-review data dir: the strict mismatch check fired because no
+revision carried the ADD COLUMN.
 """
 
 import sqlite3
@@ -10,7 +15,7 @@ from pathlib import Path
 
 from sqlalchemy import inspect
 
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 
 def backup_before_upgrade(database: str) -> Path | None:
@@ -43,6 +48,13 @@ def migrate(connection, metadata, legacy_upgrade) -> None:
     if version < 2:
         metadata.tables["command_receipts"].create(connection, checkfirst=True)
         connection.exec_driver_sql("INSERT INTO crew_schema_version(version) VALUES (2)")
+    if version < 3:
+        # Additive only (the callback inspects + ALTERs, so re-running it is safe).
+        legacy_upgrade(connection)
+        if "audit_log" in inspect(connection).get_table_names():
+            connection.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_audit_log_project_id ON audit_log (project_id)")
+        connection.exec_driver_sql("INSERT INTO crew_schema_version(version) VALUES (3)")
     # A partial schema is an error, not a fresh database that can silently hide data loss.
     inspector = inspect(connection)
     for table in metadata.sorted_tables:

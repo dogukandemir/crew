@@ -567,6 +567,27 @@ class CommandAllow(Base):
     revoke_reason: Mapped[str] = mapped_column(Text, default="")
 
 
+
+class CapabilityAllow(Base):
+    """A standing TOOL approval (the owner's ask, 2026-10-14): when a gated tool
+    (e.g. `python_eval` for a supervised agent) is approved with "⚡ Always allow",
+    future calls of this capability by THIS agent skip the gate until revoked. Only
+    a human grant writes here — agents can request approvals, never grants."""
+
+    __tablename__ = "capability_allows"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=uid)
+    project_id: Mapped[str] = mapped_column(String(32), index=True)
+    capability: Mapped[str] = mapped_column(String(64))
+    agent_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(40), default="user")
+    source_approval_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    revoke_reason: Mapped[str] = mapped_column(Text, default="")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

@@ -9,8 +9,9 @@ import { Section } from '../../components/ui/Tabs';
 import { Modal } from '../../components/ui/Drawer';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
+import { flattenOrg } from '../org/orgUtils';
 import { usdToMicros, microsToUsd } from '../../lib/format';
-import { useProject } from '../../app/hooks';
+import { useOrg, useProject } from '../../app/hooks';
 import { useUi } from '../../stores/ui';
 
 const DEFAULT_SETTINGS: ProjectSettings = {
@@ -299,6 +300,13 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           <CommandAllowlist projectId={projectId} />
         </Section>
 
+        <Section
+          title="Tool allowlist"
+          description="Standing tool approvals: when a gated tool (for example the sandboxed Python) is approved with “Always allow”, calls of that capability by that agent stop asking. Revoking closes the gate again immediately."
+        >
+          <CapabilityAllowlist projectId={projectId} />
+        </Section>
+
         <Section title="Model tier mapping" description="Which provider and model each capability tier resolves to — providers are connected at onboarding.">
           <div className="grid gap-2 sm:grid-cols-2">
             {TIERS.map((tier) => (
@@ -375,6 +383,62 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
         </label>
       </Modal>
     </div>
+  );
+}
+
+/** Standing TOOL approvals ("⚡ Always allow" on a tool gate): capability + agent,
+ * revocable, audited. Hard gates (delete/push/post) never appear here. */
+function CapabilityAllowlist({ projectId }: { projectId: string }) {
+  const qc = useQueryClient();
+  const setToast = useUi((s) => s.setToast);
+  const org = useOrg(projectId);
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of flattenOrg(org.data?.root)) m.set(u.id, u.name);
+    return m;
+  }, [org.data]);
+  const allows = useQuery({
+    queryKey: ['project', projectId, 'capability-allows'],
+    queryFn: () => api.listCapabilityAllows(projectId),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.revokeCapabilityAllow(id, 'revoked from settings'),
+    onSuccess: () => {
+      setToast({ kind: 'success', message: 'Standing tool approval revoked — it will ask again.' });
+      void qc.invalidateQueries({ queryKey: ['project', projectId, 'capability-allows'] });
+    },
+    onError: (err) => setToast({ kind: 'error', message: String(err) }),
+  });
+
+  if (allows.isLoading) return <p className="text-xs text-slate-500">Loading…</p>;
+  if (allows.isError) return <PanelError error={allows.error} label="Tool allowlist" />;
+  const items = allows.data?.items ?? [];
+  if (items.length === 0) {
+    return (
+      <p className="text-xs text-slate-500">
+        Nothing on the list. When a gated tool is approved with “Always allow”, the capability
+        lands here — audited and revocable.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-1.5">
+      {items.map((a) => (
+        <li
+          key={a.id}
+          className="flex items-center gap-2 rounded border border-slate-700/60 bg-slate-900/50 px-2 py-1.5"
+        >
+          <code className="shrink-0 font-mono text-[11px] text-slate-300">{a.capability}</code>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-slate-400">
+            {a.agent_id ? (nameById.get(a.agent_id) ?? a.agent_id) : 'any agent'}
+          </span>
+          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? '—'}</span>
+          <Button size="xs" variant="danger" loading={revoke.isPending} onClick={() => revoke.mutate(a.id)}>
+            Revoke
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

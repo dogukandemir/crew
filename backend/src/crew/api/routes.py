@@ -54,16 +54,19 @@ from crew.core.models import (
 )
 from crew.core.reward import DEFAULT_WEIGHTS, leaderboard, reward_engine
 from crew.core.security import (
+    allow_capability,
     audit,
     budget,
     decide_approval,
+    list_capability_allows,
     policy,
+    revoke_capability_allow,
     vault,
     verify_audit_chain,
 )
 from crew.core.settings import settings
-from crew.domain.catalog import ROLE_TEMPLATES, SKILLS, RoleSpec
-from crew.domain.enums import Grade, Role
+from crew.domain.catalog import ALWAYS_APPROVAL, ROLE_TEMPLATES, SKILLS, RoleSpec
+from crew.domain.enums import Capability, Grade, Role
 from crew.execution.models import router
 from crew.execution.runner import select_runner
 from crew.execution.tools import TOOLS, tools_for_agent
@@ -2070,6 +2073,18 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
         allow_id = await security_review.allow_command(
             row.project_id, norm=str(req.get("norm")), sample_cmd=str(req.get("cmd") or ""),
             note=body.reason, decided_by=user["id"], source_approval_id=approval_id)
+    elif body.always and req.get("tool"):
+        # Standing TOOL approval: future calls of this capability by THIS agent skip
+        # the gate until revoked. Hard gates (net_post / fs_delete / git_push)
+        # deliberately keep asking — a standing allow cannot cover them.
+        try:
+            hard_gate = Capability(row.capability) in ALWAYS_APPROVAL
+        except ValueError:
+            hard_gate = False
+        if not hard_gate:
+            allow_id = await allow_capability(
+                row.project_id, capability=row.capability, agent_id=row.agent_id,
+                note=body.reason, decided_by=user["id"], source_approval_id=approval_id)
     continuation = await orchestrator.approval_decided(approval_id, granted=True)
     if continuation:
         await drive_after_commit(*continuation)
@@ -2106,6 +2121,25 @@ async def revoke_command_allow(allow_id: str, body: AllowRevoke | None = None,
                                user: dict = Depends(require_user)) -> dict:
     ok = await security_review.revoke_command_allow(
         allow_id, decided_by=user["id"], reason=(body.reason if body else ""))
+    if not ok:
+        raise _problem(409, "allow entry not found or already revoked", allow_id)
+    return {"allow_id": allow_id, "state": "revoked"}
+
+
+@api.get("/projects/{project_id}/capability-allows")
+async def list_capability_allows_route(project_id: str, include_revoked: bool = False) -> dict:
+    return {"items": await list_capability_allows(project_id, include_revoked=include_revoked)}
+
+
+class CapabilityAllowRevoke(APIModel):
+    reason: str = ""
+
+
+@api.delete("/capability-allows/{allow_id}")
+async def revoke_capability_allow_route(allow_id: str, body: CapabilityAllowRevoke | None = None,
+                                        user: dict = Depends(require_user)) -> dict:
+    ok = await revoke_capability_allow(allow_id, decided_by=user["id"],
+                                       reason=(body.reason if body else ""))
     if not ok:
         raise _problem(409, "allow entry not found or already revoked", allow_id)
     return {"allow_id": allow_id, "state": "revoked"}

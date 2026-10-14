@@ -103,6 +103,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
   const kind = typeof req.kind === 'string' ? req.kind : 'generic';
   const isCommand = kind === 'command_review';
   const isContent = kind === 'content_review';
+  const isTool = !isCommand && !isContent && typeof req.tool === 'string';
   const cmd = typeof req.cmd === 'string' ? req.cmd : '';
   const url = typeof req.url === 'string' ? req.url : '';
   const preview = typeof req.preview === 'string' ? req.preview : '';
@@ -122,13 +123,16 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
           action === 'deny'
             ? 'Approval denied.'
             : action === 'always'
-              ? 'Always allowed — it will not ask again until revoked (Settings → Command allowlist).'
+              ? isTool
+                ? 'Standing approval saved — this agent’s calls skip the gate until revoked (Settings → Tool allowlist).'
+                : 'Always allowed — it will not ask again until revoked (Settings → Command allowlist).'
               : 'Approval granted.',
       });
       setReason('');
       setOpenForReason(false);
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'approvals'] });
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'command-allows'] });
+      void qc.invalidateQueries({ queryKey: ['project', projectId, 'capability-allows'] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
   });
@@ -198,7 +202,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
         <Button size="xs" variant="primary" loading={decide.isPending} onClick={() => decide.mutate('grant')}>
           {isContent ? 'Release' : 'Grant once'}
         </Button>
-        {isCommand && (
+        {(isCommand || isTool) && (
           <Button size="xs" variant="secondary" loading={decide.isPending} onClick={() => decide.mutate('always')}>
             ⚡ Always allow
           </Button>

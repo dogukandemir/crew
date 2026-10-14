@@ -9,7 +9,7 @@ import { KeyValue } from '../../components/ui/Tabs';
 import { JsonView } from '../../components/ui/JsonView';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
-import { formatDuration, formatMicros, formatPercent, formatTokens } from '../../lib/format';
+import { formatDuration, formatMicros, formatPercent, formatTokens, skillLabel } from '../../lib/format';
 import { useOrg, useTask, useTaskArtifacts, useTasks } from '../../app/hooks';
 import { flattenOrg } from '../org/orgUtils';
 import { useUi } from '../../stores/ui';
@@ -184,9 +184,9 @@ export function TaskDrawer({
               {(t.required_skills ?? []).length === 0 ? (
                 <span className="text-xs text-slate-500">none</span>
               ) : (
-                t.required_skills!.map((s) => (
-                  <Badge key={s} tone="info">
-                    {s}
+                t.required_skills!.map((s, i) => (
+                  <Badge key={i} tone="info" title={typeof s === 'string' ? s : `weight ${s.weight ?? '—'}`}>
+                    {skillLabel(s)}
                   </Badge>
                 ))
               )}

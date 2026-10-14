@@ -66,3 +66,14 @@ it('brain supersede/promote send flat model fields (promote has no rationale)', 
   await api.promoteEntry('e1', 'brain-2', 'worthy');
   expect(sent(fetcher, 1)).toEqual({ to_brain_id: 'brain-2' });
 });
+
+
+it('capability allows list and revoke speak the flat contract', async () => {
+  const fetcher = ok({ items: [] });
+  vi.stubGlobal('fetch', fetcher);
+  await api.listCapabilityAllows('p1');
+  expect(String(fetcher.mock.calls[0][0])).toContain('/api/projects/p1/capability-allows');
+  await api.revokeCapabilityAllow('a1', 'done');
+  expect(String(fetcher.mock.calls[1][0])).toContain('/api/capability-allows/a1');
+  expect(sent(fetcher, 1)).toEqual({ reason: 'done' });
+});

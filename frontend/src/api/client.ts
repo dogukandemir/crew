@@ -17,6 +17,7 @@ import type {
   BrainEntry,
   BrainSearchHit,
   CommandAck,
+  CapabilityAllow,
   CommandAllow,
   CommandBody,
   CommandMessage,
@@ -413,7 +414,7 @@ export const api = {
       title: string;
       description?: string;
       acceptance_criteria?: string[];
-      required_skills?: string[];
+      required_skills?: Array<{ skill: string; weight?: number }>;
       depends_on?: string[];
     },
   ) => request<Task>(`/api/projects/${id}/tasks`, { method: 'POST', body: input }),
@@ -550,6 +551,13 @@ export const api = {
     }),
   listCommandAllows: (id: string) =>
     request<{ items: CommandAllow[] }>(`/api/projects/${id}/command-allows`),
+  listCapabilityAllows: (id: string) =>
+    request<{ items: CapabilityAllow[] }>(`/api/projects/${id}/capability-allows`),
+  revokeCapabilityAllow: (allowId: string, reason?: string) =>
+    request<{ allow_id: string; state: string }>(`/api/capability-allows/${allowId}`, {
+      method: 'DELETE',
+      body: { reason: reason || undefined },
+    }),
   revokeCommandAllow: (allowId: string, reason?: string) =>
     request<{ allow_id: string; state: string }>(`/api/command-allows/${allowId}`, {
       method: 'DELETE',

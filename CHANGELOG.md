@@ -2,6 +2,11 @@
 
 ## Unreleased — public-readiness work
 
+- Standing tool approvals: "⚡ Always allow" on a tool gate writes a revocable, audited
+  capability allow for that agent (`capability_allows`, schema revision 4); hard gates
+  (`net.post`/`fs.delete`/`git.push`) keep asking every time.
+- The task drawer renders weighted required-skill refs (`{skill, weight}`) instead of
+  crashing the screen; mock fixtures and wire types aligned.
 - Hardened workspace containment, current-policy checks, approval expiry and one-use grants.
 - Added serialized spending reservations and a shared model-accounting gateway.
 - Verify saved artifact bytes and hashes; distinguish simulated output from Live work.

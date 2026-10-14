@@ -11,8 +11,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from cryptography.fernet import Fernet
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import desc, func, or_, select, update
 
+from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import (
     Agent,
@@ -649,6 +650,78 @@ async def verify_audit_chain() -> dict:
 
 
 # ── approvals ────────────────────────────────────────────────────────────────────────
+async def standing_allow_hit(project_id: str, *, capability: str, agent_id: str | None) -> str | None:
+    """The owner's standing tool approval: a human chose "Always allow" for this
+    agent + capability, so the gate skips asking until the entry is revoked."""
+    from crew.core.models import CapabilityAllow
+
+    async with session_scope() as s:
+        q = select(CapabilityAllow).where(
+            CapabilityAllow.project_id == project_id,
+            CapabilityAllow.capability == capability,
+            CapabilityAllow.revoked_at.is_(None))
+        if agent_id is None:
+            q = q.where(CapabilityAllow.agent_id.is_(None))
+        else:
+            q = q.where((CapabilityAllow.agent_id == agent_id) | (CapabilityAllow.agent_id.is_(None)))
+        row = (await s.scalars(q.limit(1))).first()
+    return row.id if row else None
+
+
+async def allow_capability(project_id: str, *, capability: str, agent_id: str | None, note: str,
+                           decided_by: str, source_approval_id: str | None = None) -> str:
+    """Write a standing approval for one agent + capability. Only a human grant calls
+    this; agents can request approvals but never write here themselves."""
+    from crew.core.models import CapabilityAllow
+
+    async with session_scope() as s:
+        row = CapabilityAllow(project_id=project_id, capability=capability, agent_id=agent_id,
+                              note=note, created_by=decided_by, source_approval_id=source_approval_id)
+        s.add(row)
+        await s.flush()
+        aid = row.id
+    await audit(actor_kind="user", actor_id=decided_by, action="security.allow.added",
+                resource_kind="capability_allow", resource_id=aid, reason=capability)
+    await ev.emit("security.capability_allow.added", project_id=project_id, severity="notice",
+                  title=f"standing approval added: {capability}",
+                  payload={"capability": capability, "allow_id": aid}, actor=decided_by)
+    return aid
+
+
+async def revoke_capability_allow(allow_id: str, *, decided_by: str, reason: str = "") -> bool:
+    from crew.core.models import CapabilityAllow
+
+    async with session_scope() as s:
+        row = await s.get(CapabilityAllow, allow_id)
+        if row is None or row.revoked_at is not None:
+            return False
+        row.revoked_at = datetime.now(UTC)
+        row.revoke_reason = reason
+        s.add(row)
+        project_id, capability, agent_id = row.project_id, row.capability, row.agent_id
+    await audit(actor_kind="user", actor_id=decided_by, action="security.allow.removed",
+                resource_kind="capability_allow", resource_id=allow_id, reason=reason or capability)
+    await ev.emit("security.capability_allow.removed", project_id=project_id, severity="notice",
+                  title=f"standing approval revoked: {capability}",
+                  payload={"capability": capability, "allow_id": allow_id, "agent_id": agent_id},
+                  actor=decided_by)
+    return True
+
+
+async def list_capability_allows(project_id: str, include_revoked: bool = False) -> list[dict]:
+    from crew.core.models import CapabilityAllow
+
+    async with session_scope() as s:
+        q = select(CapabilityAllow).where(CapabilityAllow.project_id == project_id)
+        if not include_revoked:
+            q = q.where(CapabilityAllow.revoked_at.is_(None))
+        rows = (await s.scalars(q.order_by(desc(CapabilityAllow.created_at)).limit(200))).all()
+    return [{"id": r.id, "capability": r.capability, "agent_id": r.agent_id, "note": r.note,
+             "created_by": r.created_by, "created_at": ev.utc_iso(r.created_at),
+             "revoked_at": ev.utc_iso(r.revoked_at) if r.revoked_at else None,
+             "revoke_reason": r.revoke_reason} for r in rows]
+
+
 async def request_approval(project_id: str, *, capability: str, agent_id: str | None,
                            task_id: str | None, request: dict, ttl_minutes: int = 120) -> str:
     request = redactor.clean(request)

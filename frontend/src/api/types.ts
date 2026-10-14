@@ -590,6 +590,9 @@ export type TaskState =
 
 export type Effort = 'S' | 'M' | 'L' | 'XL';
 
+/** A task's required skill on the wire: the planner ships {skill, weight} refs. */
+export type SkillRef = { skill: string; weight?: number } | string;
+
 export interface Task {
   id: string;
   run_id?: string | null;
@@ -600,7 +603,7 @@ export interface Task {
   title: string;
   description?: string;
   deliverable?: string;
-  required_skills?: string[];
+  required_skills?: SkillRef[];
   acceptance_criteria?: string[];
   depends_on?: string[];
   output_contract?: Record<string, unknown>;
@@ -927,6 +930,18 @@ export interface Approval {
 
 /** A standing "always allow" grant (ADR 0017): an approved risky command that runs
  * without re-asking. Created only by a human grant; revocable. */
+/** A standing tool approval ("⚡ Always allow" on a tool gate). */
+export interface CapabilityAllow {
+  id: string;
+  capability: string;
+  agent_id?: string | null;
+  note?: string;
+  created_by?: string;
+  created_at?: string;
+  revoked_at?: string | null;
+  revoke_reason?: string;
+}
+
 export interface CommandAllow {
   id: string;
   command: string;

@@ -236,6 +236,8 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "security.command.reviewed": ("cmd", "verdict"),
     "security.command.allowed": ("cmd", "via"),
     "security.allow.added": ("command",),
+    "security.capability_allow.added": ("capability", "allow_id"),
+    "security.capability_allow.removed": ("capability", "allow_id"),
     "security.allow.removed": ("command",),
     "security.sandbox.unavailable": ("tool",),
     "user.steering": ("target_kind", "text"),

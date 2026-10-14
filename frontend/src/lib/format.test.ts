@@ -118,3 +118,12 @@ describe('percent, duration, relative time', () => {
     expect(parseTs(naive)).toBe(Date.parse(zoned));
   });
 });
+
+
+it('skillLabel renders weighted refs and tolerates legacy strings', async () => {
+  const { skillLabel } = await import('./format');
+  expect(skillLabel('analytics')).toBe('analytics');
+  expect(skillLabel({ skill: 'critical-review', weight: 0.5 })).toBe('critical-review ×0.5');
+  expect(skillLabel({ skill: 'docs', weight: 1 })).toBe('docs');
+  expect(skillLabel({ skill: 'docs' })).toBe('docs');
+});

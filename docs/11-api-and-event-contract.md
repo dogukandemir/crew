@@ -226,9 +226,11 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects/{id}/approvals` | pending/all |
-| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}` — `always: true` on a command review also writes the always-allow entry (audited, revocable) |
+| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}` — `always: true` on a command review writes the always-allow entry; on a TOOL approval (request carries `tool`) it writes a standing capability allow for that agent + capability — hard gates (`net.post`/`fs.delete`/`git.push`) never receive one (both audited, revocable) |
 | GET | `/api/projects/{id}/command-allows` | the owner's always-allow list (ADR 0017) |
 | DELETE | `/api/command-allows/{id}` | revoke an allow entry (audited) |
+| GET | `/api/projects/{id}/capability-allows` | standing tool approvals (`capability` + `agent_id`; audited, revocable) |
+| DELETE | `/api/capability-allows/{id}` | revoke a standing tool approval (audited) |
 | GET | `/api/projects/{id}/audit` | this project's audit entries (paginated; rows carry `project_id`) |
 | GET | `/api/audit` | the whole hash chain across projects (admin-only) |
 | POST | `/api/system/audit/verify` | verify hash chain |

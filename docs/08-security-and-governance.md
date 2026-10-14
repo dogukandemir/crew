@@ -80,6 +80,14 @@ time-boxed, single-use capability token attached to that task (not a permanent g
 approvals (`kind: command_review|content_review`, §6.7) ride the same flow, and a command grant
 may choose **Always allow** instead of one-shot — a standing, audited, revocable list entry.
 
+Tool gates (a `REQUIRE_APPROVAL` outcome for a tool name, e.g. a supervised agent's
+`python_eval`) offer **⚡ Always allow** too: the grant writes a *standing capability allow*
+for that agent + capability (`capability_allows`, schema revision 4), and the gate skips
+asking for that agent until the entry is revoked in Settings. Hard gates — `net.post`,
+`fs.delete`, `git.push` (`ALWAYS_APPROVAL`) — deliberately never receive a standing allow;
+they ask every time. Adds/revokes emit `security.capability_allow.added|removed` and land in
+the audit chain.
+
 ## 5. Sandboxing
 
 | Capability | Enforcement (ADR 0017: the container or a refusal — never the host) |
@@ -123,7 +131,9 @@ host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017)
    Risky commands (`shell_run`, `python_eval`) never run before a decision: the allowed ways
    are a clean review, a granted approval on file for that exact command, or the project's
    **always-allow list** — created only by an explicit "Always allow" grant, revocable in
-   Settings, and every add/revoke is audited (`security.allow.added|removed`).
+   Settings, and every add/revoke is audited (`security.allow.added|removed`). A standing
+   capability allow (tool gates) lifts only the ask for that agent + capability; `net.post`,
+   `fs.delete` and `git.push` still ask every time.
 
 ## 7. Network egress
 

@@ -157,4 +157,11 @@ export function budgetFraction(
   return Math.max(0, Math.min(1, spend / cap));
 }
 
+/** A required-skill ref: the backend ships {skill, weight} objects (docs/03 §1);
+ * plain strings are tolerated so a stale payload can never crash the renderer. */
+export function skillLabel(s: { skill: string; weight?: number } | string): string {
+  if (typeof s === 'string') return s;
+  return typeof s.weight === 'number' && s.weight !== 1 ? `${s.skill} ×${s.weight}` : s.skill;
+}
+
 export { UNKNOWN };

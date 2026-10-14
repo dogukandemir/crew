@@ -33,8 +33,10 @@ from crew.core.security import (
     redactor,
     request_approval,
     scan_injection,
+    standing_allow_hit,
 )
 from crew.core.settings import settings
+from crew.domain.catalog import ALWAYS_APPROVAL
 from crew.domain.enums import Capability, PolicyOutcome
 
 log = logging.getLogger("crew.tools")
@@ -815,13 +817,27 @@ class ToolInvoker:
             return {"ok": False, "error": "policy_denied", "detail": decision.reason}
         if decision.outcome == PolicyOutcome.REQUIRE_APPROVAL:
             invocation = {"tool": name, "args": args, "run_id": ctx.run_id}
+            # A human's standing approval ("⚡ Always allow") covers this agent +
+            # capability until revoked. The hard gates (net_post / fs_delete /
+            # git_push) deliberately keep asking every time.
+            standing = None
+            if spec.capability not in ALWAYS_APPROVAL:
+                standing = run_on_loop(standing_allow_hit(ctx.project_id,
+                                                          capability=spec.capability.value,
+                                                          agent_id=ctx.agent.id if ctx.agent else None))
             # The gate opens when a decision is ALREADY on file. Without this half the
             # human's "granted" was recorded and then ignored: the retried call was denied
             # forever and the approval queue was theatre (docs/17 batch 1).
-            if run_on_loop(approval_granted(ctx.project_id,
-                                            agent_id=ctx.agent.id if ctx.agent else None,
-                                            capability=spec.capability.value, task_id=ctx.task_id,
-                                            invocation=invocation)):
+            if standing:
+                run_on_loop(ev.emit("policy.approval.used", project_id=ctx.project_id, task_id=ctx.task_id,
+                                    agent_id=ctx.agent.id if ctx.agent else None, severity="notice",
+                                    title=f"standing approval: {spec.capability.value}",
+                                    payload={"capability": spec.capability.value, "tool": name,
+                                             "allow_id": standing}))
+            elif run_on_loop(approval_granted(ctx.project_id,
+                                              agent_id=ctx.agent.id if ctx.agent else None,
+                                              capability=spec.capability.value, task_id=ctx.task_id,
+                                              invocation=invocation)):
                 run_on_loop(ev.emit("policy.approval.used", project_id=ctx.project_id, task_id=ctx.task_id,
                                     agent_id=ctx.agent.id if ctx.agent else None, severity="notice",
                                     title=f"approval on file: {spec.capability.value}",

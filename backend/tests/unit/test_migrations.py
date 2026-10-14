@@ -24,6 +24,7 @@ def test_migrate_upgrades_a_pre_review_database(tmp_path):
         # simulate the previous release: the column (and its index) absent, stamped at 2
         conn.exec_driver_sql("DROP INDEX IF EXISTS ix_audit_log_project_id")
         conn.exec_driver_sql("ALTER TABLE audit_log DROP COLUMN project_id")
+        conn.exec_driver_sql("DROP TABLE IF EXISTS capability_allows")
         conn.exec_driver_sql("CREATE TABLE IF NOT EXISTS crew_schema_version "
                              "(version INTEGER PRIMARY KEY)")
         conn.exec_driver_sql("INSERT INTO crew_schema_version(version) VALUES (2)")
@@ -31,9 +32,11 @@ def test_migrate_upgrades_a_pre_review_database(tmp_path):
     with engine.begin() as conn:
         migrate(conn, Base.metadata, _add_missing_columns)  # must NOT raise
         cols = {c["name"] for c in inspect(conn).get_columns("audit_log")}
+        tables = set(inspect(conn).get_table_names())
         version = conn.exec_driver_sql("SELECT MAX(version) FROM crew_schema_version").scalar_one()
 
     assert "project_id" in cols, "revision 3 re-adds the additive column"
+    assert "capability_allows" in tables, "revision 4 creates the standing-approval table"
     assert version == CURRENT_VERSION, "the upgrade is stamped"
     engine.dispose()
 

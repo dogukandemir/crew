@@ -7,6 +7,10 @@ Revision 3 (2026-10 review round) is purely additive: the audit scope column
 (`audit_log.project_id`) for databases that predate it. Caught live when the app was
 started against a real pre-review data dir: the strict mismatch check fired because no
 revision carried the ADD COLUMN.
+
+Revision 4 (standing tool approvals) is additive too: the `capability_allows` table.
+The strict check walks every model table, so a NEW table needs its revision or old
+databases fail the check before they can be upgraded.
 """
 
 import sqlite3
@@ -15,7 +19,7 @@ from pathlib import Path
 
 from sqlalchemy import inspect
 
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 
 
 def backup_before_upgrade(database: str) -> Path | None:
@@ -55,6 +59,12 @@ def migrate(connection, metadata, legacy_upgrade) -> None:
             connection.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_audit_log_project_id ON audit_log (project_id)")
         connection.exec_driver_sql("INSERT INTO crew_schema_version(version) VALUES (3)")
+    if version < 4:
+        # Additive: the standing tool-approval table (capability allows). A NEW table
+        # must be created HERE or the strict mismatch check below trips on databases
+        # that predate the model.
+        metadata.tables["capability_allows"].create(connection, checkfirst=True)
+        connection.exec_driver_sql("INSERT INTO crew_schema_version(version) VALUES (4)")
     # A partial schema is an error, not a fresh database that can silently hide data loss.
     inspector = inspect(connection)
     for table in metadata.sorted_tables:

@@ -395,6 +395,7 @@ export interface Run {
   tokens_in: number;
   tokens_out: number;
   triggered_by?: 'user' | 'schedule';
+  mode?: 'interactive' | 'autonomous' | string | null;
   report?: RunReport | null;
 }
 

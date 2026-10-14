@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   WORKSPACE_TAB_LABEL,
   defaultWorkspaceTab,
@@ -43,6 +43,26 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
   const openApprovals = useUi((s) => s.setApprovalsOpen);
   const scrollRef = useRef<HTMLDivElement>(null);
   const project = useProject(tab.projectId);
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<number | undefined>(undefined);
+
+  // The run-summary action must be VISIBLE even when its target tab is already the
+  // current one: scroll the panel to the top and flash it once, whatever it was.
+  const goto = useCallback(
+    (id: WorkspaceTab) => {
+      setInternalTab(tab.id, id);
+      const el = scrollRef.current;
+      if (el) el.scrollTop = 0;
+      requestAnimationFrame(() => {
+        const again = scrollRef.current;
+        if (again) again.scrollTop = 0;
+      });
+      setFlash(true);
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+      flashTimer.current = window.setTimeout(() => setFlash(false), 950);
+    },
+    [setInternalTab, tab.id],
+  );
 
   // Restore the scroll position captured for this tab.
   useEffect(() => {
@@ -77,7 +97,7 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ProjectHeader projectId={tab.projectId} />
-      {project.data && project.data.kind !== 'company' && <RunSummary project={project.data} navigate={id => setInternalTab(tab.id, id)} />}
+      {project.data && project.data.kind !== 'company' && <RunSummary project={project.data} navigate={goto} />}
       <div className="flex items-center justify-between border-b border-slate-800/70 px-2">
         {project.data ? (
           <WorkspaceNavigation
@@ -106,6 +126,7 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
           'min-h-0 flex-1',
           // The office owns its own canvas and panning; the data panels scroll.
           current === 'office' || current === 'hq' ? 'overflow-y-auto' : 'overflow-y-auto px-3 py-3',
+          flash && 'crew-flash',
         )}
       >
         {project.isError ? <PanelError error={project.error} onRetry={() => void project.refetch()} label="Project" /> : project.data ? (

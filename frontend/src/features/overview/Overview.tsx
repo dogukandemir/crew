@@ -16,6 +16,7 @@ import {
   useOrg,
   useProject,
   useProjectMetrics,
+  useRuns,
   useTasks,
 } from '../../app/hooks';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
@@ -200,7 +201,18 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
   const [goal, setGoal] = useState(defaultGoal);
   const editedGoal = useRef(false);
   useEffect(() => { if (!editedGoal.current) setGoal(defaultGoal); }, [defaultGoal]);
+  const runs = useRuns(projectId);
+  // The form opens on the project's ACTUAL last-run mode: the select is not a second
+  // source of truth for how the org runs (it used to reset to Guided on every mount,
+  // which read as if the chosen Autonomous mode had flipped back).
+  const lastMode = runs.data?.[0]?.mode;
   const [mode, setMode] = useState<'interactive' | 'autonomous'>('interactive');
+  const modeTouched = useRef(false);
+  useEffect(() => {
+    if (!modeTouched.current && (lastMode === 'interactive' || lastMode === 'autonomous')) {
+      setMode(lastMode);
+    }
+  }, [lastMode]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [skipAsk, setSkipAsk] = useState(false);
   const qc = useQueryClient();
@@ -248,7 +260,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
               : 'Keeps you involved at run checkpoints. Tool approvals and spending caps still apply.'
           }
         >
-          <Select value={mode} onChange={(e) => setMode(e.target.value as 'interactive' | 'autonomous')}>
+          <Select value={mode} onChange={(e) => { modeTouched.current = true; setMode(e.target.value as 'interactive' | 'autonomous'); }}>
             <option value="interactive">Guided</option>
             <option value="autonomous">Autonomous</option>
           </Select>

@@ -1026,8 +1026,9 @@ async def run_dossier(run_id: str) -> dict:
         events = (await s.scalars(select(Event).where(Event.run_id == run_id)
                                   .order_by(Event.seq).limit(5000))).all()
     return {"run": run_dict(r), "tasks": [task_dict(t) for t in tasks],
-            "rewards": [{"agent_id": x.agent_id, "role": x.role_in_task, "reward": x.reward,
-                         "verdict": x.verdict, "components": x.components} for x in rewards],
+            "rewards": [{"id": x.id, "agent_id": x.agent_id, "role": x.role_in_task,
+                         "reward": x.reward, "verdict": x.verdict, "components": x.components}
+                        for x in rewards],
             "events": [ev.event_to_dict(e) for e in events]}
 
 
@@ -1335,8 +1336,9 @@ async def get_task(task_id: str) -> dict:
         out["verification"] = ([{"verdict": v.verdict, "method": v.method, "checks": v.checks,
                                  "rubric": v.rubric, "confidence": v.confidence,
                                  "created_at": ev.utc_iso(v.created_at)} for v in ver] or [None])[0]
-        out["rewards"] = [{"agent_id": r.agent_id, "role": r.role_in_task, "reward": r.reward,
-                           "verdict": r.verdict, "components": r.components} for r in rewards]
+        out["rewards"] = [{"id": r.id, "agent_id": r.agent_id, "role": r.role_in_task,
+                           "reward": r.reward, "verdict": r.verdict, "components": r.components}
+                          for r in rewards]
         out["artifacts"] = [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256,
                             "kind": a.kind} for a in arts]
     return out

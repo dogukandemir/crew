@@ -273,8 +273,8 @@ export function TaskDrawer({
               <p className="text-xs text-slate-500">No reward events for this task yet.</p>
             ) : (
               <ul className="space-y-1 text-xs">
-                {t.rewards!.map((r) => (
-                  <li key={r.id} className="rounded border border-slate-700/50 px-2 py-1">
+                {t.rewards!.map((r, i) => (
+                  <li key={r.id ?? `${r.agent_id}-${i}`} className="rounded border border-slate-700/50 px-2 py-1">
                     <div className="flex items-center gap-2">
                       <Badge tone={(r.reward ?? 0) >= 0 ? 'success' : 'danger'}>
                         {(r.reward ?? 0).toFixed(3)}

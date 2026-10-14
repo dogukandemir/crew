@@ -7,6 +7,7 @@ import { TaskDrawer } from './TaskDrawer';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const TASK = {
@@ -28,12 +29,12 @@ const TASK = {
   required_skills: [{ skill: 'critical-review', weight: 0.5 }, { skill: 'technical-writing' }],
 };
 
-function stubFetch() {
+function stubFetch(task: unknown = TASK) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: unknown) => {
       const u = String(url);
-      let body: unknown = TASK;
+      let body: unknown = task;
       if (/\/artifacts$/.test(u)) body = { items: [] };
       else if (/\/org$/.test(u)) body = { root: { kind: 'org', id: 'root', name: 'Org', children: [] } };
       else if (/\/projects\/p1\/tasks$/.test(u)) body = { items: [] };
@@ -60,18 +61,25 @@ it('renders weighted skill refs instead of crashing the screen', async () => {
 });
 
 it('still renders legacy plain-string skills', async () => {
-  const task = { ...TASK, required_skills: ['analytics'] };
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: unknown) => {
-      const u = String(url);
-      let body: unknown = task;
-      if (/\/artifacts$/.test(u)) body = { items: [] };
-      else if (/\/org$/.test(u)) body = { root: { kind: 'org', id: 'root', name: 'Org', children: [] } };
-      else if (/\/projects\/p1\/tasks$/.test(u)) body = { items: [] };
-      return new Response(JSON.stringify(body), { status: 200 });
-    }),
-  );
+  stubFetch({ ...TASK, required_skills: ['analytics'] });
   renderDrawer();
   expect(await screen.findByText('analytics')).toBeTruthy();
+});
+
+it('renders reward rows even when a payload omits the id — no key warning', async () => {
+  // The live console showed "Each child in a list should have a unique key prop"
+  // because reward rows shipped {agent_id, role, reward} without their id.
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  stubFetch({
+    ...TASK,
+    rewards: [
+      { agent_id: 'a1', role_in_task: 'producer', reward: -0.261, components: { quality: 0.1 } },
+      { agent_id: 'a2', role_in_task: 'verifier', reward: -0.056 },
+    ],
+  });
+  renderDrawer();
+  expect(await screen.findByText('producer')).toBeTruthy();
+  expect(screen.getByText('verifier')).toBeTruthy();
+  const keyWarnings = spy.mock.calls.filter((c) => String(c[0]).includes('unique "key" prop'));
+  expect(keyWarnings.length).toBe(0);
 });

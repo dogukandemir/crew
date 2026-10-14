@@ -129,3 +129,48 @@ async def test_friction_off_means_a_clean_hiring_wave(bound_loop, project):
             Event.type == "hiring.candidate.proposed"))).all()
     assert not rejected, "no drama when friction is off"
     assert proposed, "but the interviews still happen — one candidate per opening"
+
+
+@pytest.mark.asyncio
+async def test_rejected_names_are_never_re_drawn_by_a_later_opening(monkeypatch, bound_loop, project):
+    """CI caught a rejected candidate returning as a hire in a later opening.
+
+    The agent-name set alone is not enough: everyone already ON the hiring record
+    (proposed / rejected) must be excluded from later draws, or a person the record
+    rejected walks back in through the next opening.
+    """
+    from crew.domain import soul as soul_mod
+    from crew.domain.catalog import RoleSpec
+    from crew.domain.enums import Grade
+
+    picked_excluded: list[set[str]] = []
+    counter = {"n": 0}
+
+    def fake_pick(rng, excluded):
+        picked_excluded.append(set(excluded))
+        counter["n"] += 1
+        return ("pool", "First", "Last", f"Person {counter['n']}")
+
+    monkeypatch.setattr(soul_mod, "pick_name", fake_pick)
+
+    async with session_scope() as s:
+        p = await s.get(Project, project["id"])
+        p.settings = {**(p.settings or {}), "hr_friction": 1.0}
+        s.add(p)
+
+    spec = RoleSpec.from_template(Role.WORKER, grade=Grade.MID, skills=["python"])
+    await hiring.hr_hire(p, spec=spec, run_id="r-draw1", actor="test")
+
+    async with session_scope() as s:
+        rejected1 = [(e.payload or {}).get("candidate") for e in
+                     (await s.scalars(select(Event).where(
+                         Event.project_id == project["id"],
+                         Event.type == "hiring.candidate.rejected"))).all()]
+    rejected1 = [n for n in rejected1 if n]
+    assert rejected1, "friction=1 must interview with rejections"
+
+    picked_excluded.clear()
+    await hiring.hr_hire(p, spec=spec, run_id="r-draw2", actor="test")
+    seen = set().union(*picked_excluded) if picked_excluded else set()
+    assert set(rejected1) <= seen, (
+        f"a rejected candidate was re-drawn by the next opening: {rejected1} vs excluded {seen}")

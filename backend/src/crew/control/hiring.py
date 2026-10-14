@@ -23,7 +23,7 @@ from sqlalchemy import select
 
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Department, Project
+from crew.core.models import Agent, Department, Event, Project
 from crew.domain import soul as soul_mod
 from crew.domain.catalog import RoleSpec
 from crew.domain.enums import ModelTier, Role
@@ -245,6 +245,18 @@ async def hr_hire(project: Project, *, spec: RoleSpec, run_id: str, actor: str,
     async with session_scope() as s:
         existing = set((await s.scalars(select(Agent.name).where(
             Agent.project_id == project.id))).all())
+        # A rejected candidate is a person on the record, not a free name: a later
+        # opening must never re-draw someone this project already interviewed.
+        # (CI caught the collision: only agent names were excluded, so a rejected
+        # candidate came back as the next opening's hire.)
+        recorded = (await s.scalars(select(Event.payload).where(
+            Event.project_id == project.id,
+            Event.type.in_(("hiring.candidate.proposed", "hiring.candidate.rejected"))))).all()
+
+    for payload in recorded:
+        name = (payload or {}).get("candidate")
+        if isinstance(name, str) and name:
+            existing.add(name)
 
     flaws = ["skill_shortfall", "grade_overreach", "profile_clone", "vision_conflict"]
     rng.shuffle(flaws)

@@ -211,10 +211,10 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   return parsed0 as T;
 }
 
-/** Assemble the write-op body from docs/11 §1 (command envelope). */
-function cmdBody(payload?: unknown, reason?: string): CommandBody {
+/** Assemble a flat {reason} control body. Endpoints take plain models with
+ * extra="forbid" — a payload envelope is rejected (review 2026-10-14). */
+function cmdBody(reason?: string): CommandBody {
   const body: CommandBody = {};
-  if (payload !== undefined) body.payload = payload;
   if (reason) body.reason = reason;
   return body;
 }
@@ -325,7 +325,7 @@ export const api = {
   killProject: (id: string, reason?: string) =>
     request<CommandAck>(`/api/projects/${id}/kill`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
   archiveProject: (id: string) =>
     request<CommandAck>(`/api/projects/${id}`, { method: 'DELETE' }),
@@ -337,10 +337,13 @@ export const api = {
     request<CommandAck>(`/api/projects/${id}/runs`, { method: 'POST', body: input }),
   listRuns: (id: string) => request<Paged<Run>>(`/api/projects/${id}/runs`),
   getRun: (runId: string) => request<Run>(`/api/runs/${runId}`),
-  answerRun: (runId: string, answers: unknown) =>
-    request<CommandAck>(`/api/runs/${runId}/answer`, { method: 'POST', body: cmdBody(answers) }),
+  answerRun: (runId: string, answers: string[]) =>
+    request<CommandAck>(`/api/runs/${runId}/answer`, {
+      method: 'POST',
+      body: { answers, confirm: true },
+    }),
   steerRun: (runId: string, text: string) =>
-    request<CommandAck>(`/api/runs/${runId}/steer`, { method: 'POST', body: cmdBody({ text }) }),
+    request<CommandAck>(`/api/runs/${runId}/steer`, { method: 'POST', body: { text } }),
   cancelRun: (runId: string) =>
     request<CommandAck>(`/api/runs/${runId}/cancel`, { method: 'POST', body: cmdBody() }),
 
@@ -364,7 +367,7 @@ export const api = {
   closeSquad: (squadId: string, reassignTo?: string) =>
     request<CommandAck>(`/api/squads/${squadId}/close`, {
       method: 'POST',
-      body: cmdBody({ reassign_to: reassignTo }),
+      body: { reassign_to: reassignTo },
     }),
   hireAgent: (
     id: string,
@@ -376,25 +379,25 @@ export const api = {
   promoteAgent: (agentId: string, reason: string) =>
     request<CommandAck>(`/api/agents/${agentId}/promote`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
   demoteAgent: (agentId: string, reason: string) =>
     request<CommandAck>(`/api/agents/${agentId}/demote`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
   probationAgent: (agentId: string, reason: string) =>
     request<CommandAck>(`/api/agents/${agentId}/probation`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
   fireAgent: (agentId: string, reason?: string) =>
     request<CommandAck>(`/api/agents/${agentId}/fire`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
   messageAgent: (agentId: string, text: string) =>
-    request<CommandAck>(`/api/agents/${agentId}/message`, { method: 'POST', body: cmdBody({ text }) }),
+    request<CommandAck>(`/api/agents/${agentId}/message`, { method: 'POST', body: { text } }),
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
   listTasks: (
@@ -416,16 +419,16 @@ export const api = {
   ) => request<Task>(`/api/projects/${id}/tasks`, { method: 'POST', body: input }),
   getTask: (taskId: string) => request<Task>(`/api/tasks/${taskId}`),
   retryTask: (taskId: string, reason?: string) =>
-    request<CommandAck>(`/api/tasks/${taskId}/retry`, { method: 'POST', body: cmdBody(undefined, reason) }),
+    request<CommandAck>(`/api/tasks/${taskId}/retry`, { method: 'POST', body: cmdBody(reason) }),
   cancelTask: (taskId: string, reason?: string) =>
-    request<CommandAck>(`/api/tasks/${taskId}/cancel`, { method: 'POST', body: cmdBody(undefined, reason) }),
+    request<CommandAck>(`/api/tasks/${taskId}/cancel`, { method: 'POST', body: cmdBody(reason) }),
   reassignTask: (taskId: string, agentId: string, reason?: string) =>
     request<CommandAck>(`/api/tasks/${taskId}/reassign`, {
       method: 'POST',
-      body: cmdBody({ assignee_agent_id: agentId }, reason),
+      body: { agent_id: agentId, reason: reason || undefined },
     }),
   escalateTask: (taskId: string, reason: string) =>
-    request<CommandAck>(`/api/tasks/${taskId}/escalate`, { method: 'POST', body: cmdBody(undefined, reason) }),
+    request<CommandAck>(`/api/tasks/${taskId}/escalate`, { method: 'POST', body: cmdBody(reason) }),
   listTaskArtifacts: (taskId: string) =>
     request<Paged<Artifact>>(`/api/tasks/${taskId}/artifacts`),
 
@@ -452,7 +455,7 @@ export const api = {
   overrideDecision: (decisionId: string, reason: string) =>
     request<CommandAck>(`/api/decisions/${decisionId}/override`, {
       method: 'POST',
-      body: cmdBody(undefined, reason),
+      body: cmdBody(reason),
     }),
 
   // ── Brains ─────────────────────────────────────────────────────────────────
@@ -477,12 +480,12 @@ export const api = {
   supersedeEntry: (entryId: string, newEntryId: string, reason: string) =>
     request<CommandAck>(`/api/entries/${entryId}/supersede`, {
       method: 'POST',
-      body: cmdBody({ new_entry_id: newEntryId, reason }),
+      body: { new_entry_id: newEntryId, reason },
     }),
   promoteEntry: (entryId: string, toBrainId: string, rationale: string) =>
     request<CommandAck>(`/api/entries/${entryId}/promote`, {
       method: 'POST',
-      body: cmdBody({ to_brain_id: toBrainId, rationale }),
+      body: { to_brain_id: toBrainId },
     }),
   searchBrains: (id: string, query: string) =>
     request<{ hits: BrainSearchHit[] }>(`/api/projects/${id}/brains/search`, {
@@ -533,20 +536,24 @@ export const api = {
       `/api/approvals/${approvalId}/grant`,
       {
         method: 'POST',
-        body: cmdBody({ reason, ttl_minutes: opts?.ttlMinutes, always: opts?.always || undefined }),
+        body: {
+          reason: reason || undefined,
+          ttl_minutes: opts?.ttlMinutes,
+          always: opts?.always || undefined,
+        },
       },
     ),
   denyApproval: (approvalId: string, reason?: string) =>
     request<CommandAck>(`/api/approvals/${approvalId}/deny`, {
       method: 'POST',
-      body: cmdBody({ reason }),
+      body: { reason: reason || undefined },
     }),
   listCommandAllows: (id: string) =>
     request<{ items: CommandAllow[] }>(`/api/projects/${id}/command-allows`),
   revokeCommandAllow: (allowId: string, reason?: string) =>
     request<{ allow_id: string; state: string }>(`/api/command-allows/${allowId}`, {
       method: 'DELETE',
-      body: cmdBody({ reason }),
+      body: { reason: reason || undefined },
     }),
   listAudit: (id: string, cursor?: string) =>
     request<Paged<AuditEntry>>(`/api/projects/${id}/audit`, { query: { cursor } }),

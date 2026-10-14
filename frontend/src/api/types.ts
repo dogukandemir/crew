@@ -53,10 +53,8 @@ export interface Problem {
 }
 
 /** Payload accepted by write endpoints (docs/11 §1, "Command envelope"). */
-export interface CommandBody<P = unknown> {
-  payload?: P;
+export interface CommandBody {
   reason?: string;
-  idempotency_key?: string;
 }
 
 export interface CommandAck {

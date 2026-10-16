@@ -63,5 +63,7 @@ def test_presets_point_the_tiers_and_persist(tmp_path, monkeypatch):
 
 def test_ollama_pricing_is_zero_so_local_never_eats_the_budget():
     from crew.execution.models import router
-    assert router.price("ollama/llama3.2") == (0.0, 0.0)
+    assert router.price("ollama/llama3.2").cache_miss == 0.0
+    assert router.price("ollama/llama3.2").cache_hit == 0.0
+    assert router.price("ollama/llama3.2").output == 0.0
     assert router.estimate_cost_micros("ollama/llama3.2", 10_000, 4_000) == 0

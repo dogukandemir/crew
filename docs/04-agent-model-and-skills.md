@@ -67,6 +67,46 @@ config-only. Escalation on retry may jump one tier regardless of grade.
 at least `reasoning`, a policy check (`decider.min_tier`) refuses a Chief decision from a
 cheap model, preventing "gaming the decider" with an under-powered agent.
 
+### 2a. Thinking mode, and what a token actually costs
+
+DeepSeek made thinking a **request parameter**, not a model, so both routed models run with or
+without it and thinking is ON by default at effort `high`. That default is why the router sends
+the knob explicitly on every DeepSeek call:
+
+| `reasoning_effort` | Effect |
+|--------------------|--------|
+| `none` | thinking off, the cheapest path |
+| `low` / `high` / `max` | thinking on, at that effort (the provider maps `minimal`→`low`, `medium`/`xhigh`→`high`, `ultra`→`max`, and rejects anything else) |
+
+`CREW_REASONING_EFFORT` (default `low`) is validated against that set and applied to DeepSeek
+models only. The planner, the judge and the council's JSON calls run at `none`: they must return
+complete JSON inside a bounded output allowance, and default thinking can spend it before the
+answer starts. In thinking mode the provider ignores `temperature`, and `max_tokens` defaults to
+64K (128K at `max`), so every call keeps the project's explicit cap.
+
+**A ledger number is only useful if it describes the bill.** DeepSeek bills three things
+separately, and prices by time of day (verified 16 October 2026 against
+`api-docs.deepseek.com/quick_start/pricing`, USD per million tokens, peak / off-peak):
+
+| Model | Input, cache hit | Input, cache miss | Output |
+|-------|-----------------:|------------------:|-------:|
+| `deepseek-flash` | 0.006 / 0.003 | 0.30 / 0.15 | 1.20 / 0.60 |
+| `deepseek-v4-pro` | 0.044 / 0.022 | 1.32 / 0.66 | 3.96 / 1.98 |
+
+- **Prefix caching is automatic** for a repeated prefix, and it is the biggest cost lever: the
+  system prompt, the tool schemas and the task context repeat on every ReAct step, so most input
+  tokens bill as hits, roughly 50x cheaper than a miss on Flash. The gateway reads the buckets
+  the provider reports (`prompt_cache_hit_tokens`, surfaced by CrewAI as
+  `prompt_tokens_details.cached_tokens`) and settles on them.
+- **Peak is 01:00-04:00 and 06:00-10:00 UTC, Monday through Friday**; every other hour and the
+  whole weekend bills at half. A call is priced in the window it was billed in.
+- **Thinking tokens bill as output**, the expensive bucket on both models.
+- **Reservations stay conservative**: a pre-flight reservation prices the whole input at the
+  peak cache-miss rate, so a run cannot spend past its cap on a bill nobody expected; the
+  settlement then charges the buckets the provider reported and emits them on `llm.response`.
+- An operator override (`CREW_MODEL_PRICES`) takes `(cache_miss, output)` or
+  `(cache_hit, cache_miss, output)` per model, after checking the provider's own page.
+
 ## 3. Skill registry
 
 - Catalog in `skills` table, seeded from `backend/src/crew/domain/catalog.py` (~60 skills

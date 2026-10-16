@@ -6,6 +6,7 @@ Unknown/failed request usage conservatively consumes the whole reservation.
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from crew.core import events
@@ -13,10 +14,15 @@ from crew.core.db import session_scope
 from crew.core.models import Run
 from crew.core.security import budget
 from crew.execution import lifecycle
-from crew.execution.models import router
+from crew.execution.models import is_peak, router
 
 _limits = None
 _limits_loop = None
+
+
+def _usage_int(summary, name: str) -> int:
+    """A provider usage counter, or 0 when the provider does not report that bucket."""
+    return int(getattr(summary, name, 0) or 0)
 
 
 async def call_model(delegate, *, model: str, messages, project_id: str,
@@ -56,10 +62,14 @@ async def _call_model(delegate, *, model, messages, project_id, agent_id, run_id
     await budget.reserve(project_id, amount_micros=amount, scope_kind=scope_kind, scope_id=scope_id,
                          ref=ref, run_id=run_id, idempotency_key=f"model-reserve:{call_id}")
     charged, tin, tout, usage_state = amount, 0, 0, "unknown_reserved"
+    cached_in, reasoning_tokens = 0, 0
+    now = datetime.now(UTC)  # the moment the provider bills against, which decides peak
+    billed_peak = is_peak(now)
     response_excerpt = ""
     try:
         before = delegate.get_token_usage_summary()
         before_in, before_out = before.prompt_tokens, before.completion_tokens
+        before_cached, before_reasoning = _usage_int(before, "cached_prompt_tokens"), _usage_int(before, "reasoning_tokens")
         # SDK retries are disabled when constructing providers. Bypass the provider's
         # automatic rate-limit retry wrapper: the caller must re-enter this gateway.
         wrapped = getattr(delegate.call, "__wrapped__", None)
@@ -80,17 +90,27 @@ async def _call_model(delegate, *, model, messages, project_id, agent_id, run_id
         after = delegate.get_token_usage_summary()
         response_excerpt = str(result)[:2000]
         tin, tout = max(0, after.prompt_tokens-before_in), max(0, after.completion_tokens-before_out)
+        # The provider bills a prefix-cache hit at a fraction of a miss, and DeepSeek counts
+        # the thinking tokens as output. Both arrive in the usage summary (CrewAI reads
+        # prompt_tokens_details.cached_tokens, which DeepSeek fills alongside its own
+        # prompt_cache_hit_tokens), so settle on the real buckets instead of the estimate.
+        cached_in = max(0, min(tin, _usage_int(after, "cached_prompt_tokens") - before_cached))
+        reasoning_tokens = max(0, _usage_int(after, "reasoning_tokens") - before_reasoning)
         if tin or tout:
-            charged = router.cost_micros(model, tin, tout)
+            charged = router.cost_micros(model, tin, tout, cached_in=cached_in, at=now)
             usage_state = "provider_tokens_estimated_price"
         lifecycle.check_cancelled(run_id)
-        return result, {"cost_micros": charged, "tokens_in": tin, "tokens_out": tout, "usage_state": usage_state}
+        return result, {"cost_micros": charged, "tokens_in": tin, "tokens_out": tout,
+                        "cached_tokens_in": cached_in, "reasoning_tokens": reasoning_tokens,
+                        "peak": billed_peak, "usage_state": usage_state}
     finally:
         await budget.settle(project_id, reserved_micros=amount, actual_micros=charged,
                             scope_kind=scope_kind, scope_id=scope_id, ref=ref,
                             idempotency_key=f"model-settle:{call_id}")
         if on_usage:
-            on_usage({"cost_micros": charged, "tokens_in": tin, "tokens_out": tout, "usage_state": usage_state})
+            on_usage({"cost_micros": charged, "tokens_in": tin, "tokens_out": tout,
+                      "cached_tokens_in": cached_in, "reasoning_tokens": reasoning_tokens,
+                      "peak": billed_peak, "usage_state": usage_state})
         if charged > amount:
             # One call costing more than its estimate is booked, not a stop: the next
             # reservation reads availability from the ledger. Latching the project breaker
@@ -105,6 +125,8 @@ async def _call_model(delegate, *, model, messages, project_id, agent_id, run_id
                           tokens_in=tin, tokens_out=tout,
                           payload={"model": model, "usage_state": usage_state, "call_id": call_id,
                                    "reserved_micros": amount, "charged_micros": charged,
+                                   "cached_tokens_in": cached_in, "reasoning_tokens": reasoning_tokens,
+                                   "peak": billed_peak,
                                    "response_excerpt": response_excerpt})
 
 
@@ -139,6 +161,10 @@ def governed_llm(delegate, req, *, model: str, before_call=None):
             self.total_cost += usage["cost_micros"]
             self.total_in += usage["tokens_in"]
             self.total_out += usage["tokens_out"]
+            # Kept beside the totals so a task report can say how much of the input the
+            # provider served from cache and how much of the output was thinking.
+            self.total_cached_in += usage.get("cached_tokens_in", 0)
+            self.total_reasoning += usage.get("reasoning_tokens", 0)
 
         def call(self, messages, **kwargs):
             if before_call:
@@ -161,4 +187,5 @@ def governed_llm(delegate, req, *, model: str, before_call=None):
     # exact routed provider/model identity, including when a task escalates tiers.
     wrapped = GovernedLLM(model=model, temperature=0.2)
     wrapped.total_cost = wrapped.total_in = wrapped.total_out = 0
+    wrapped.total_cached_in = wrapped.total_reasoning = 0
     return wrapped

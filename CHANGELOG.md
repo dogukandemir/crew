@@ -11,6 +11,20 @@
   exhausted, and the pause names its numbers and the way out in `run.error` plus a
   `budget.paused` event. A model call costing more than its reservation is booked and
   emitted as `budget.overrun` instead of stopping the project (ADR 0019).
+- **The ledger prices what the provider bills**: DeepSeek's rate card now carries its
+  prefix-cache hit bucket and its peak/off-peak windows (peak is 01:00-04:00 and 06:00-10:00
+  UTC, Monday to Friday, and everything else is half price). The gateway settles on the
+  buckets the provider reports, so `llm.response` carries `cached_tokens_in`,
+  `reasoning_tokens` and `peak`, and the system status serves the rate card and the window in
+  force. Reservations still price the whole input at the peak cache-miss rate. On the
+  16 October ledger alone, charging every off-peak call at the peak rate overstated those
+  calls by $0.84 of the $2.99 booked; the cache-hit share was not recorded before this and
+  sits on top.
+- **Thinking mode is a request parameter, and the project sets it on every call**:
+  `CREW_REASONING_EFFORT` accepts the provider's whole set (`none` turns thinking off,
+  `low`/`high`/`max` set the effort, with `minimal`/`medium`/`xhigh`/`ultra` mapped onto it)
+  because the provider's own default is thinking ON at high effort, and the thinking tokens
+  bill as output. The planner, the judge and the council's JSON calls run at `none`.
 - **A workspace write is a deliverable**: `fs_write` records the file it writes as an
   artifact (byte-exact `sha256`, the producer's attempt stamp), so the verifier reads the
   producer's work. Without it the judge saw "0 registered artifact(s)" and failed tasks

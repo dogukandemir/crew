@@ -27,7 +27,7 @@ Types are namespaced so the UI can filter and the replay can reconstruct:
 | `org.*` | `org.department.created`, `org.agent.hired`, `org.agent.promoted`, `org.squad.disbanded` |
 | `task.*` | `task.created`, `task.assigned`, `task.started`, `task.step`, `task.completed`, `task.failed`, `task.escalated` |
 | `agent.*` | `agent.thought`, `agent.message`, `agent.tool.call`, `agent.tool.result`, `agent.delegated`, `agent.escalated` |
-| `llm.*` | `llm.request`, `llm.response`, `llm.error`, `llm.retry` (tokens + cost + latency) |
+| `llm.*` | `llm.request`, `llm.response`, `llm.error`, `llm.retry` (tokens + cost + latency); `llm.response` carries the billed buckets: `cached_tokens_in`, `reasoning_tokens`, `peak` |
 | `council.*` | `council.convened`, `council.position`, `council.round`, `council.decided` |
 | `decision.*` | `decision.recorded`, `decision.overridden` |
 | `reward.*` | `reward.settled`, `reward.penalty`, `reward.rolled_up` |

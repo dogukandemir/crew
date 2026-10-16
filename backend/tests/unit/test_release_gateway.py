@@ -72,3 +72,78 @@ async def test_restart_accounts_for_unknown_usage_once(project):
     async with session_scope() as s:
         p = await s.get(Project, project["id"])
     assert p.reserved_micros == 0 and p.spend_micros == 123
+
+
+class CacheProvider:
+    """Reports the buckets the way the provider does: prompt tokens, a prefix-cache hit, and
+    thinking tokens inside the completion."""
+
+    def __init__(self, prompt=10_000, cached=9_000, completion=1_000):
+        self.calls = 0
+        self.prompt, self.cached, self.completion = prompt, cached, completion
+
+    def get_token_usage_summary(self):
+        return SimpleNamespace(prompt_tokens=self.prompt * self.calls,
+                               completion_tokens=self.completion * self.calls,
+                               cached_prompt_tokens=self.cached * self.calls,
+                               reasoning_tokens=400 * self.calls)
+
+    def call(self, messages):
+        self.calls += 1
+        return "answer"
+
+
+@pytest.mark.asyncio
+async def test_a_prefix_cache_hit_is_billed_at_the_cache_rate(project, monkeypatch):
+    """The ledger has to describe what the provider charges: DeepSeek bills a repeated prefix
+    at the cache-hit rate and halves every rate off-peak. Until 16 October every input token
+    was charged at the peak miss rate, so the screen showed more than the invoice."""
+    from crew.execution import gateway as gw
+    from crew.execution import models as model_mod
+
+    monkeypatch.setattr(gw, "is_peak", lambda at=None: True)          # pin the peak window
+    monkeypatch.setattr(model_mod, "is_peak", lambda at=None: True)
+    provider = CacheProvider()
+    usages = []
+    _, usage = await call_model(provider, model="deepseek/deepseek-flash", messages="hello",
+                                project_id=project["id"], on_usage=usages.append)
+    # 1,000 missed input at $0.30/M + 9,000 cached input at $0.006/M + 1,000 output at $1.20/M
+    assert usage["cost_micros"] == 1_554
+    assert usage["cached_tokens_in"] == 9_000 and usage["reasoning_tokens"] == 400
+    assert usage["peak"] is True
+    async with session_scope() as s:
+        event = (await s.scalars(select(Event).where(Event.project_id == project["id"],
+                                                     Event.type == "llm.response"))).one()
+    assert event.payload["cached_tokens_in"] == 9_000
+    assert event.payload["reasoning_tokens"] == 400
+    assert event.payload["peak"] is True
+    # The same call billed as if nothing had been cached would cost 4,200 micros.
+    assert usage["cost_micros"] < model_mod.router.cost_micros(
+        "deepseek/deepseek-flash", 10_000, 1_000, at=None)
+
+
+@pytest.mark.asyncio
+async def test_the_planner_disables_thinking_on_deepseek(project, monkeypatch):
+    """Planning has to return complete JSON inside a bounded output allowance, and thinking
+    is ON by default at high effort now, so the compact path turns it off explicitly."""
+    import crewai
+
+    from crew.execution import gateway as gw
+
+    captured: dict = {}
+
+    class FakeLLM:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+        def call(self, messages, **kwargs):
+            return "{}"
+
+        def get_token_usage_summary(self):
+            return SimpleNamespace(prompt_tokens=0, completion_tokens=0)
+
+    monkeypatch.setattr(crewai, "LLM", FakeLLM)
+    await gw.complete(project_id=project["id"], model="deepseek/deepseek-flash",
+                      messages=[{"role": "user", "content": "plan the work"}], compact=True)
+    assert captured["reasoning_effort"] == "none"
+    assert captured["max_tokens"] == 4096

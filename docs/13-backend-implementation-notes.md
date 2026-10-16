@@ -237,6 +237,31 @@ visible in the record either way.
 8. **Tool breadth**: `net.post`, `git.push`, `data.sql` are catalogued and policy-gated but not
    implemented, an agent requesting them gets a clear "not granted/approval required" answer.
 
+## Live-run round 2026-10-16 (second pass): thinking modes and the price of a token
+
+Three gaps, all of them about money being reported instead of billed:
+
+- **Thinking is a request parameter now, and its default is on.** DeepSeek's current set is
+  `none` (off) | `low` | `high` | `max`, with `minimal`/`medium`/`xhigh`/`ultra` mapped onto it
+  and the provider's own default being thinking at high effort. `CREW_REASONING_EFFORT` is
+  validated against that set (the old validator rejected `none`, i.e. the only way to say
+  "no thinking"), the router keeps sending the knob on every DeepSeek call, and the planner,
+  judge and council JSON calls run with thinking off. Thinking tokens bill as output.
+- **The price table was peak-only and cache-blind.** Every input token was charged at the
+  cache-MISS rate while DeepSeek bills a repeated prefix at a cache-hit rate roughly 50x
+  lower on Flash (measured: a second call with the same 3,133-token prompt reported 2,944
+  cache-hit tokens), and every call was charged at the peak rate while DeepSeek halves its
+  rates outside 01:00-04:00 and 06:00-10:00 UTC on weekdays. `PriceSpec` now carries the three
+  buckets with an off-peak multiplier, `cost_micros(cached_in=..., at=...)` prices a call the
+  way the provider did, and both `prompt_tokens_details.cached_tokens` and DeepSeek's own
+  `prompt_cache_hit_tokens` are read through CrewAI's usage summary.
+- **Reservations stay conservative on purpose.** A pre-flight reservation prices the whole
+  input at the peak cache-miss rate, so the breaker cannot be talked past by an optimistic
+  estimate; the settlement then charges the reported buckets. The overstatement from the peak
+  rule alone, measured over the 16 October `llm.response` rows, was $0.84 of $2.99.
+
+Rows already in the ledger keep the old numbers; only new settlements use the new table.
+
 ## Live-run round 2026-10-16: the money stop, and a deliverable the verifier could not see
 
 The third Launch run paused itself with the envelope half full (cap $6.00, spent $2.99) and

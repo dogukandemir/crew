@@ -230,7 +230,8 @@ def _usage(crew: Any, model: str) -> tuple[int, int, int]:
     metrics = getattr(crew, "usage_metrics", None)
     tin = int(getattr(metrics, "prompt_tokens", 0) or 0)
     tout = int(getattr(metrics, "completion_tokens", 0) or 0)
-    return tin, tout, router.cost_micros(model, tin, tout)
+    cached = int(getattr(metrics, "cached_prompt_tokens", 0) or 0)
+    return tin, tout, router.cost_micros(model, tin, tout, cached_in=cached)
 
 
 def _render(value: Any) -> str:

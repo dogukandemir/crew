@@ -489,6 +489,9 @@ async def system_status() -> dict:
     return {
         "db": await ping(), "projects": projects, "events": events,
         "models": router.available(), "offline_llm": settings.offline_llm,
+        # What the ledger charges right now: the peak window, the rate card and the thinking
+        # effort in force (docs/04 §2), so a spend number on screen can be explained.
+        "pricing": router.pricing_snapshot(),
         "tool_sandbox": settings.tool_sandbox, "max_concurrent_crews": settings.max_concurrent_crews,
         "vault": "configured" if settings.vault_key else "missing",
         "runner": type(select_runner()).__name__,

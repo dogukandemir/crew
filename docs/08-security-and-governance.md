@@ -179,6 +179,9 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
   the next step boundary.
 - Ledger is append-only (`budget_ledger`), reconciled against `llm.*` events; a nightly job
   asserts ledger == sum of events (an integrity test, not a hope).
+- Charges are the provider's own buckets (docs/04 §2a): a prefix-cache hit and an off-peak hour
+  are billed at the provider's published rates, while a reservation stays at the peak
+  cache-miss rate. A meter that overstates the invoice is a bug, not caution.
 - Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill`, sets
   cancel flags + opens the breaker, returns the list of stopped jobs. The UI has one button.
 

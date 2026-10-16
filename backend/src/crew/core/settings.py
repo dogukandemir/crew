@@ -17,6 +17,12 @@ def _a(*names: str) -> AliasChoices:
     return AliasChoices(*names)
 
 
+# The provider's accepted effort values and the legacy spellings it maps onto them
+# (api-docs.deepseek.com/guides/thinking_mode). `none` disables thinking mode.
+_EFFORT_ALIASES = {"none": "none", "minimal": "low", "low": "low", "medium": "high",
+                   "high": "high", "xhigh": "high", "max": "max", "ultra": "max"}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
@@ -61,11 +67,15 @@ class Settings(BaseSettings):
     tier_standard: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_STANDARD", "tier_standard"))
     tier_fast: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_FAST", "tier_fast"))
     tier_embed: str = Field("openai/text-embedding-3-small", validation_alias=_a("CREW_TIER_EMBED", "tier_embed"))
-    # DeepSeek V4 made thinking a request parameter: reasoning_effort (low|high|max).
-    # Applied to DeepSeek models at LLM construction; other providers never see it.
+    # DeepSeek made thinking a request parameter rather than a model: the provider's whole
+    # set is none (thinking off) | low | high | max, thinking is ON BY DEFAULT at high, and
+    # the thinking tokens bill as output. Applied to DeepSeek models only; other providers
+    # never see the knob.
     reasoning_effort: str = Field("low", validation_alias=_a("CREW_REASONING_EFFORT", "reasoning_effort"))
-    model_prices: dict[str, tuple[Annotated[float, Field(ge=0, allow_inf_nan=False)],
-                                  Annotated[float, Field(ge=0, allow_inf_nan=False)]]] = Field(
+    # (cache_miss, output) per million tokens, or (cache_hit, cache_miss, output) when the
+    # provider's published page names a prefix-cache rate. Prices are USD per million tokens
+    # at the provider's PEAK rate; DeepSeek's off-peak halving rides the built-in table.
+    model_prices: dict[str, tuple[Annotated[float, Field(ge=0, allow_inf_nan=False)], ...]] = Field(
         default_factory=dict, validation_alias=_a("CREW_MODEL_PRICES", "model_prices"))
 
     # ── safety rails ──────────────────────────────────────────────────────────
@@ -108,8 +118,19 @@ class Settings(BaseSettings):
     @field_validator("reasoning_effort")
     @classmethod
     def _effort(cls, v: str) -> str:
-        if v not in ("low", "high", "max"):
-            raise ValueError("CREW_REASONING_EFFORT must be one of low|high|max")
+        key = str(v or "").strip().lower()
+        if key not in _EFFORT_ALIASES:
+            raise ValueError("CREW_REASONING_EFFORT must be one of none|low|high|max "
+                             "(aliases: minimal->low, medium/xhigh->high, ultra->max)")
+        return _EFFORT_ALIASES[key]
+
+    @field_validator("model_prices")
+    @classmethod
+    def _prices(cls, v: dict) -> dict:
+        for model, entry in (v or {}).items():
+            if len(entry) not in (2, 3):
+                raise ValueError(f"CREW_MODEL_PRICES[{model}] must be two or three numbers "
+                                 "(cache_miss, output) or (cache_hit, cache_miss, output)")
         return v
 
     def model_post_init(self, __context) -> None:  # noqa: D105

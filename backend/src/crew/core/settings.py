@@ -69,7 +69,10 @@ class Settings(BaseSettings):
         default_factory=dict, validation_alias=_a("CREW_MODEL_PRICES", "model_prices"))
 
     # ── safety rails ──────────────────────────────────────────────────────────
-    max_concurrent_crews: int = Field(2, ge=1, le=64, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
+    # Four independent tasks in one wave is the normal shape of a deliverable plan
+    # (the Launch pack: four documents that do not depend on each other). At 2 they
+    # queued in pairs and the run took 28 minutes; the gate below shares this number.
+    max_concurrent_crews: int = Field(4, ge=1, le=64, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
     max_agents_per_project: int = Field(24, ge=1, le=1000, validation_alias=_a("CREW_MAX_AGENTS_PER_PROJECT", "max_agents_per_project"))
     max_departments_per_project: int = Field(6, ge=1, le=100, validation_alias=_a("CREW_MAX_DEPARTMENTS_PER_PROJECT", "max_departments_per_project"))
     default_project_budget_usd: float = Field(10.0, gt=0, allow_inf_nan=False, validation_alias=_a("CREW_DEFAULT_PROJECT_BUDGET_USD", "default_project_budget_usd"))

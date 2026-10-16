@@ -164,12 +164,19 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
 
 - Caps exist at **three scopes**: project (hard), department (envelope), agent (per-run /
   per-day). The effective cap is the minimum of the three.
-- Breaching a soft threshold (80%) emits `budget.warning`; breaching hard → reservation is
-  refused, the job fails with a typed `BudgetExceeded`, and the run moves to
-  `PAUSED_BUDGET` with an actionable message ("needs $1.40 to continue; raise the cap?").
-- The **circuit breaker** opens on (a) any hard breach, (b) spend rate above
-  `$/min` threshold, (c) repeated provider errors. When open, no new jobs dispatch and
-  in-flight crews are stopped at the next step boundary.
+- Breaching a soft threshold (80%) emits `budget.warning`. A **refused reservation fails the
+  job** with a typed `BudgetExceeded`: an agent cap or a department envelope that is spent
+  stops that agent's work and leaves the rest of the run to its other agents.
+- Only an **exhausted project envelope (or its company's)** pauses the run: it moves to
+  `PAUSED_BUDGET` carrying the numbers and the way out ("raise the cap or wait for the budget
+  day to roll over, then resume the project") in `run.error`, and emits `budget.paused`. A
+  pause no wave can heal and that names no cause is a bug, not a safeguard (ADR 0019).
+- The **circuit breaker** guards that same envelope: it opens on (a) an exhausted project or
+  company envelope, (b) spend rate above `$/min` threshold, (c) repeated provider errors, and
+  a wave head that finds headroom again closes it instead of trusting the latch. One model
+  call costing more than its reservation is booked and emitted as `budget.overrun`, it does
+  not stop the project. When open, no new jobs dispatch and in-flight crews are stopped at
+  the next step boundary.
 - Ledger is append-only (`budget_ledger`), reconciled against `llm.*` events; a nightly job
   asserts ledger == sum of events (an integrity test, not a hope).
 - Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill`, sets

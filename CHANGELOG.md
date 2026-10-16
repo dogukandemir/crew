@@ -2,6 +2,19 @@
 
 ## Unreleased: public-readiness work
 
+- **Faster waves**: `CREW_MAX_CONCURRENT_CREWS` now defaults to 4 (was 2), so the
+  independent tasks of a plan run four at a time. The second live Launch pack queued its
+  four deliverables two at a time; the provider-call gate shares the same number.
+- **A cap stops the job, the envelope stops the run**: a refused reservation fails that job
+  with `BudgetExceeded`, and an agent's cap or a department envelope running dry no longer
+  latches the project. The run pauses only when the project envelope (or its company's) is
+  exhausted, and the pause names its numbers and the way out in `run.error` plus a
+  `budget.paused` event. A model call costing more than its reservation is booked and
+  emitted as `budget.overrun` instead of stopping the project (ADR 0019).
+- **A workspace write is a deliverable**: `fs_write` records the file it writes as an
+  artifact (byte-exact `sha256`, the producer's attempt stamp), so the verifier reads the
+  producer's work. Without it the judge saw "0 registered artifact(s)" and failed tasks
+  whose files were on disk.
 - **Full autonomy (YOLO)**: a per-project switch in Settings turns every human approval
   gate off. Tools, commands and gated web content run as requested; each call a human
   would have been asked to approve is written to the audit log and emitted as

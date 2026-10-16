@@ -61,6 +61,8 @@ Decisions that were expensive to make and would be expensive to reverse:
 - [0015, Company-first navigation: the company owns HQ, projects are members](adr/0015-company-first-navigation.md)
 - [0016, Agent souls and the HR hiring ladder](adr/0016-agent-souls-and-hr-hiring.md)
 - [0017, Workspaces, egress and the security review gate](adr/0017-workspaces-and-security-review.md)
+- [0018, Full autonomy (YOLO) and a council that acts](adr/0018-full-autonomy-and-a-council-that-acts.md)
+- [0019, A cap stops the job, the envelope stops the run](adr/0019-a-cap-stops-the-job-the-envelope-stops-the-run.md)
 
 ## Conventions
 

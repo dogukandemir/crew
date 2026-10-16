@@ -229,12 +229,35 @@ visible in the record either way.
    login → bearer → WS handshake flow yet. `local` mode is the tested default.
 5. **Replay** exists server-side (`GET /api/projects/{id}/events?from_seq&to_seq`, dossier
    export); the UI scrubber is frontend work.
-6. **Live provider runs**: the CrewAI path is exercised through construction + callbacks, but a
-   real end-to-end run with a provider key is still pending (needs the user's key).
+6. **Live provider runs**: the CrewAI path is exercised through construction + callbacks, and by
+   real end-to-end runs on the dev host (the Launch project, 14 and 16 October, owner's key);
+   a keyed run still cannot be part of CI.
 7. **Concurrency**: crews run in a thread pool with a global semaphore; there is no per-project
    fairness scheduler or job resumption across process restarts beyond the stage machine.
 8. **Tool breadth**: `net.post`, `git.push`, `data.sql` are catalogued and policy-gated but not
    implemented, an agent requesting them gets a clear "not granted/approval required" answer.
+
+## Live-run round 2026-10-16: the money stop, and a deliverable the verifier could not see
+
+The third Launch run paused itself with the envelope half full (cap $6.00, spent $2.99) and
+four of five tasks had failed verification with "0 registered artifact(s)". Three causes, one
+path (ADR 0019):
+
+- **`reserve()` latched the project breaker on any scope refusal**, so one worker's per-run cap
+  stopped every other agent; the pause wrote no cause and no numbers into `run.error`, and only
+  a restart or an explicit resume cleared the in-memory latch. Now only an exhausted project or
+  company envelope latches it, `_budget_stop_stands` re-reads the envelope at each wave head,
+  and the pause carries the numbers and the way out (`budget.paused`).
+- **`_call_model` latched on `charged > amount`**, i.e. on a call whose actual cost the ledger
+  books correctly. It emits `budget.overrun` now and the next reservation reads the ledger.
+- **`h_fs_write` wrote bytes and recorded nothing.** The verifier's deterministic floor reads
+  registered artifacts, so tasks whose files were on disk (12,197 bytes at 13:12 UTC) failed
+  with "0 chars". The handler now writes bytes (byte-exact digest, no CRLF rewrite), registers
+  the artifact with the producer's attempt stamp, and returns the byte count.
+
+Parallelism: `CREW_MAX_CONCURRENT_CREWS` defaults to 4 (the Launch pack queued four independent
+deliverables two at a time). The number drives both the wave semaphore and the provider-call
+gate; the semaphore is built once per event loop, so a change takes effect on a restart.
 
 ## Review round 2026-10-14: what changed and why (the memorable bits)
 

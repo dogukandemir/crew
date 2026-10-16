@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Agent, Artifact, Event, Task, VerificationResult
+from crew.core.models import Agent, Artifact, Event, Project, Task, VerificationResult
 from crew.core.settings import settings
 from crew.domain.enums import Role, Verdict, VerifyMethod
 from crew.execution.models import router
@@ -74,15 +74,23 @@ def deterministic_checks(task: Task, result_text: str, artifacts: list[Artifact]
     return checks, round(score, 3)
 
 
-def artifact_checks(task: Task, artifacts: list[Artifact]) -> tuple[list[dict], str]:
-    """Read actual, hash-bound files from this task's artifact store, never its narrative."""
-    root = settings.artifacts_dir(task.project_id).resolve()
+def artifact_checks(task: Task, artifacts: list[Artifact],
+                    roots: tuple[Path, ...] | None = None) -> tuple[list[dict], str]:
+    """Read actual, hash-bound files from this task's own stores, never its narrative.
+
+    `roots` are the directories an artifact of this task may live in: the project's
+    artifact store, and the project's workspace. A file the producer wrote into the
+    workspace IS a deliverable (ADR 0019), so the workspace is an authority root; a
+    path outside both is still refused.
+    """
+    if roots is None:
+        roots = (settings.artifacts_dir(task.project_id).resolve(),)
     checks, bodies, seen = [], [], set()
     for artifact in artifacts:
         path = Path(artifact.path)
         try:
             resolved = path.resolve()
-            if (not resolved.is_relative_to(root) or path.is_symlink()
+            if (not any(resolved.is_relative_to(root) for root in roots) or path.is_symlink()
                     or artifact.project_id != task.project_id or artifact.task_id != task.id):
                 raise ValueError("artifact is outside this task's authority")
             if not 0 < resolved.stat().st_size <= 2_000_000:
@@ -98,6 +106,24 @@ def artifact_checks(task: Task, artifacts: list[Artifact]) -> tuple[list[dict], 
         except (OSError, ValueError) as exc:
             checks.append({"name": "artifact_integrity", "ok": False, "detail": str(exc)})
     return checks, "\n\n".join(bodies)[:120_000]
+
+
+async def verification_roots(task: Task) -> tuple[Path, ...]:
+    """Where this task's artifacts may live: the project's artifact store and the project's
+    workspace (a workspace write is a deliverable, ADR 0019). Anything outside both is
+    refused by `artifact_checks`, so widening the roots does not widen the authority to
+    arbitrary host paths."""
+    roots = [settings.artifacts_dir(task.project_id).resolve()]
+    try:
+        async with session_scope() as s:
+            project = await s.get(Project, task.project_id)
+        if project is not None:
+            from crew.control.workspaces import resolve_workspace
+
+            roots.append(resolve_workspace(project).resolve())
+    except Exception as exc:  # an unresolvable workspace must not break verification
+        log.warning("workspace root unavailable for %s: %s", task.project_id, exc)
+    return tuple(roots)
 
 
 def current_artifacts(artifacts: list[Artifact]) -> list[Artifact]:
@@ -220,7 +246,8 @@ class Verifier:
         async with session_scope() as s:
             artifacts = (await s.scalars(select(Artifact).where(Artifact.task_id == task.id))).all()
         artifacts = current_artifacts(list(artifacts))
-        integrity, evidence_text = await asyncio.to_thread(artifact_checks, task, list(artifacts))
+        roots = await verification_roots(task)
+        integrity, evidence_text = await asyncio.to_thread(artifact_checks, task, list(artifacts), roots)
         checks, det_score = deterministic_checks(task, evidence_text, list(artifacts))
         checks.extend(integrity)
         contract = task.output_contract or {}

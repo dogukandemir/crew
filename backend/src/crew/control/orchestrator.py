@@ -257,6 +257,37 @@ class Orchestrator:
         await _emit_stage(run, RunStage.EXECUTING, project.id, {"assigned": assigned})
         return RunStage.EXECUTING
 
+    async def _budget_stop_stands(self, project_id: str) -> bool:
+        """Whether the budget stop still holds right now.
+
+        A breaker that latched while the envelope was empty must not outlive the fix (a
+        raised cap, a new budget day), so re-read the envelope instead of trusting a flag
+        that only a restart or an explicit resume could clear."""
+        if not budget.breaker_open(project_id):
+            return False
+        if await budget.envelope_available(project_id) > 0:
+            budget.close_breaker(project_id)
+            return False
+        return True
+
+    async def _pause_for_budget(self, run: Run, project: Project) -> None:
+        """A stop the operator can act on: the numbers, in the run row and in the stream."""
+        async with session_scope() as s:
+            p = await s.get(Project, project.id)
+            cap, spend, reserved = p.budget_cap_micros, p.spend_micros, p.reserved_micros
+            row = await s.get(Run, run.id)
+            row.status = RunStatus.PAUSED_BUDGET.value
+            row.error = (f"budget stop: the project envelope is exhausted (cap ${cap / 1e6:.2f}, "
+                         f"spent ${spend / 1e6:.2f}, reserved ${reserved / 1e6:.2f}). Raise the cap "
+                         f"or wait for the budget day to roll over, then resume the project.")
+            s.add(row)
+        run.status = RunStatus.PAUSED_BUDGET.value
+        await ev.emit("budget.paused", project_id=project.id, run_id=run.id, severity="error",
+                      title="run paused: the project envelope is exhausted",
+                      payload={"cap_micros": cap, "spend_micros": spend, "reserved_micros": reserved,
+                               "available_micros": 0},
+                      actor="system:budget")
+
     async def _execute(self, run: Run, project: Project) -> RunStage:
         loop = asyncio.get_running_loop()
         if self._worker_loop is not loop:
@@ -264,8 +295,8 @@ class Orchestrator:
             self._worker_loop = loop
         sem = self._worker_semaphore
         for _wave in range(MAX_WAVES):
-            if budget.breaker_open(project.id):
-                await self._set_run(run.id, status=RunStatus.PAUSED_BUDGET.value)
+            if await self._budget_stop_stands(project.id):
+                await self._pause_for_budget(run, project)
                 return RunStage.EXECUTING
             async with session_scope() as s:
                 r = await s.get(Run, run.id)

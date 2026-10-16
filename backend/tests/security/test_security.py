@@ -307,21 +307,41 @@ def test_budget_available_math_boundaries_and_breaker():
                                  scope_id=pid, ref="r4")                # 2M left → refused
         except BudgetExceeded as e:
             refused, message = True, str(e)
-        open_now = budget.breaker_open(pid)
+        # A refusal inside a non-empty envelope fails the call, it does NOT stop the
+        # project (ADR 0019). The envelope itself is what latches.
+        open_while_funded = budget.breaker_open(pid)
         budget.close_breaker(pid)
         closed = not budget.breaker_open(pid)
+        async with session_scope() as s:
+            row = await s.get(Project, pid)
+            row.spend_micros = row.budget_cap_micros       # the envelope is exhausted now
+            s.add(row)
+        try:
+            await budget.reserve(pid, amount_micros=1_000, scope_kind="project",
+                                 scope_id=pid, ref="r5")
+        except BudgetExceeded:
+            pass
+        assert await budget.envelope_available(pid) == 0
+        open_now = budget.breaker_open(pid)
+        budget.close_breaker(pid)
+        async with session_scope() as s:                   # restore the ledger's number
+            row = await s.get(Project, pid)
+            row.spend_micros = 8_000_000
+            s.add(row)
         rec = await budget.reconcile(pid)
-        return zero, avail, after_settle, idem is not None, after_release, refused, message, open_now, closed, rec
+        return (zero, avail, after_settle, idem is not None, after_release, refused, message,
+                open_while_funded, open_now, closed, rec)
 
     (zero, avail, after_settle, idem_row, after_release, refused,
-     message, open_now, closed, rec) = asyncio.run(run())
+     message, open_while_funded, open_now, closed, rec) = asyncio.run(run())
     assert zero == 0, "an unknown project has zero budget, not None"
     assert avail == 5_000_000, "cap - spend - reserved"
     assert after_settle == (0, 8_000_000), "settle clears the reservation and charges spend"
     assert idem_row, "the caller's idempotency key is what lands in the ledger"
     assert after_release == 0, "release returns the reservation"
     assert refused and "3.0000" in message and "2.0000" in message, message
-    assert open_now is True and closed is True
+    assert open_while_funded is False, "a refusal inside a funded envelope must not stop the project"
+    assert open_now is True and closed is True, "an exhausted envelope is what latches"
     assert rec["ok"] is True and rec["ledger_settle_micros"] == 8_000_000
     assert rec["ledger_reserved_micros"] == 11_000_000, "reserved sums only this project's reserves"
     assert rec["ledger_released_micros"] == 11_000_000, "settlements release their reservations too"

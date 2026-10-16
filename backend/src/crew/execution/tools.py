@@ -282,8 +282,18 @@ def h_fs_write(ctx: ToolContext, args: dict) -> dict:
         return {"ok": False, "error": "path is required"}
     p = _jailed(ctx, rel)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(str(content), encoding="utf-8")
-    return {"ok": True, "data": {"path": rel, "bytes": p.stat().st_size}}
+    data = str(content).encode("utf-8")
+    # Byte-exact: text mode rewrites \n to \r\n on Windows and the recorded sha256 has to
+    # describe the bytes actually stored, the same rule artifact_publish follows.
+    p.write_bytes(data)
+    import hashlib
+
+    digest = hashlib.sha256(data).hexdigest()
+    # A file written into the workspace IS a deliverable. Registering it here is what
+    # lets the verifier see the producer's work; without it the judge read "0 registered
+    # artifact(s)" and failed a task whose file was on disk (live run, 16 October).
+    run_on_loop(_record_artifact(ctx, p.name, p, len(data), digest, source_path=rel))
+    return {"ok": True, "data": {"path": rel, "bytes": len(data)}}
 
 
 def h_fs_read(ctx: ToolContext, args: dict) -> dict:

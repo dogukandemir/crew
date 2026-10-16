@@ -229,6 +229,8 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "hiring.candidate.rejected": ("candidate", "reason"),
     "policy.approval.used": ("capability",),
     "budget.exceeded": ("scope_kind", "scope_id"),
+    "budget.paused": ("cap_micros", "spend_micros", "reserved_micros", "available_micros"),
+    "budget.overrun": ("model", "call_id", "reserved_micros", "charged_micros"),
     "security.injection.detected": ("where",),
     "security.egress.blocked": ("url", "host"),
     "security.secret.redaction": ("tool", "count"),

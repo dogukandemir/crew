@@ -79,8 +79,8 @@ queue. Order: reuse > add worker to existing squad > new squad > new department.
 ## 5. Dispatch & execution
 
 - The Scheduler keeps a ready-set (deps done, not started) ordered by (priority, critical
-  path length, cost). It runs at most `CREW_MAX_CONCURRENT_CREWS` crews globally and a
-  per-project limit.
+  path length, cost). It runs at most `CREW_MAX_CONCURRENT_CREWS` crews globally
+  (default 4; the provider-call gate shares the number).
 - A **crew** is built per **task**: one CrewAI agent, one task, `Process.sequential`
   (`execution/runner.py`), squad context reaches the agent through the prompt, not a manager
   crew; there is no per-squad hierarchical crew.

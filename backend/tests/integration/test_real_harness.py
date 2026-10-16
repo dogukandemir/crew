@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
+from crew.control.verify import current_artifacts
 from crew.control.workspaces import resolve_workspace
 from crew.core.db import session_scope
 from crew.core.models import Agent, Artifact, Event, Project, Run, Task
@@ -73,8 +74,22 @@ async def test_real_crewai_loop_writes_and_publishes_with_accounted_generations(
         usage = (await s.scalars(select(Event).where(Event.run_id == r.id, Event.type == "llm.response"))).all()
         p = await s.get(Project, project["id"])
         (await s.get(Run, r.id)).status = "completed"
-    assert len(artifacts) == 1
-    assert await asyncio.to_thread(Path(artifacts[0].path).read_text) == "real harness artifact"
+    # One logical deliverable, two records: the workspace write (fs_write registers it, the
+    # link the live run was missing) and the publication that copies it into the artifact
+    # store. The verifier collapses them to the newest per logical name, so the judge never
+    # reads the same document twice (ADR 0019).
+    assert len(artifacts) == 2, [a.path for a in artifacts]
+    def _classify(rows: list[Artifact]) -> tuple[list[Artifact], list[Artifact]]:
+        store_root = settings.artifacts_dir(p.id).resolve()
+        ws_root = workspace.resolve()
+        return ([a for a in rows if Path(a.path).resolve().is_relative_to(store_root)],
+                [a for a in rows if Path(a.path).resolve().is_relative_to(ws_root)])
+
+    store, written = await asyncio.to_thread(_classify, list(artifacts))
+    assert len(store) == 1 and len(written) == 1, [a.path for a in artifacts]
+    assert await asyncio.to_thread(Path(store[0].path).read_text) == "real harness artifact"
+    assert store[0].sha256 == written[0].sha256
+    assert len(current_artifacts(list(artifacts))) == 1
     assert len(usage) == len(responses)
     assert all(e.payload["model"] == routed_model for e in usage)
     assert result.tokens_in == 100 * len(responses) and result.tokens_out == 30 * len(responses)

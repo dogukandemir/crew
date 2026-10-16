@@ -35,7 +35,7 @@ Types are namespaced so the UI can filter and the replay can reconstruct:
 | `verify.*` | `verify.started`, `verify.check`, `verify.verdict` |
 | `policy.*` | `policy.allowed`, `policy.denied`, `policy.approval.requested`, `policy.approval.granted` |
 | `security.*` | `security.injection.detected`, `security.egress.blocked`, `security.content.reviewed`, `security.content.quarantined`, `security.content.released`, `security.command.reviewed`, `security.command.allowed`, `security.allow.added`, `security.allow.removed`, `security.sandbox.unavailable`, `security.secret.redaction`, the review gate's trail (ADR 0017); quarantines and releases are audited too |
-| `budget.*` | `budget.reserved`, `budget.spent`, `budget.exceeded`, `budget.circuit_open` |
+| `budget.*` | `budget.reserved`, `budget.spent`, `budget.exceeded`, `budget.circuit_open`, `budget.paused` (the numbers behind a pause), `budget.overrun` (a call cost more than its reservation) |
 | `user.*` | `user.steering`, `user.approval`, `user.command`, `user.message` |
 
 `agent.thought` and `agent.tool.call` are emitted from CrewAI's `step_callback`/task callbacks;

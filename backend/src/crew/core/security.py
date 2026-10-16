@@ -336,6 +336,26 @@ class BudgetGuard:
         async with session_scope() as s:
             return await self._available(s, project_id, agent_id, department_id, run_id)
 
+    async def envelope_available(self, project_id: str) -> int:
+        """Project plus company headroom only. The circuit breaker guards THIS envelope:
+        an agent's daily/run cap or a department envelope must fail that job (docs/08 §8:
+        "the job fails with a typed BudgetExceeded"), never pause the whole project."""
+        async with session_scope() as s:
+            return await self._envelope_available(s, project_id)
+
+    @staticmethod
+    async def _envelope_available(s, project_id: str) -> int:
+        p = await s.get(Project, project_id)
+        if p is None or p.status != "active":
+            return 0
+        avail = p.budget_cap_micros - p.spend_micros - p.reserved_micros
+        if p.company_id:
+            company = await s.get(Project, p.company_id)
+            if company is None or company.status != "active":
+                return 0
+            avail = min(avail, company.budget_cap_micros - company.spend_micros - company.reserved_micros)
+        return max(0, avail)
+
     async def recover_reservations(self) -> int:
         """Startup only: interrupted requests may have billed, so charge held estimates.
 
@@ -469,8 +489,15 @@ class BudgetGuard:
                 return
             available = await self._available(s, project_id, scope_id if scope_kind == "agent" else None,
                                               scope_id if scope_kind == "department" else None, run_id)
-            if self.breaker_open(project_id) or amount_micros > available:
-                self.open_breaker(project_id)
+            if self.breaker_open(project_id):
+                raise BudgetExceeded(scope_kind, scope_id, amount_micros, available)
+            if amount_micros > available:
+                # Only an exhausted PROJECT or COMPANY envelope stops the project. A scope
+                # refusal (agent cap, department envelope) fails this job and leaves the run
+                # to its other agents: latching here paused a run whose envelope was half
+                # full (16 October) and no wave could heal it without a resume.
+                if await self._envelope_available(s, project_id) <= 0:
+                    self.open_breaker(project_id)
                 raise BudgetExceeded(scope_kind, scope_id, amount_micros, available)
             p = await s.get(Project, project_id)
             if p is None or p.status != "active":

@@ -92,7 +92,14 @@ async def _call_model(delegate, *, model, messages, project_id, agent_id, run_id
         if on_usage:
             on_usage({"cost_micros": charged, "tokens_in": tin, "tokens_out": tout, "usage_state": usage_state})
         if charged > amount:
-            budget.open_breaker(project_id)
+            # One call costing more than its estimate is booked, not a stop: the next
+            # reservation reads availability from the ledger. Latching the project breaker
+            # here paused runs whose envelope was half full (16 October).
+            await events.emit("budget.overrun", project_id=project_id, run_id=run_id,
+                              task_id=task_id, agent_id=agent_id, severity="warning",
+                              title="model call exceeded its reservation", cost_micros=charged,
+                              payload={"model": model, "call_id": call_id,
+                                       "reserved_micros": amount, "charged_micros": charged})
         await events.emit("llm.response", project_id=project_id, run_id=run_id, task_id=task_id,
                           agent_id=agent_id, title="model usage recorded", cost_micros=charged,
                           tokens_in=tin, tokens_out=tout,

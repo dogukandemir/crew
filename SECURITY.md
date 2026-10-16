@@ -33,3 +33,13 @@ Caps are application estimates based on configured prices. Unknown failed/interr
 Use GitHub's private vulnerability reporting for this repository when enabled: **Security → Advisories → Report a vulnerability**. If private reporting is unavailable, open a minimal issue asking for a private contact without publishing the exploit or secrets. Include affected revision, reproduction steps, expected boundary and impact. Do not test against someone else's deployment.
 
 There is no promised response SLA yet. Track unresolved dependency advisories in [dependency notes](docs/DEPENDENCIES.md); the four open Chroma advisories are a reviewed, version-bounded exception in the dependency workflow (excepted by ID, with the raw scan still preserved as an artifact).
+
+## Full autonomy (YOLO)
+
+A project can turn its human approval gates off in Settings (full autonomy, ADR 0018).
+In that mode tool calls, sandbox commands and quarantined web content proceed without asking,
+and every call a human would have been asked to approve is written to the hash-chained audit
+log and emitted as `policy.yolo`. What does NOT change: capability ceilings by grade,
+per-agent tool grants, project deny lists, the workspace jail, the fail-closed sandbox, budget
+breakers, reward gating by the verifier, and the redactor. YOLO removes the asking, never the
+record; treat a YOLO project as you would a trusted operator standing at the machine.

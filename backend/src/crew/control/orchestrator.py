@@ -9,7 +9,7 @@ import logging
 import re
 from datetime import UTC, datetime
 
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, func, select, update
 
 from crew.control import backlog, gossip, inbox, org, workspaces
 from crew.control.council import council
@@ -21,7 +21,7 @@ from crew.core.models import Agent, AgentSkill, Event, Project, Run, Task
 from crew.core.reward import reward_engine
 from crew.core.security import BudgetExceeded, audit, budget, expire_inactive_approvals
 from crew.core.settings import settings
-from crew.domain.enums import Effort, Role, RunStage, RunStatus, TaskState
+from crew.domain.enums import Effort, ModelTier, Role, RunStage, RunStatus, TaskState
 from crew.execution.models import router
 from crew.execution.prompt import build_system_prompt, build_task_prompt
 from crew.execution.runner import (
@@ -866,21 +866,83 @@ class Orchestrator:
         )
         await council.run_round(project_id=project.id, session_id=session["session_id"])
         outcome = await council.decide(project=project, session_id=session["session_id"])
+        # The council is an actor, not a suggestion box (ADR 0018): its outcome is
+        # applied here. Parking a task for an operator action that does not exist was
+        # the 14 October dead end, and re-running from scratch was the only path out.
+        option = outcome.chosen_option if outcome.chosen_option in (
+            "retry_more_budget", "reduce_scope") else "abort_task"
+        retry_capped = False
         async with session_scope(write_lock=True) as s:
             row = await s.get(Task, task_id)
             current_run = await s.get(Run, run.id)
             if current_run.status != RunStatus.RUNNING.value or row.state == TaskState.ABORTED.value:
                 return
-            if outcome.chosen_option == "retry_more_budget":
-                row.state = TaskState.ABORTED.value
-                row.escalation_reason = "Attempt limit reached; operator may start a new run after reviewing council advice"
-            elif outcome.chosen_option == "reduce_scope":
-                row.state = TaskState.ABORTED.value
-                row.escalation_reason = "Attempt limit reached; operator must approve any reduction in acceptance criteria"
+            retries = int(await s.scalar(select(func.count()).select_from(Event).where(
+                Event.task_id == task_id, Event.type == "task.council.retry",
+                Event.run_id == run.id)) or 0)
+            if option != "abort_task" and retries >= 2:
+                retry_capped, option = True, "abort_task"
+            title = row.title
+            criteria = list(row.acceptance_criteria or [])
+            if option == "retry_more_budget":
+                row.state = TaskState.READY.value
+                row.attempts = max(0, MAX_TASK_ATTEMPTS - 2)
+                row.escalation_reason = f"council: retry {retries + 1}/2 with two fresh attempts"
+                new_criteria = criteria
+            elif option == "reduce_scope":
+                new_criteria = await self._reduce_criteria(project, row, reason)
+                row.acceptance_criteria = new_criteria
+                row.state = TaskState.READY.value
+                row.attempts = max(0, MAX_TASK_ATTEMPTS - 2)
+                row.escalation_reason = (f"council: scope reduced to {len(new_criteria)} "
+                                         f"criteria; retry {retries + 1}/2")
             else:
                 row.state = TaskState.ABORTED.value
-                row.escalation_reason = f"council: {outcome.chosen_option}"
+                row.escalation_reason = (
+                    f"council: {outcome.chosen_option} (retry cap reached)"
+                    if retry_capped else f"council: {outcome.chosen_option}")
+                new_criteria = criteria
             s.add(row)
+        if option != "abort_task":
+            await ev.emit("task.council.retry", project_id=project.id, run_id=run.id,
+                          task_id=task_id, severity="notice",
+                          title=f"council: retrying {title[:50]}",
+                          payload={"option": option, "retries": retries + 1,
+                                   "criteria": new_criteria},
+                          actor="system:orchestrator")
+
+    async def _reduce_criteria(self, project: Project, task: Task, reason: str) -> list[str]:
+        """The council's reduce_scope, applied. The model rewrites the criteria into a
+        smaller set when a key is configured; offline the deterministic fallback keeps
+        the first two. Either way the new list rides task.council.retry, on the record."""
+        criteria = list(task.acceptance_criteria or [])
+        if len(criteria) <= 1:
+            return criteria
+        try:
+            from crew.execution.gateway import complete
+
+            model = router.model_for_tier(ModelTier.STANDARD)
+            if settings.provider_key_for(model) and not settings.offline_llm:
+                raw = await complete(project_id=project.id, task_id=task.id, run_id=task.run_id,
+                                     model=model, compact=True, messages=[
+                    {"role": "system", "content":
+                        "You reduce acceptance criteria for a task that kept failing "
+                        "verification. Return ONLY a JSON array of 2 or fewer strings: the "
+                        "smallest set that still makes the same deliverable verifiable. "
+                        "Keep the intent, drop the breadth."},
+                    {"role": "user", "content": json.dumps(
+                        {"task": task.title, "criteria": criteria, "last_failure": reason},
+                        ensure_ascii=False)},
+                ], timeout=120)
+                m = re.search(r"\[.*\]", str(raw), re.S)
+                if m:
+                    data = json.loads(m.group(0))
+                    new = [str(c)[:500] for c in data if str(c).strip()]
+                    if 1 <= len(new) <= len(criteria):
+                        return new[:2]
+        except Exception as e:
+            log.warning("council scope rewrite failed: %s", e)
+        return criteria[:2]
 
     # The desk intents that become directives in task prompts (ADR 0012). Everything
     # else, status, help, an unparsed sentence, is conversation, not an order.

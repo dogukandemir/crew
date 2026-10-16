@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from crew.control import onboarding, org
-from crew.control.orchestrator import orchestrator
+from crew.control.orchestrator import MAX_TASK_ATTEMPTS, orchestrator
 from crew.core import events
 from crew.core.db import session_scope
 from crew.core.models import Event, Project, Run, Task
@@ -230,7 +230,11 @@ async def test_driver_failure_persists_terminal_status_and_error(project, monkey
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("choice", ["retry_more_budget", "reduce_scope"])
-async def test_council_cannot_reset_attempt_limit_or_weaken_acceptance(project, monkeypatch, choice):
+async def test_council_life_lines_are_bounded_and_capped(project, monkeypatch, choice):
+    """ADR 0018: a failure council requeues the task (two fresh attempts, or a criteria
+    set of at most two), but a task gets at most two council life-lines before the third
+    failure aborts it. The old contract (never requeue, always abort) turned every hard
+    task into an operator dead end; the KaffeKlip runs paid for that twice."""
     from crew.control.council import council
 
     async with session_scope() as s:
@@ -255,11 +259,24 @@ async def test_council_cannot_reset_attempt_limit_or_weaken_acceptance(project, 
     monkeypatch.setattr(council, "convene", convene)
     monkeypatch.setattr(council, "run_round", run_round)
     monkeypatch.setattr(council, "decide", decide)
+
+    # life-line 1 and 2: requeued, attempts reset, criteria never widened
+    for _ in range(2):
+        await orchestrator._escalate_failed_task(run, p, task.id, "verification failed")
+        async with session_scope() as s:
+            row = await s.get(Task, task.id)
+            assert row.state == "ready"
+            assert row.attempts == MAX_TASK_ATTEMPTS - 2
+            assert len(row.acceptance_criteria or []) <= 2
+            row.state = "failed"  # the next attempt failed again
+            s.add(row)
+
+    # life-line 3: the cap aborts, and the reason says so
     await orchestrator._escalate_failed_task(run, p, task.id, "verification failed")
     async with session_scope() as s:
         row = await s.get(Task, task.id)
-        assert row.state == "aborted" and row.attempts == 3
-        assert row.acceptance_criteria == ["Works correctly", "Tests pass"]
+        assert row.state == "aborted"
+        assert "retry cap" in (row.escalation_reason or "")
 
 
 @pytest.mark.asyncio

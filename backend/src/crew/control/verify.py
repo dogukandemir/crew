@@ -101,7 +101,17 @@ def artifact_checks(task: Task, artifacts: list[Artifact]) -> tuple[list[dict], 
 
 
 def current_artifacts(artifacts: list[Artifact]) -> list[Artifact]:
-    """Verify the latest publication per logical filename; retain older evidence on disk."""
+    """Verify the latest publication per logical filename, from the producer's FINAL
+    attempt only; earlier attempts stay on disk as evidence, never as the deliverable.
+    Without this the judge read v1+v2+v3 as one document and failed a "one page"
+    criterion (KaffeKlip, 14 October). Rows published before attempts were stamped keep
+    taking part."""
+    stamped = [a for a in artifacts if isinstance((a.meta or {}).get("attempt"), int)]
+    if stamped:
+        last = max((a.meta or {}).get("attempt") for a in stamped)
+        artifacts = [a for a in artifacts
+                     if not isinstance((a.meta or {}).get("attempt"), int)
+                     or (a.meta or {}).get("attempt") == last]
     current = {}
     for artifact in sorted(artifacts, key=lambda a: (a.created_at.isoformat() if a.created_at else "", a.id or "")):
         name = (artifact.meta or {}).get("name") or Path(artifact.path).name
@@ -171,6 +181,7 @@ async def _judging_context(task: Task) -> dict:
         if identity not in seen:
             manifest.append({"name": (artifact.meta or {}).get("name", Path(artifact.path).name),
                 "source_path": (artifact.meta or {}).get("source_path"),
+                "attempt": (artifact.meta or {}).get("attempt"),
                 "sha256": artifact.sha256, "bytes": artifact.bytes})
             seen.add(identity)
     receipts = []

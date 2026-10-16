@@ -183,6 +183,8 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "run.started": ("run_id", "goal"),
     "run.stage.changed": ("run_id", "stage"),
     "run.recovered": ("run_id", "interrupted_tasks"),
+    "policy.yolo": ("tool", "capability"),
+    "task.council.retry": ("option", "retries", "criteria"),
     "org.department.created": ("department_id", "name"),
     "org.squad.created": ("squad_id", "name"),
     "org.agent.hired": ("agent_id", "role", "grade"),

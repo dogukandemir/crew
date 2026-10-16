@@ -131,6 +131,11 @@ class PolicyEngine:
         if agent.tools and cap.value not in set(agent.tools):
             return PolicyDecision(PolicyOutcome.DENY, f"{cap.value} not granted to this agent", cap.value)
 
+        # Full autonomy (ADR 0018): the project turned the human gates off. Ceilings and
+        # explicit denies above still bind; the invoker audits every call this skips.
+        if project is not None and bool(project.setting("yolo", False)):
+            return PolicyDecision(PolicyOutcome.ALLOW, "yolo: human gates are off", cap.value)
+
         # Then the gates that a human can lift.
         if cap.value in set(policy.get("require_approval", [])) or cap in ALWAYS_APPROVAL:
             return PolicyDecision(PolicyOutcome.REQUIRE_APPROVAL, f"{cap.value} requires human approval", cap.value)

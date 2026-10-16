@@ -357,6 +357,7 @@ export interface Project {
 export interface ProjectSettings {
   project_id?: string;
   autonomous_intake: boolean;
+  yolo?: boolean;
   require_goal_confirmation: boolean;
   require_human_verification: boolean;
   max_agents: number;

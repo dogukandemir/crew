@@ -94,8 +94,10 @@ queue. Order: reuse > add worker to existing squad > new squad > new department.
   covers the skills takes it first); there is no `retry.escalated` event and no automatic
   model-tier escalation.
 - **Escalation ladder**: worker fails → Lead re-plans the task → Head re-staffs it →
-  Orchestrator re-plans the workstream → Council → user approval. Each rung emits
-  `task.escalated` with the reason; the UI shows the escalation ribbon.
+  Orchestrator re-plans the workstream → Council, whose outcome is applied: retry with
+  two fresh attempts, reduced acceptance criteria, or abort (two council life-lines per
+  task, then abort; ADR 0018). Each rung emits `task.escalated` with the reason; the UI
+  shows the escalation ribbon.
 
 ## 6. Verification (the gate that makes rewards real)
 

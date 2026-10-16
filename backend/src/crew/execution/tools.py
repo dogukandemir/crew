@@ -26,6 +26,7 @@ from crew.core import events as ev
 from crew.core.db import session_scope
 from crew.core.models import Agent, Project, Run, Task, WorkItem
 from crew.core.security import (
+    SUPERVISED_FORBIDDEN,
     approval_granted,
     audit,
     invocation_hash,
@@ -43,6 +44,27 @@ log = logging.getLogger("crew.tools")
 
 MAX_BYTES = 20_000
 SANDBOX_IMAGE = "python:3.13-slim"
+
+
+def _yolo_on(ctx) -> bool:
+    """Full autonomy for this project (ADR 0018): every human gate is off."""
+    try:
+        return ctx.project is not None and bool(ctx.project.setting("yolo", False))
+    except Exception:
+        return False
+
+
+def _yolo_audit(ctx, *, tool: str, capability: str) -> None:
+    """The honest half of YOLO: what a human would have been asked to approve is
+    recorded, hash-chained, so the decision trail survives the missing prompt."""
+    run_on_loop(ev.emit("policy.yolo", project_id=ctx.project_id, task_id=ctx.task_id,
+                        run_id=ctx.run_id, agent_id=ctx.agent.id if ctx.agent else None,
+                        severity="notice", title=f"yolo: auto-granted {capability}",
+                        payload={"tool": tool, "capability": capability}))
+    run_on_loop(audit(actor_kind="agent", actor_id=ctx.agent.id if ctx.agent else "",
+                      action="policy.yolo.grant", resource_kind="capability",
+                      resource_id=capability, outcome="allowed",
+                      reason=f"yolo mode: {tool}", project_id=ctx.project_id))
 
 
 @dataclass
@@ -140,6 +162,17 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
                         agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
     if not review.risky:
         return {"outcome": "clean", "review": review, "body": None, "response": None}
+    if _yolo_on(ctx):
+        # Full autonomy: the gate is off, and the release is still on the record.
+        run_on_loop(ev.emit("security.content.released", project_id=ctx.project_id,
+                            severity="notice", title=f"content released (yolo): {url[:70]}",
+                            payload={"url": url, "via": "yolo"},
+                            agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+        run_on_loop(audit(actor_kind="agent", actor_id=ctx.agent.id if ctx.agent else "",
+                          action="security.content.released", resource_kind="capability",
+                          resource_id="net.fetch", outcome="allowed",
+                          reason=f"yolo: {url}", project_id=ctx.project_id))
+        return {"outcome": "released", "review": review, "body": text, "response": None}
     released = run_on_loop(sreview.release_for_content(
         ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, url=url,
         task_id=ctx.task_id, run_id=ctx.run_id))
@@ -349,15 +382,18 @@ def _command_gate(ctx: ToolContext, *, tool: str, capability: str, cmd: str) -> 
     else:
         review = sreview.review_command(cmd)
         if review.risky:
-            released = run_on_loop(sreview.release_for_command(
-                ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, norm=norm,
-                capability=capability, task_id=ctx.task_id, run_id=ctx.run_id))
-            if released is not None:
-                allowed_via = "approval"
+            if _yolo_on(ctx):
+                allowed_via = "yolo"
             else:
-                return run_on_loop(sreview.gate_command(
-                    ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None,
-                    task_id=ctx.task_id, tool=tool, capability=capability, cmd=cmd, review=review, run_id=ctx.run_id))
+                released = run_on_loop(sreview.release_for_command(
+                    ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, norm=norm,
+                    capability=capability, task_id=ctx.task_id, run_id=ctx.run_id))
+                if released is not None:
+                    allowed_via = "approval"
+                else:
+                    return run_on_loop(sreview.gate_command(
+                        ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None,
+                        task_id=ctx.task_id, tool=tool, capability=capability, cmd=cmd, review=review, run_id=ctx.run_id))
     if allowed_via:
         run_on_loop(ev.emit("security.command.allowed", project_id=ctx.project_id,
                             severity="notice", title=f"command allowed via {allowed_via}",
@@ -492,10 +528,15 @@ async def _record_artifact(ctx: ToolContext, name: str, path: Path, size: int, d
     from crew.core.db import session_scope
     from crew.core.models import Artifact
 
+    attempt = 0
+    if ctx.task_id:
+        async with session_scope() as s:
+            task_row = await s.get(Task, ctx.task_id)
+            attempt = int(task_row.attempts or 0) if task_row else 0
     async with session_scope() as s:
         s.add(Artifact(project_id=ctx.project_id, task_id=ctx.task_id,
                        agent_id=ctx.agent.id if ctx.agent else None, kind="file", path=str(path),
-                       bytes=size, sha256=digest, meta={"name": name,
+                       bytes=size, sha256=digest, meta={"name": name, "attempt": attempt,
                            **({"source_path": source_path} if source_path is not None else {})}))
     await ev.emit("artifact.published", project_id=ctx.project_id, task_id=ctx.task_id,
                   agent_id=ctx.agent.id if ctx.agent else None, title=f"artifact: {name}",
@@ -812,6 +853,9 @@ class ToolInvoker:
             return {"ok": False, "error": "policy_denied", "detail": decision_reason}
 
         decision = policy.check(agent=ctx.agent, capability=spec.capability, project=ctx.project)
+        if (decision.outcome == PolicyOutcome.ALLOW and decision.reason.startswith("yolo")
+                and (spec.capability in ALWAYS_APPROVAL or spec.capability in SUPERVISED_FORBIDDEN)):
+            _yolo_audit(ctx, tool=name, capability=spec.capability.value)
         if decision.outcome == PolicyOutcome.DENY:
             self._denied(ctx, name, spec.capability, decision.reason)
             return {"ok": False, "error": "policy_denied", "detail": decision.reason}

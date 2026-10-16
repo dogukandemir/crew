@@ -182,6 +182,12 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             onChange={(v) => setSettings((s) => ({ ...s, autonomous_intake: v }))}
           />
           <Toggle
+            label="Full autonomy (YOLO)"
+            hint="skip every human approval: tools run as requested, and each auto-granted call is audited"
+            checked={settings.yolo ?? false}
+            onChange={(v) => setSettings((s) => ({ ...s, yolo: v }))}
+          />
+          <Toggle
             label="Require goal confirmation"
             hint="the orchestrator's interpretation is shown for your approval before planning"
             checked={settings.require_goal_confirmation}

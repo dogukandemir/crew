@@ -2,6 +2,16 @@
 
 ## Unreleased: public-readiness work
 
+- **Full autonomy (YOLO)**: a per-project switch in Settings turns every human approval
+  gate off. Tools, commands and gated web content run as requested; each call a human
+  would have been asked to approve is written to the audit log and emitted as
+  `policy.yolo`. Capability ceilings, the workspace jail, the sandbox and budget breakers
+  still bind (ADR 0018).
+- **The council acts**: a failing-verification council applies its outcome instead of
+  parking the task for an operator action that does not exist. Retry requeues with two
+  fresh attempts, reduce scope rewrites the acceptance criteria, abort aborts; two
+  council life-lines per task, then abort. Verification now reads only the producer's
+  final attempt, so earlier drafts stop failing a one-page criterion (ADR 0018).
 - Standing tool approvals: "Always allow" on a tool gate writes a revocable, audited
   capability allow for that agent (`capability_allows`, schema revision 4); hard gates
   (`net.post`/`fs.delete`/`git.push`) keep asking every time.

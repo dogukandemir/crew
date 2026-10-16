@@ -38,6 +38,7 @@ log = logging.getLogger("crew.org")
 
 DEFAULT_PROJECT_SETTINGS: dict = {
     "autonomous_intake": True,
+    "yolo": False,
     "require_goal_confirmation": False,
     "require_human_verification": False,
     "max_agents": settings.max_agents_per_project,

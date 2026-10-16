@@ -25,6 +25,13 @@
   `low`/`high`/`max` set the effort, with `minimal`/`medium`/`xhigh`/`ultra` mapped onto it)
   because the provider's own default is thinking ON at high effort, and the thinking tokens
   bill as output. The planner, the judge and the council's JSON calls run at `none`.
+- **A task writes its file before it keeps researching**: the task prompt carries a WORK ORDER
+  (write the deliverable into the workspace with what you know, then improve the file on disk
+  in every later step), and the step budget scaled up (S/M/L/XL = 8/12/18/24, iteration cap 24,
+  was 6/8/10/12 capped at 12; the flat "a small file task needs 8 steps" reading was wrong for
+  a repo-scale audit). Verified live on the 16 October relaunch: the audit task wrote a 305-char
+  file on its first attempt, grew it to 4,215 chars, passed on attempt 3, and the wave behind it
+  ran three tasks in the same second.
 - **A workspace write is a deliverable**: `fs_write` records the file it writes as an
   artifact (byte-exact `sha256`, the producer's attempt stamp), so the verifier reads the
   producer's work. Without it the judge saw "0 registered artifact(s)" and failed tasks

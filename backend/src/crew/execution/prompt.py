@@ -131,6 +131,11 @@ def build_task_prompt(
         parts += ["", f"DELIVERABLE: {deliverable}"]
         parts += ["Create the actual deliverable with tools and publish it with artifact_publish. "
                   "A final answer alone is not a deliverable. Publish only work you actually completed."]
+        parts += ["WORK ORDER: write the file with what you know BEFORE you keep researching "
+                  "(fs_write into the workspace), then extend it in your remaining steps. Every "
+                  "step after that should improve the file on disk: a task that ends with no file "
+                  "fails its acceptance criteria whatever you learned, and everything that depends "
+                  "on it never runs."]
     if acceptance_criteria:
         parts += ["", "ACCEPTANCE CRITERIA (address each explicitly in your final answer):"]
         parts += [f"  {i + 1}. {c}" for i, c in enumerate(acceptance_criteria)]

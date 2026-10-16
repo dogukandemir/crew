@@ -237,6 +237,29 @@ visible in the record either way.
 8. **Tool breadth**: `net.post`, `git.push`, `data.sql` are catalogued and policy-gated but not
    implemented, an agent requesting them gets a clear "not granted/approval required" answer.
 
+## Live-run round 2026-10-16 (third pass): a task that never wrote its file
+
+The relaunch after the reset exposed a task-shape defect rather than an engine one. The audit
+task (a repo-scale read with a file deliverable) spent its whole step budget listing and
+grepping the product tree with `python_eval`, wrote nothing, failed verification three times
+("0 chars", "0 registered artifact(s)"), and every dependent task hung behind it:
+
+- **The step budget was read as "a small file task"** (S/M/L/XL = 6/8/10/12, iteration cap 12).
+  It is now 8/12/18/24 with a cap of 24: reading before writing is the job for an audit.
+- **The prompt never said to write early.** It warned that "a final answer alone is not a
+  deliverable", which the agent satisfied by researching harder. The task prompt now carries a
+  WORK ORDER: write the file with what you know BEFORE more research, then improve the file on
+  disk in every later step.
+- Verified live on the same goal: the audit task wrote a 305-char file on its first attempt and
+  grew it to 4,215 chars, passing on attempt 3; the wave behind it started three tasks in the
+  same second.
+
+Still open (a verifier defect this run made plain): the deterministic keyword-coverage check
+compares an English acceptance criterion against a Danish deliverable and scores 0.00, so a
+localised deliverable fails by construction until the council reduces the criteria. Either the
+planner must write criteria in the deliverable's language or the check must tolerate a language
+mismatch.
+
 ## Live-run round 2026-10-16 (second pass): thinking modes and the price of a token
 
 Three gaps, all of them about money being reported instead of billed:

@@ -177,7 +177,7 @@ class CrewAICrewRunner:
                                       grade=agent.grade, soul=agent.soul or None),
             llm=llm,
             tools=tools,
-            max_iter=max(3, min(12, steps_budget(req.task.effort))),
+            max_iter=max(3, min(24, steps_budget(req.task.effort))),
             max_retries=1,
             verbose=False,
             allow_delegation=False,
@@ -222,8 +222,11 @@ class CrewAICrewRunner:
 
 
 def steps_budget(effort: str) -> int:
-    # A small file task needs room to inspect, write, read back, publish and finish.
-    return {"S": 6, "M": 8, "L": 10, "XL": 12}.get(effort, 8)
+    # A one-file writer needs a handful of steps, but a repo-scale audit has to read many files
+    # before it can write a grounded deliverable: on 16 October a junior spent its whole
+    # 10-step budget listing and grepping the product tree and never wrote the file its
+    # acceptance criteria asked for, so every dependent task in the run hung on it.
+    return {"S": 8, "M": 12, "L": 18, "XL": 24}.get(effort, 12)
 
 
 def _usage(crew: Any, model: str) -> tuple[int, int, int]:

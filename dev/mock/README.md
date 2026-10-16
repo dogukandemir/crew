@@ -55,6 +55,10 @@ migration, and a date that has to hold without breaking anyone already in produc
   council's own question — and the same lexicon the backend speaks: mentions resolve
   against the live roster, "everyone … break" answers with the break line, a bare
   "@Elena, …" comes back as an assignment with `task.created`/`task.assigned` chips.
+- **Local mode, like a native install.** `GET /api/auth/config` answers
+  `{"mode": "local"}`, the same probe the real backend serves per `docs/11`, so the UI
+  boots without a sign-in. The probe was missing here during the auth work — AuthGate
+  refuses to paint without it — and the mock was fixed on 16 October 2026.
 - **The board is the run's paper trail (ADR 0010).** Epic → workstreams → stories:
   live tasks with helpers (`+1 helping`), a review card, done work, a blocked card
   that unsticks when the council decides — because the column is derived from the

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crew: a control room for a real AI agent company</title>
+<meta name="description" content="Give a company a goal. A CrewAI-powered org plans it, hires for it, runs sandboxed tools, verifies the work and pays rewards, while an animated office shows the same event stream. Local-first, MIT licensed, experimental.">
+<meta name="author" content="Dogukan Demir">
+<link rel="canonical" href="https://dogukandemir.github.io/crew/">
+<meta name="theme-color" content="#0b0e14">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Crew">
+<meta property="og:title" content="Crew: a control room for a real AI agent company">
+<meta property="og:description" content="Give a company a goal. A CrewAI-powered org plans it, hires for it, runs sandboxed tools, verifies the work and pays rewards, while an animated office shows the same event stream.">
+<meta property="og:url" content="https://dogukandemir.github.io/crew/">
+<meta property="og:image" content="https://dogukandemir.github.io/crew/assets/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+<link rel="alternate icon" type="image/png" href="assets/icon-128.png">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Crew",
+  "alternateName": "Crew control room",
+  "description": "A local-first control room for a real AI agent company. Goals in, planning, hiring, sandboxed execution, verification and rewards out, with an animated office drawn from the same event records.",
+  "url": "https://dogukandemir.github.io/crew/",
+  "codeRepository": "https://github.com/dogukandemir/crew",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Windows, Linux, macOS (Docker with Compose)",
+  "programmingLanguage": "Python, TypeScript",
+  "license": "https://github.com/dogukandemir/crew/blob/main/LICENSE",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Dogukan Demir", "url": "https://github.com/dogukandemir" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What does it cost to try?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Nothing. Demo mode uses deterministic simulated agents and spends nothing. Live mode calls your own provider account, and the budget envelope caps the spend." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is it production ready?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. It is experimental, single-process software for one trusted workspace. Runs are supervised, and SECURITY.md describes the trust boundaries before you point it at private work." }
+    },
+    {
+      "@type": "Question",
+      "name": "What are the agents allowed to touch?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A workspace root chosen when the company is founded. Commands run in a Docker container with no network and only that folder mounted. Fetched content and risky commands pass a review gate first." }
+    },
+    {
+      "@type": "Question",
+      "name": "Where do my provider keys go?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Into an encrypted vault on your machine. Model requests go to the provider you chose, and the key is never rendered back to the interface." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I run it without a model key?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. CREW_OFFLINE_LLM=true swaps in a deterministic fake runner, and planning, hiring, verification, rewards and learning still run end to end for zero spend." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do agents act on their own?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log." }
+    },
+    {
+      "@type": "Question",
+      "name": "How does the office stay honest?",
+      "acceptedAnswer": { "@type": "Answer", "text": "It draws only what the records say. Bubble text comes from message payloads, a surfaced concern needs at least three distinct mouths, and the simulation never invents what was said." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is CrewAI's role?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Execution. CrewAI runs the crews and their tools. Orchestration, budgets, verification, the board and the audit trail are Crew's own, all of it testable offline." }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="./">
+      <img src="assets/icon-128.png" alt="Crew mark" width="28" height="28">
+      Crew
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-docs" href="#docs">Docs</a>
+      <a class="nav-github" href="https://github.com/dogukandemir/crew">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="container">
+      <img class="mark" src="assets/icon-256.png" alt="The Crew mark: one solid node above two outlined nodes, in green" width="88" height="88">
+      <h1>Crew</h1>
+      <p class="tagline">A playable control room for a real AI agent company.</p>
+      <p class="lede">Give a company a goal. Its agents plan the work, interview and hire each other, run sandboxed commands, hand back verified files, and ask for approval when a call is not theirs to make. The office is a view of the same records, not a separate story.</p>
+      <div class="install">
+        <code id="install-cmd"><span class="prompt">$</span> docker compose up --build</code>
+        <button data-copy="#install-cmd" aria-label="Copy the command">Copy</button>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" href="#quickstart">Get started</a>
+        <a class="btn btn-secondary" href="https://github.com/dogukandemir/crew">GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/dogukandemir/crew/blob/main/docs/README.md">Read the spec</a>
+      </div>
+      <div class="stats">
+        <span>MIT licensed</span>
+        <span>Python 3.13 + React 19</span>
+        <span>CrewAI execution</span>
+        <span>Docker sandbox, no host fallback</span>
+        <span>Demo spends nothing</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="demo-frame">
+        <img src="assets/office.png" alt="The company floor mid-run: rooms per department, desks with characters, and a meeting room, all drawn from task and message events" width="1299" height="928" loading="lazy">
+      </div>
+      <p class="demo-caption">A run in progress. Every room, desk and speech bubble is derived from the event stream.</p>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="container">
+      <div class="section-head center">
+        <h2>Goal in, verified work out</h2>
+        <p>Six real stages. Each one writes records you can read back.</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <h3>Set the goal</h3>
+          <p>The Captain writes the mission at the command desk, in plain language. The reply lists the actions that actually ran, and a refusal is a reply too.</p>
+        </li>
+        <li>
+          <h3>Plan</h3>
+          <p>The orchestrator turns the goal into an epic, features and stories on the board, then promotes whatever is ready into real tasks.</p>
+        </li>
+        <li>
+          <h3>Staff</h3>
+          <p>Gaps open hiring loops: an HR head interviews candidates, and the one who lands keeps a face, a voice and a story of their own.</p>
+        </li>
+        <li>
+          <h3>Execute</h3>
+          <p>One task, one owner. Shell and Python run inside a Docker container with no network and only the workspace mounted.</p>
+        </li>
+        <li>
+          <h3>Verify</h3>
+          <p>A separate verifier grades the result against the task's output contract. Only a verifier verdict can move a score.</p>
+        </li>
+        <li>
+          <h3>Reward and learn</h3>
+          <p>Scores, promotions and brain entries follow the verdict, and the floor replays the whole thing as it happens.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head center">
+        <h2>What you get</h2>
+        <p>The pieces that make the company legible, and the ones that keep it honest.</p>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3>Command desk</h3>
+          <p>Orders, questions and ideas in natural language. Assign, reassign, fire, hire, set a budget, start a run. Every turn is a record.</p>
+        </div>
+        <div class="card">
+          <h3>The office</h3>
+          <p>A 2.5D floor drawn from events: walkers, coffee bubbles, a board room that fills when a session is live, a rumour that needs three mouths before it is a concern.</p>
+        </div>
+        <div class="card">
+          <h3>The board</h3>
+          <p>Epics, features and stories. Once a story is promoted, its column is derived from task state, so the board cannot disagree with the engine.</p>
+        </div>
+        <div class="card">
+          <h3>Governance</h3>
+          <p>A board of directors with a chair, portfolio verdicts (on track, at risk, stop) and directives that write real spend caps into its companies.</p>
+        </div>
+        <div class="card">
+          <h3>Budgets and ledger</h3>
+          <p>Per-project and per-company envelopes, a breaker that refuses new spend, and a ledger that reconciles against what was actually spent.</p>
+        </div>
+        <div class="card">
+          <h3>Sandbox or refusal</h3>
+          <p>Agent commands run in Docker with no network and only the workspace at hand. No Docker means no execution. There is no host fallback.</p>
+        </div>
+        <div class="card">
+          <h3>Approvals</h3>
+          <p>Privileged tools pause the run until a human grants once or sets a standing allow. Hard gates (net.post, fs.delete, git.push) always ask.</p>
+        </div>
+        <div class="card">
+          <h3>Security review</h3>
+          <p>Fetched content and risky commands pass a deterministic review gate. Anything suspicious is quarantined by hash until someone releases it.</p>
+        </div>
+        <div class="card">
+          <h3>Memory and brains</h3>
+          <p>Three scoped levels on SQLite, per squad, per department and per project. Verified work is what earns a brain entry, not promises.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="limits">
+    <div class="container">
+      <div class="section-head">
+        <h2>What it is not</h2>
+        <p>The project keeps its claims small on purpose.</p>
+      </div>
+      <ul class="limits">
+        <li><strong>Not a hosted service.</strong> One server process and one shared workspace per installation, for a person who trusts the machine it runs on.</li>
+        <li><strong>Not unsupervised.</strong> Demo mode is simulated and free. Live runs bill your provider account, the budget caps the spend, and a verifier pass is not a human review.</li>
+        <li><strong>Not a safety layer.</strong> The sandbox removes host access; it does not make agent output correct. Read <a href="https://github.com/dogukandemir/crew/blob/main/SECURITY.md">SECURITY.md</a> before giving agents private work.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="quickstart">
+    <div class="container">
+      <div class="section-head">
+        <h2>Run it</h2>
+        <p>Requires Docker with Compose. Both ports bind to loopback only.</p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Run mode">
+        <button role="tab" id="tab-docker" aria-controls="panel-docker" aria-selected="true">Docker</button>
+        <button role="tab" id="tab-native" aria-controls="panel-native" aria-selected="false" tabindex="-1">Native dev</button>
+        <button role="tab" id="tab-offline" aria-controls="panel-offline" aria-selected="false" tabindex="-1">No provider key</button>
+      </div>
+
+      <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" class="tabpanel">
+        <pre><code><span class="c"># UI: http://localhost:5173</span>
+<span class="c"># API: http://127.0.0.1:8787 (loopback only)</span>
+docker compose up --build</code></pre>
+        <p class="engine-note">First run: the onboarding wizard asks where the company workspace lives and how you want to run agents. Demo mode needs no key and spends nothing.</p>
+      </div>
+
+      <div role="tabpanel" id="panel-native" aria-labelledby="tab-native" class="tabpanel" hidden>
+        <pre><code><span class="c"># backend</span>
+cd backend
+uv sync
+uv run python -m crew serve
+
+<span class="c"># frontend</span>
+cd frontend
+npm install
+npm run dev</code></pre>
+        <p class="engine-note">Tested with Python 3.13 and Node 26. The native path still needs Docker for agent command execution.</p>
+      </div>
+
+      <div role="tabpanel" id="panel-offline" aria-labelledby="tab-offline" class="tabpanel" hidden>
+        <pre><code><span class="c"># deterministic agents, zero spend, no key</span>
+CREW_OFFLINE_LLM=true uv run python -m crew serve</code></pre>
+        <p class="engine-note">Planning, hiring, dispatch, verification, rewards and learning all run with a fake runner. This is the mode the test suite and the demo both use.</p>
+      </div>
+
+      <h3 class="qs-sub">Live mode</h3>
+      <p class="qs-note">Connect a provider key from the interface (<em>Configure provider</em>), then switch the run to Live. The key is checked, stored encrypted and never shown again.</p>
+      <ul class="provider-note">
+        <li><strong>Acceptance-tested:</strong> DeepSeek with the Docker sandbox, on Windows.</li>
+        <li><strong>Experimental:</strong> OpenAI, Anthropic, OpenRouter, and local Ollama.</li>
+        <li>Evidence and known limits live in the <a href="https://github.com/dogukandemir/crew/blob/main/docs/SUPPORT-MATRIX.md">support matrix</a>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="faq">
+    <div class="container">
+      <div class="section-head center">
+        <h2>Questions</h2>
+        <p>Short answers to what people ask before running it.</p>
+      </div>
+      <div class="faq">
+        <div class="faq-item">
+          <h3>What does it cost to try?</h3>
+          <p>Nothing. Demo mode uses deterministic simulated agents and spends nothing. Live mode calls your own provider account, and the budget envelope caps the spend.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Is it production ready?</h3>
+          <p>No. It is experimental, single-process software for one trusted workspace. Runs are supervised, and <a href="https://github.com/dogukandemir/crew/blob/main/SECURITY.md">SECURITY.md</a> describes the trust boundaries before you point it at private work.</p>
+        </div>
+        <div class="faq-item">
+          <h3>What are the agents allowed to touch?</h3>
+          <p>A workspace root chosen when the company is founded. Commands run in a Docker container with no network and only that folder mounted. Fetched content and risky commands pass a review gate first.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Where do my provider keys go?</h3>
+          <p>Into an encrypted vault on your machine. Model requests go to the provider you chose, and the key is never rendered back to the interface.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Can I run it without a model key?</h3>
+          <p>Yes. <code>CREW_OFFLINE_LLM=true</code> swaps in a deterministic fake runner, and the whole pipeline still runs end to end for zero spend.</p>
+        </div>
+        <div class="faq-item">
+          <h3>Do agents act on their own?</h3>
+          <p>Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log.</p>
+        </div>
+        <div class="faq-item">
+          <h3>How does the office stay honest?</h3>
+          <p>It draws only what the records say. Bubble text comes from message payloads, a surfaced concern needs at least three distinct mouths, and the simulation never invents what was said.</p>
+        </div>
+        <div class="faq-item">
+          <h3>What is CrewAI's role?</h3>
+          <p>Execution. CrewAI runs the crews and their tools. Orchestration, budgets, verification, the board and the audit trail are Crew's own, all of it testable offline.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="docs">
+    <div class="container">
+      <div class="section-head">
+        <h2>Documentation</h2>
+        <p>The specification comes first. Code follows the docs, and when they disagree, both get fixed in the same commit.</p>
+      </div>
+      <div class="docs-grid">
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/README.md">README</a>
+          <span class="desc">The pitch, the quickstart, and what is real versus simulated.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/docs/README.md">Specification</a>
+          <span class="desc">18 documents plus 17 ADRs, from vision to the office renderer.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/docs/INSTALLATION.md">Installation</a>
+          <span class="desc">Docker, native development, upgrades and recovery.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/docs/SUPPORT-MATRIX.md">Support matrix</a>
+          <span class="desc">Tested providers and platforms, with the evidence.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/SECURITY.md">Security</a>
+          <span class="desc">Trust boundaries and the sandbox model.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/examples/temperature-converter/PROVENANCE.md">A verified live run</a>
+          <span class="desc">A real DeepSeek run: files, test output, hashes and cumulative cost.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/CHANGELOG.md">Changelog</a>
+          <span class="desc">What changed, and when.</span>
+        </div>
+        <div class="docs-item">
+          <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/CONTRIBUTING.md">Contributing</a>
+          <span class="desc">How to run the suites and keep the docs true.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="foot-brand">
+      <img src="assets/icon-128.png" alt="" width="22" height="22">
+      <span>Crew &middot; MIT licensed</span>
+    </div>
+    <nav aria-label="Footer">
+      <a href="https://github.com/dogukandemir/crew">GitHub</a>
+      <a href="https://github.com/dogukandemir/crew/blob/main/SECURITY.md">Security</a>
+      <a href="https://github.com/dogukandemir/crew/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="llms.txt">llms.txt</a>
+    </nav>
+    <p class="colophon">Built and maintained by Dogukan Demir.</p>
+  </div>
+</footer>
+
+<script src="script.js" defer></script>
+</body>
+</html>

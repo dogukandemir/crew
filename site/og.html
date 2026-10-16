@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Crew card</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #0b0e14; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #eef2f8;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 4.6% 5.2% 4.2%;
+  }
+  .bg { position: absolute; inset: 0; background:
+    radial-gradient(70% 60% at 82% 16%, rgba(52, 211, 153, 0.10), transparent 62%),
+    radial-gradient(55% 50% at 8% 96%, rgba(94, 116, 210, 0.10), transparent 60%),
+    #0b0e14; }
+  .wrap { position: relative; display: flex; flex-direction: column; height: 100%; }
+  .brand { display: flex; align-items: center; gap: 0.9rem; }
+  .mark { width: 3rem; height: 3rem; border-radius: 0.7rem; box-shadow: 0 0 0 1px rgba(148,163,184,0.3); }
+  h1 { font-size: 3.3rem; letter-spacing: -0.02em; }
+  .sub { margin-top: 1rem; font-size: 1.4rem; line-height: 1.4; color: #b6c0cf; max-width: 46%; }
+  .shot { position: absolute; right: 5.2%; bottom: 4.2%; width: 46%; border-radius: 0.7rem;
+          border: 1px solid rgba(148,163,184,0.3); box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
+  .foot { position: absolute; left: 5.2%; bottom: 5%; display: flex; gap: 0.75rem; align-items: center;
+          color: #7d8798; font-size: 1rem; }
+  .pill { border: 1px solid rgba(148,163,184,0.3); border-radius: 999px; padding: 0.42rem 0.9rem; color: #b6c0cf; }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="wrap">
+    <div class="brand">
+      <img class="mark" src="assets/icon-256.png" alt="">
+      <h1>Crew</h1>
+    </div>
+    <p class="sub">A control room for a real AI agent company. Goals in, verified files and approvals out.</p>
+    <div class="foot">
+      <span class="pill">CrewAI execution</span>
+      <span class="pill">Local-first</span>
+      <span class="pill">MIT</span>
+    </div>
+  </div>
+  <img class="shot" src="assets/office.png" alt="">
+</body>
+</html>

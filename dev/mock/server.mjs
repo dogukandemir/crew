@@ -1239,6 +1239,14 @@ const server = http.createServer((req, res) => {
   }
   const url = new URL(req.url, 'http://localhost');
 
+  // Auth bootstrap: the UI fetches this before it paints and shows a backend
+  // error when it is missing (AuthGate). The demo runs the same local mode the
+  // native app defaults to, so no sign-in appears.
+  if (/^\/api\/auth\/config$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS });
+    return res.end(JSON.stringify({ mode: 'local' }));
+  }
+
   // Two POSTs must win over the GET-shaped route table (ADR 0015 flows): the leading
   // demo loop is method-agnostic for legacy reasons, so /api/projects and /api/found
   // are claimed here, before it.

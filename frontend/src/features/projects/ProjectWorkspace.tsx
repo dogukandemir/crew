@@ -27,7 +27,7 @@ const HqTab = lazy(() => import('../hq/HqTab').then(m => ({ default: m.HqTab }))
 const CompanyProjects = lazy(() => import('../hq/CompanyProjects').then(m => ({ default: m.CompanyProjects })));
 const CompanyBrains = lazy(() => import('../hq/CompanyBrains').then(m => ({ default: m.CompanyBrains })));
 const BoardTab = lazy(() => import('../board/BoardTab').then(m => ({ default: m.BoardTab })));
-const DeliverablesPanel = lazy(() => import('../deliverables/DeliverablesPanel').then(m => ({ default: m.DeliverablesPanel })));
+import { DeliverablesPanel } from '../deliverables/DeliverablesPanel';
 import { cn } from '../../lib/cn';
 import { PanelError } from '../../components/PanelError';
 

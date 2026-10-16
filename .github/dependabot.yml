@@ -18,3 +18,11 @@ updates:
     directories: [/backend, /frontend]
     schedule:
       interval: monthly
+    ignore:
+      # Base images track the tested toolchain, not the newest tag: the pinned CrewAI caps
+      # Python below 3.14, and the frontend stays on the stable nginx branch (1.31 is
+      # mainline). Both are recorded in docs/DEPENDENCIES.md.
+      - dependency-name: python
+        versions: [">=3.14"]
+      - dependency-name: nginx
+        versions: [">=1.31"]

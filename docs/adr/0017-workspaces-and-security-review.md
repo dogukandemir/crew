@@ -18,7 +18,7 @@ with three gaps the owner called out:
 3. **Untrusted content and commands had no gate.** Web results were label-scan only
    (deterministic regexes); commands ran if the capability grant allowed them. There was
    no reviewer, no approval for risky content/commands, no "always allow", and — as the
-   owner put it — no evidence trail: "sorun çıktığı durumlarda elimizde kanıt olmaz".
+   owner put it — no evidence trail: "when something goes wrong, we have no evidence to show for it".
 
 ## Decision
 

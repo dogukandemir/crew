@@ -7,6 +7,14 @@ Give a company a goal. Watch its agents organize, use tools, produce files, and 
 
 **Experimental, local-first software.** Crew combines a game-like interface with a real [CrewAI](https://github.com/crewAIInc/crewAI) execution harness. It is for developers and builders exploring supervised agent companies. Agent output still needs human review. It is not a hosted multi-tenant service or a guarantee of autonomous business success.
 
+### At a glance
+
+- **Execution engine:** CrewAI — planning, hiring, tasks and tool calls are real records; the office is a view of the same events.
+- **Providers:** DeepSeek (shipped default), OpenAI, Anthropic, OpenRouter, or local Ollama. Demo needs no key and spends nothing.
+- **Runtime:** Python 3.13 backend, React 19 / Node 26 frontend, Docker for agent command execution, SQLite for state.
+- **Distribution:** one `docker compose up --build`; both ports bind to loopback only.
+- **License:** MIT. **Status:** experimental; one trusted workspace per installation.
+
 ![Crew's animated office](docs/assets/office.png)
 
 ## Try it
@@ -43,7 +51,17 @@ The office makes work visible; the saved task, tool and artifact records are the
 
 See [a verified DeepSeek example](examples/temperature-converter/PROVENANCE.md): actual source files, ten passing tests and the captured execution report. Its provenance records the repairs, operator approval and cumulative cost needed to complete the workflow.
 
+<p>
+  <img src="docs/assets/command-desk.png" width="32%" alt="The command desk: the Captain writes an order, the orchestrator answers with the actions it took">
+  <img src="docs/assets/hq.png" width="32%" alt="The company floor: a live board session, one pod per product">
+  <img src="docs/assets/portfolio.png" width="32%" alt="The portfolio: products with health verdicts, budget envelopes and directives">
+</p>
+
 ## Providers and installation
+
+<p>
+  <img src="docs/assets/onboarding.png" width="62%" alt="First run: pick a provider, the key is checked, stored encrypted and never shown again">
+</p>
 
 The picker offers DeepSeek, OpenAI, Anthropic, OpenRouter, and local Ollama. The bounded DeepSeek/Docker workflow has passed real-provider acceptance; the other integrations remain experimental. See the [tested support matrix](docs/SUPPORT-MATRIX.md) for exact evidence and limitations. Hosted providers need your own account and credentials. Ollama needs its server and the configured model installed. Docker reaches host Ollama through `host.docker.internal`; native installs normally use `localhost`. Provider availability and model access depend on your account.
 

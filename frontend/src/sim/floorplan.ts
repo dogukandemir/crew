@@ -3,7 +3,7 @@
  *
  * The floor is a real 3D plane: departments are rooms, agents get desks, and a
  * corridor network (a vertical spine plus one corridor per shelf row) connects
- * every room — so characters walk *between* departments instead of teleporting.
+ * every room, so characters walk *between* departments instead of teleporting.
  *
  * Deterministic: the same org tree always produces the same floor.
  */
@@ -14,12 +14,12 @@ export const DESK_W = 104;
 export const DESK_H = 92;
 
 /**
- * The desk itself — the top, not the bay it sits in — in metres.
+ * The desk itself, the top, not the bay it sits in, in metres.
  *
  * The bay is 1.45 m wide by definition (`DESK_W` below), and the desk that stands in
  * it is 1.4 × 0.7: a desk, with the rest of the bay left as legroom and chair space.
  * These are the numbers the atlas art has to match, and `sprites.test.ts` checks
- * that it does — the art is the one thing here that can silently disagree.
+ * that it does, the art is the one thing here that can silently disagree.
  */
 export const DESK_TOP_W_M = 1.4;
 export const DESK_TOP_D_M = 0.7;
@@ -55,7 +55,7 @@ export const ENTRANCE_MARGIN = 44;
 /**
  * The meeting room's table, in the metre this plan counts (`M_UNIT`).
  *
- * 3 × 1 m because that is the art `prop.table.3` actually carries — and because
+ * 3 × 1 m because that is the art `prop.table.3` actually carries, and because
  * the room has to fit inside the block's pitch: a room wider than the pitch makes
  * `placeRooms` re-lay the whole floor, and a council convening must not move the
  * building. The room is sized FOR the table, not the table stretched to the room.
@@ -77,7 +77,7 @@ export interface RoomSlot {
   h: number;
   /**
    * The slot's BAY: what it was given, with one desk of slack in each direction. The
-   * drawn room may grow inside its bay without the shelf — or anything below it —
+   * drawn room may grow inside its bay without the shelf, or anything below it,
    * moving. This is the field that makes "a hire is a local event" true rather than
    * hopeful, and it is why bays have to be carried between builds.
    */
@@ -93,8 +93,8 @@ export interface RoomSlot {
 /**
  * The block's pitch: how far apart two cells are.
  *
- * It is the smallest it can be for the rooms that exist — a two-desk department plus its
- * bay — and it GROWS when a department's roster outgrows that, so a room is always as
+ * It is the smallest it can be for the rooms that exist, a two-desk department plus its
+ * bay, and it GROWS when a department's roster outgrows that, so a room is always as
  * big as the people in it and the block stays tight instead of being a grid of empty
  * bays. Every slot carries the pitch it was laid out with, so the number survives
  * between builds; only when it has to grow does the block re-lay itself, which is a
@@ -108,7 +108,7 @@ const MIN_PITCH_HOLDER = null;
  *
  * A bay that fits its first roster exactly is the bug this whole placement exists to
  * fix. The first hire into a department then grows that room past its allocation, the
- * shelf gets taller, and every shelf below slides down — one new agent in one
+ * shelf gets taller, and every shelf below slides down, one new agent in one
  * department, and a different department on the far side of the floor moves.
  */
 const BAY_SLACK = { w: DESK_W + DESK_GAP_X, h: DESK_H + DESK_GAP_Y };
@@ -124,18 +124,18 @@ export interface Placement {
   rows: number;
   width: number;
   height: number;
-  /** y of each shelf, and the height of the tallest room on it — its corridor follows. */
+  /** y of each shelf, and the height of the tallest room on it, its corridor follows. */
   rowTops: number[];
   rowHeights: number[];
 }
 
 /**
- * Where every room sits — and, the part that matters, that it stays there.
+ * Where every room sits, and, the part that matters, that it stays there.
  *
  * The floor is a SQUARE BLOCK of cells. Rooms fill it in reading order, and a hire that
  * opens a department takes the next free cell, so the new office completes the square
  * rather than being tacked onto the end of a corridor. When the square is full the next
- * ring begins — three-by-three becomes four-by-four — and nothing already standing
+ * ring begins, three-by-three becomes four-by-four, and nothing already standing
  * moves, because a room's position is its cell times the same two constants.
  *
  * A room is placed ONCE. A hire re-grids the desks inside a department's slot; it does
@@ -152,7 +152,7 @@ export function placeRooms(sizes: { id: string; w: number; h: number; fixed?: bo
   let maxCol = -1;
   let maxRow = -1;
 
-  // 0. The bays FIRST, then the pitch that has to hold them — in that order, because the
+  // 0. The bays FIRST, then the pitch that has to hold them, in that order, because the
   // pitch must be sized by what a room is RESERVED, not by what it happens to hold. The
   // bay is sticky: a hire eats into it, and only outgrowing it grows the pitch. Sizing
   // the pitch off the current width instead made every hire re-lay the whole block,
@@ -167,7 +167,7 @@ export function placeRooms(sizes: { id: string; w: number; h: number; fixed?: bo
     // A room that never grows gets no bay slack: the meeting room's size IS its
     // furniture (a table and eight chairs, nothing else ever). Slack on it would
     // push the pitch past the block's and re-lay the whole floor the moment a
-    // council convened — a meeting must not move the building.
+    // council convened, a meeting must not move the building.
     const bay = {
       w: Math.max(was?.bayW ?? (room.fixed ? room.w : room.w + BAY_SLACK.w), room.w),
       h: Math.max(was?.bayH ?? (room.fixed ? room.h : room.h + BAY_SLACK.h), room.h),
@@ -187,8 +187,8 @@ export function placeRooms(sizes: { id: string; w: number; h: number; fixed?: bo
   // ones are not on.
   const repitch = wasPitchW > 0 && (wasPitchW !== pitchW || wasPitchH !== pitchH);
 
-  // 1. Rooms that already exist keep the cell they were given, and — unless the pitch
-  // itself changed — their exact x and y. A carried position is a promise; a recomputed
+  // 1. Rooms that already exist keep the cell they were given, and, unless the pitch
+  // itself changed, their exact x and y. A carried position is a promise; a recomputed
   // one is arithmetic that can drift.
   for (const room of sizes) {
     const was = prev[room.id];
@@ -213,7 +213,7 @@ export function placeRooms(sizes: { id: string; w: number; h: number; fixed?: bo
   }
 
   // 2. The block is a SQUARE: the smallest one that holds everything, and never smaller
-  // than what is already standing — a department emptying must not fold the building in.
+  // than what is already standing, a department emptying must not fold the building in.
   const side = Math.max(Math.ceil(Math.sqrt(sizes.length)), maxCol + 1, maxRow + 1);
 
   // 3. New rooms take the first free cell, in reading order: the new office completes
@@ -397,8 +397,8 @@ export type RoomKind = 'commons' | 'orchestrator' | 'department' | 'bench' | 'br
 /**
  * Work that belongs at a lab bench rather than at a desk.
  *
- * Read off the org's own words — a department's name and mission, an agent's
- * role, a task's title — so the lab is used because the organization is doing
+ * Read off the org's own words, a department's name and mission, an agent's
+ * role, a task's title, so the lab is used because the organization is doing
  * research, not because a timer said so.
  */
 const RE_RND = /research|r&d|lab\b|laborator|science|scientist|innovat|experiment|discover|analysis|analyst/i;
@@ -435,7 +435,7 @@ export interface Room {
   seats: number;
   rows: number;
   cols: number;
-  /** Shelf row this room was packed into — decides which corridor serves it. */
+  /** Shelf row this room was packed into, decides which corridor serves it. */
   row: number;
   /** Waypoint just outside the room's bottom edge, where its corridor spur starts. */
   door: Point;
@@ -472,7 +472,7 @@ export interface Office {
   spineX: number;
   /**
    * Every room's slot, bays included. Hand this back as `BuildOptions.prev` and the
-   * floor is extended instead of re-packed — which is the only way a room keeps its
+   * floor is extended instead of re-packed, which is the only way a room keeps its
    * place while the organization changes around it.
    */
   placement: Placement['slots'];
@@ -483,12 +483,12 @@ export interface BuildOptions {
   /**
    * The council in session, if any. A meeting room exists only while somebody
    * has to decide together: it is created on demand, and then keeps its slot like
-   * any other room — a meeting room that has been built stays where it was.
+   * any other room, a meeting room that has been built stays where it was.
    */
   meeting?: { question: string } | null;
   /**
    * The previous placement, so a room that already exists keeps the slot it was given
-   * instead of being packed again. Omitting it is a fresh floor — correct for the first
+   * instead of being packed again. Omitting it is a fresh floor, correct for the first
    * build, and for a test that wants the packing itself.
    */
   prev?: Placement['slots'];
@@ -557,7 +557,7 @@ function shell(init: RoomInit): Room {
  *
  * Rooms are packed shelf-style (left to right, wrapping at MAX_ROW_WIDTH). Rows
  * are separated by a corridor band, and the whole floor is shifted right to
- * leave room for the vertical spine — that pair of corridors is what makes
+ * leave room for the vertical spine, that pair of corridors is what makes
  * cross-row (cross-department) walking possible.
  */
 export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions = {}): Office {
@@ -572,7 +572,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   const agentOf: Record<string, OrgNode> = {};
   for (const a of agents) agentOf[a.id] = a;
 
-  // The command chain, straight from the org tree's own manager_id — this is what
+  // The command chain, straight from the org tree's own manager_id, this is what
   // lets a report walk to the reporter's actual manager, and onward to whoever
   // runs the floor.
   const managerOf: Record<string, string> = {};
@@ -593,7 +593,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
 
   const rooms: Room[] = [];
 
-  // 1. Break corner — where genuinely idle characters wander, with room for
+  // 1. Break corner, where genuinely idle characters wander, with room for
   // round tables and the chairs around them rather than a single coffee point.
   const breakSize = roomSize(3, 1);
   rooms.push(
@@ -610,7 +610,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     }),
   );
 
-  // 2. Commons — the shared review table (walk target while verifying).
+  // 2. Commons, the shared review table (walk target while verifying).
   const commonsSize = roomSize(2, 1);
   rooms.push(
     shell({
@@ -646,7 +646,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     );
   }
 
-  // 3.5 The lab — where research and R&D work is actually done. It exists only
+  // 3.5 The lab, where research and R&D work is actually done. It exists only
   // when the organization has a department whose own words say it does research.
   const wantsLab = isResearchWork(...departments.flatMap((d) => [d.name, d.mission]));
   if (wantsLab) {
@@ -666,7 +666,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
     );
   }
 
-  // 3.6 Meeting room — the room a council needs. It appears on demand, and once it
+  // 3.6 Meeting room, the room a council needs. It appears on demand, and once it
   // has been built it STAYS: its slot is in `prev` from then on, so it is drawn
   // again every build and the next sitting lands in the same room. A meeting room
   // that vanished between councils would move the next one somewhere new, and the
@@ -741,7 +741,7 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
   // ── Shelf packing: once per room, and then never again ─────────────────────
   // `placeRooms` and not a fresh pack on every update. A room that already exists keeps
   // the slot it was given, so hiring into engineering re-grids engineering's own desks
-  // and moves nobody else — and a room stays where the reader last saw it.
+  // and moves nobody else, and a room stays where the reader last saw it.
   const placement = placeRooms(
     rooms.map((r) => ({ id: r.id, w: r.w, h: r.h, fixed: r.kind === 'meeting' })),
     opts.prev ?? {},
@@ -812,14 +812,14 @@ export function buildOffice(root: OrgNode | null | undefined, opts: BuildOptions
 export interface MeetingSeat {
   x: number;
   y: number;
-  /** What the sitter looks at — the middle of the table. */
+  /** What the sitter looks at, the middle of the table. */
   face: Point;
   /** Which way the chair art stands: true = its back toward the room's south. */
   chairTurned: boolean;
 }
 
 export interface MeetingLayout {
-  /** The table's own corner and size, in plan units — `prop.table.4`'s metre. */
+  /** The table's own corner and size, in plan units, `prop.table.4`'s metre. */
   table: { x: number; y: number; w: number; d: number };
   /** Eight seats, in a fixed order: see below. */
   seats: MeetingSeat[];
@@ -829,11 +829,11 @@ export interface MeetingLayout {
  * Where the meeting room's table and its eight chairs stand.
  *
  * ONE derivation, because two things need it: the renderer draws the chairs, the
- * simulation seats people on them — two formulas is how a sitter and their chair
+ * simulation seats people on them, two formulas is how a sitter and their chair
  * end up half a metre apart.
  *
- * The seat order alternates across the table — south-left, north-right,
- * south-middle, north-middle, south-right, north-left, west head, east head — so
+ * The seat order alternates across the table, south-left, north-right,
+ * south-middle, north-middle, south-right, north-left, west head, east head, so
  * that two people at a two-person meeting face each other across it rather than
  * sitting shoulder to shoulder on the same side.
  */
@@ -865,9 +865,9 @@ export function meetingLayout(room: { x: number; y: number; w: number; h: number
  * Where the person at a desk sits.
  *
  * ONE function, because two things need it: the simulation walks a body to this
- * point, and the renderer draws the chair under it. They used to be two formulas —
+ * point, and the renderer draws the chair under it. They used to be two formulas,
  * `DESK_H - 30` in the plan and a constant assembled from a slab depth that existed
- * nowhere else — which agreed to within three units purely by luck, and would have
+ * nowhere else, which agreed to within three units purely by luck, and would have
  * drifted apart on the next edit to either. The seat is the desk's own near edge
  * plus the legroom, and both callers ask this.
  */

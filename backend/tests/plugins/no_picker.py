@@ -3,7 +3,7 @@
 The founding wizard's Browse button (ADR 0017) is answered by the machine, so
 `crew.api.routes._picker_available()` is host state: True where powershell /
 osascript / zenity exists, False on a bare runner. A test that asserts host
-availability instead of pinning it passes on Windows and fails on ubuntu — which is
+availability instead of pinning it passes on Windows and fails on ubuntu, which is
 exactly what the first CI observation found. This plugin makes that condition reachable
 on any host, so the Linux path cannot regress unnoticed.
 

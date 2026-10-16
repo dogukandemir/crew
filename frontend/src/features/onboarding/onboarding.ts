@@ -1,6 +1,6 @@
 /**
  * The first-run card's pure rules (ADR 0013): when it appears, what a key should look
- * like, and where its console is. No React, no network — the card and its tests share
+ * like, and where its console is. No React, no network, the card and its tests share
  * these rules.
  */
 import type { OnboardingState } from '../../api/types';
@@ -19,7 +19,7 @@ export function dismissOnboarding(): void {
   try {
     window.localStorage.setItem(DISMISS_KEY, '1');
   } catch {
-    /* private mode — nothing to remember */
+    /* private mode, nothing to remember */
   }
 }
 
@@ -88,7 +88,7 @@ export function defaultProvider(state: OnboardingState): string {
 }
 
 /**
- * The save failure a human deserves: the backend's problem `detail` (it says WHY — "the
+ * The save failure a human deserves: the backend's problem `detail` (it says WHY, "the
  * provider rejected this key"), not the transport line ("POST … failed with 400").
  */
 export function describeKeyError(err: unknown): string {

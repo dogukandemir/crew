@@ -70,7 +70,7 @@ async def test_allocation_ranks_the_portfolio_and_freezes_a_stop(bound_loop):
 
 @pytest.mark.asyncio
 async def test_a_member_with_no_finished_work_is_never_on_track(bound_loop):
-    """Zero completed and zero failed work reads truthfully — a brand-new
+    """Zero completed and zero failed work reads truthfully, a brand-new
     project says 'nothing on the record yet'; it never poses as 'on track'."""
     co = await company.create_company(name="Fresh Co", mission="x", budget_usd=10.0)
     fresh = await org.create_project(name="Greenfield", goal="g", budget_usd=2.0)

@@ -3,12 +3,12 @@ company moves.
 
 Natural language in; real actions out; every step on the record. The desk is
 deterministic-first: a lexicon parser (English) turns the message into a
-typed command; only when it cannot — and only when a model is configured — does the
+typed command; only when it cannot, and only when a model is configured, does the
 orchestrator's model get asked to interpret into the same strict schema. Offline it
 says what it can and cannot understand; it never guesses a destructive act.
 
 Attribution is the whole point: the Captain is this deployment's owner. Orders bind,
-ideas are weighed, questions stay questions — and every line carries its source.
+ideas are weighed, questions stay questions, and every line carries its source.
 """
 
 from __future__ import annotations
@@ -116,10 +116,10 @@ def _mentions(text: str, roster: list[dict]) -> tuple[list[str], list[str]]:
 
 
 def parse_command(text: str, roster: list[dict]) -> Command:
-    """Lexicon parse — pure, no DB, no clock. English lexicon (ADR 0012)."""
+    """Lexicon parse, pure, no DB, no clock. English lexicon (ADR 0012)."""
     norm = _norm(text)
     ids, unknown = _mentions(text, roster)
-    cleaned = re.sub(r"@\S+", " ", text).strip(" ,;:—-")
+    cleaned = re.sub(r"@\S+", " ", text).strip(" ,;:-")
     cmd = Command(mentions=ids, text=cleaned, note=("unknown mentions: " + ", ".join(unknown))
                   if unknown else "")
 
@@ -252,10 +252,10 @@ async def handle_command(*, project_id: str, text: str, actor: str = "user") -> 
         log.exception("command desk failed: %s", e)
         ok, reply = False, f"I couldn't carry that out: {e}"
     if parsed.note.startswith("unknown mentions"):
-        # A name that matches nobody must not vanish silently — the Captain needs to know
+        # A name that matches nobody must not vanish silently, the Captain needs to know
         # WHY the order found no one (names resolve against this project's roster).
         names = parsed.note.removeprefix("unknown mentions: ")
-        reply = (f"{reply} — I couldn't match {names} here: names resolve against "
+        reply = (f"{reply}, I couldn't match {names} here: names resolve against "
                  f"this project's roster (Agents tab).")
 
     # `executed` keeps the record honest downstream: only a message whose desk answer
@@ -273,7 +273,7 @@ async def handle_command(*, project_id: str, text: str, actor: str = "user") -> 
 async def _execute(*, project_id: str, parsed: Command, roster: list[dict], raw: str,
                    actor: str) -> tuple[str, list[dict], bool]:
     """(reply, actions, executed). `executed` tells the truth about what happened: a
-    refusal or a missing name is a reply, not an act — and never a directive."""
+    refusal or a missing name is a reply, not an act, and never a directive."""
     intent = parsed.intent
     if "(ambiguous)" in parsed.note:
         return ("That name matches several agents. Use an @full name so I can route the order correctly.", [], False)
@@ -326,14 +326,14 @@ async def _status(project_id: str, parsed: Command, roster: list[dict]) -> tuple
             active = [t for t in mine if t.state not in ("completed", "failed", "aborted")]
             if active:
                 t = active[0]
-                lines.append(f"@{_name_of(roster, aid)}: {t.state} — “{t.title[:60]}”"
+                lines.append(f"@{_name_of(roster, aid)}: {t.state}, “{t.title[:60]}”"
                              f" (attempt {t.attempts})")
             else:
                 lines.append(f"@{_name_of(roster, aid)}: no open work right now "
                              f"({sum(1 for t in mine if t.state == 'completed')} done so far)")
         return (" | ".join(lines), [], False)
     latest = "; ".join(f"{e.type}" for e in recent)
-    return (f"Company status: {len(states)} agents — {busy} busy, {on_break} on a break · "
+    return (f"Company status: {len(states)} agents, {busy} busy, {on_break} on a break · "
             f"tasks: {len(open_tasks)} open, {done} done, {failed} failed · "
             f"latest on the record: {latest}", [], False)
 
@@ -347,10 +347,10 @@ async def _assign(project_id: str, parsed: Command, roster: list[dict], raw: str
         if agent:
             # the mention marker is stripped by the parser but part of the NAME stays in
             # the sentence: "@Lena Schreiber, draft …" → "draft …" (the parser eats
-            # "@Lena", leaving "Schreiber, …" — check name, first AND last word)
+            # "@Lena", leaving "Schreiber, …", check name, first AND last word)
             for alias in (agent.name, agent.name.split()[0], agent.name.split()[-1]):
                 if alias and title.lower().startswith(alias.lower()):
-                    title = title[len(alias):].lstrip(" ,:—-·").strip() or title
+                    title = title[len(alias):].lstrip(" ,:-·").strip() or title
                     break
         task = Task(project_id=project_id, run_id=None,
                     department_id=agent.department_id if agent else None,
@@ -391,10 +391,10 @@ async def _assign(project_id: str, parsed: Command, roster: list[dict], raw: str
                 Run.status.notin_([RunStatus.COMPLETED.value, RunStatus.FAILED.value,
                                    RunStatus.ABORTED.value])))
         tail = ("It runs with the next wave." if open_run else
-                "It is queued — press Start run (or send `goal: …`) and the next wave picks it up.")
+                "It is queued, press Start run (or send `goal: …`) and the next wave picks it up.")
         return (f"On it: “{title[:80]}” is assigned to @{agent.name}. {tail}{extra}", actions, True)
     return (f"Noted: “{title[:80]}” is on the board. The engine will match the best "
-            f"owner when a run is active — tag an agent to name one directly.", actions, True)
+            f"owner when a run is active, tag an agent to name one directly.", actions, True)
 
 
 async def _active_task_of(s, agent_id: str) -> Task | None:
@@ -410,7 +410,7 @@ async def _reassign(project_id: str, parsed: Command, roster: list[dict],
         if len(parsed.mentions) == 1:
             return (f"Whose work should move to @{_name_of(roster, parsed.mentions[0])}? "
                     f"Name both: “@Ada's task goes to @{_name_of(roster, parsed.mentions[0])}”.", [], False)
-        return ("I need two names: whose work, and the new owner — "
+        return ("I need two names: whose work, and the new owner, "
                 "“@Ada's task goes to @Bo”.", [], False)
     from_agent, to_agent = parsed.mentions[0], parsed.mentions[1]
     async with session_scope() as s:
@@ -449,13 +449,13 @@ async def _fire(project_id: str, parsed: Command, roster: list[dict],
         return ("I couldn't find that agent on the roster.", [], False)
     if entry["role"] in UNFIREABLE:
         return (f"@{entry['name']} holds an office the desk doesn't dismiss "
-                f"({entry['role']}) — that decision belongs to the board.", [], False)
+                f"({entry['role']}), that decision belongs to the board.", [], False)
     reason = parsed.text or "the Captain's call"
     # The reason reads the reason: strip the verb phrase, and if the Captain said
-    # "reason: …" use exactly that — never the command's leftovers.
-    reason = re.sub(r"^(?:let\b[^,;:]*?\bgo|fire|dismiss|terminate)\b[ ,;:—-]*", "",
-                    reason, flags=re.I).strip(" ,;:—-")
-    m = re.search(r"\breason\b\s*[:\-–—]?\s*(.+)", reason, flags=re.I)
+    # "reason: …" use exactly that, never the command's leftovers.
+    reason = re.sub(r"^(?:let\b[^,;:]*?\bgo|fire|dismiss|terminate)\b[ ,;:-]*", "",
+                    reason, flags=re.I).strip(" ,;:-")
+    m = re.search(r"\breason\b\s*[:\-–]?\s*(.+)", reason, flags=re.I)
     if m:
         reason = m.group(1).strip()
     reason = reason or "the Captain's call"
@@ -480,7 +480,7 @@ async def _break(project_id: str, parsed: Command, roster: list[dict],
     if not targets:
         if parsed.clear_break:
             return ("Nobody is on a break.", [], False)
-        return ("That name isn't on the roster — no break was set.", [], False)
+        return ("That name isn't on the roster, no break was set.", [], False)
     until = datetime.now(UTC) + timedelta(minutes=minutes)
     async with session_scope() as s:
         for a in targets:
@@ -540,13 +540,13 @@ async def _budget(project_id: str, parsed: Command, actor: str) -> tuple[str, li
     hard = int(_settings.hard_budget_usd * 1_000_000)
     if new_cap > hard:
         return (f"That's above the deployment's hard ceiling of "
-                f"${_settings.hard_budget_usd:,.0f} — the cap stays "
+                f"${_settings.hard_budget_usd:,.0f}, the cap stays "
                 f"${old_cap / 1_000_000:.2f}.", [], False)
     if new_cap < committed:
         return (f"That's below what's already committed (${committed / 1_000_000:.2f} "
-                f"spent + reserved) — the cap stays ${old_cap / 1_000_000:.2f}.", [], False)
+                f"spent + reserved), the cap stays ${old_cap / 1_000_000:.2f}.", [], False)
     if company_cap is not None and new_cap > company_cap:
-        return (f"That's above the company cap of ${company_cap / 1_000_000:.2f} — "
+        return (f"That's above the company cap of ${company_cap / 1_000_000:.2f}, "
                 f"the cap stays ${old_cap / 1_000_000:.2f}.", [], False)
     async with session_scope() as s:
         project = await s.get(Project, project_id)
@@ -568,7 +568,7 @@ async def _hire(project_id: str, parsed: Command, raw: str, actor: str) -> tuple
             break
     if role is None:
         return ("I can hire an analyst, an engineer, a researcher, a designer or a "
-                "writer — say which (“hire a data analyst”).", [], False)
+                "writer, say which (“hire a data analyst”).", [], False)
     spec = RoleSpec.from_template(role, mission=f"hired by the Captain: {raw[:100]}")
     agent = await org.hire_agent(project_id=project_id, spec=spec,
                                  rationale=f"the Captain's hire: {raw[:100]}", actor=actor)
@@ -577,7 +577,7 @@ async def _hire(project_id: str, parsed: Command, raw: str, actor: str) -> tuple
 
 
 async def transcript(*, project_id: str, limit: int = 60) -> dict:
-    """The desk's history, straight from the record — user and orchestrator turns."""
+    """The desk's history, straight from the record, user and orchestrator turns."""
     async with session_scope() as s:
         rows = (await s.scalars(select(Event).where(
             Event.project_id == project_id,

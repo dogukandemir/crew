@@ -7,11 +7,11 @@ import type { OrgNode } from '../api/types';
  * office actually does is grow: agents are hired while the tab is open, a hire into an
  * existing department adds a desk to that department's room, and a hire into nothing
  * opens a whole new room on the canvas. All three are transitions, and transitions are
- * what this file exists to make testable — `orgAt(seconds)` is the org as it stood
+ * what this file exists to make testable, `orgAt(seconds)` is the org as it stood
  * `seconds` after the project opened.
  *
- * The mock backend stages the same SHAPE of growth — a hire into an existing room, a
- * hire that opens a new one — on its own accelerated beats (`BEAT` in `dev/mock`), so
+ * The mock backend stages the same SHAPE of growth, a hire into an existing room, a
+ * hire that opens a new one, on its own accelerated beats (`BEAT` in `dev/mock`), so
  * the tests and the demo describe the same transitions, not the same clock.
  */
 

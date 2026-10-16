@@ -32,7 +32,7 @@ const ORG: OrgNode = {
       state: 'active',
       children: [
         agent({ id: 'cleo', name: 'Cleo', role: 'Backend Engineer', grade: 3, squad_id: 'sq1', department_id: 'd2' }),
-        agent({ id: 'dev', name: 'Dev' , role: 'Engineer', grade: 1, squad_id: 'sq1', department_id: 'd2' }),
+        agent({ id: 'dev', name: 'Dev', role: 'Engineer', grade: 1, squad_id: 'sq1', department_id: 'd2' }),
       ],
     },
   ],
@@ -106,7 +106,7 @@ describe('asking a colleague in person', () => {
     });
     expect(out.bo.point).toEqual(OFFICE.deskOf.bo);
     expect(out.bo.roomId).toBe('d1');
-    // Stays put and looks at their own desk — an unresolved name must not put
+    // Stays put and looks at their own desk, an unresolved name must not put
     // anyone else on the floor as a recipient.
     expect(out.bo.faceTowards?.x).toBe(OFFICE.deskOf.bo.x);
     expect(out.bo.faceTowards?.y).toBeLessThan(OFFICE.deskOf.bo.y);
@@ -143,7 +143,7 @@ describe('working together', () => {
         [squadTask(state)],
       );
       expect(out.dev.point, `moved on a ${state} task`).toEqual(OFFICE.deskOf.dev);
-      // Back at their own desk, they look at their own desk — never at Cleo.
+      // Back at their own desk, they look at their own desk, never at Cleo.
       expect(out.dev.faceTowards).not.toEqual(OFFICE.deskOf.cleo);
       expect(out.dev.faceTowards?.x).toBe(OFFICE.deskOf.dev.x);
     }

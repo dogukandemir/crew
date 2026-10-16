@@ -1,4 +1,4 @@
-"""Batch 2 of docs/17: gossip — real signals, retold, and problems that surface."""
+"""Batch 2 of docs/17: gossip, real signals, retold, and problems that surface."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ async def test_gossip_is_grounded_in_real_state(bound_loop, project):
     assert gs, "someone should have whispered something"
     for g in gs:
         p = g.payload or {}
-        assert p.get("basis"), "gossip must cite its evidence — we never invent"
+        assert p.get("basis"), "gossip must cite its evidence, we never invent"
         assert p.get("topic") and p.get("from_agent_id") and p.get("to_agent_id")
         assert p["from_agent_id"] != p["to_agent_id"], "nobody gossips to themselves"
 

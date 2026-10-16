@@ -1,14 +1,14 @@
 """First-run onboarding (ADR 0013): the user picks a provider once.
 
 The key is verified against the provider, stored ENCRYPTED in the vault (never in
-plaintext, never returned again), and made effective in-process — `os.environ` for the
-CrewAI/LiteLLM layer, the settings object for our own routing — so nothing needs a
+plaintext, never returned again), and made effective in-process, `os.environ` for the
+CrewAI/LiteLLM layer, the settings object for our own routing, so nothing needs a
 `.env` edit or a restart. Picking a provider also points the model tiers at it
 (`PROVIDER_PRESETS`, persisted to `data/provider.json`), because a saved key the
 routing never reads would be a dead end. On boot, stored keys and the picker's choice
 are loaded back, so onboarding survives.
 
-Positioning (deliberate): **Ollama here means LOCAL Ollama** — the machine's own
+Positioning (deliberate): **Ollama here means LOCAL Ollama**, the machine's own
 server, no key, zero spend, verified by reaching it. Ollama's *cloud* models are
 served through OpenRouter's API and key (openrouter.ai/provider/ollama), so they ride
 under the OpenRouter entry instead of a separate picker tile.
@@ -42,7 +42,7 @@ PROVIDERS: dict[str, tuple[str, str, str | None]] = {
     "openrouter": ("OPENROUTER_API_KEY", "openrouter_api_key",
                    "https://openrouter.ai/api/v1/key"),
     # Local Ollama: the "key" slot carries its base URL; there is no secret. The
-    # cloud side deliberately has no entry here — it is reached through OpenRouter.
+    # cloud side deliberately has no entry here, it is reached through OpenRouter.
     "ollama": ("OLLAMA_BASE_URL", "ollama_base_url", None),
     # Kept for backwards compatibility (env-only; no picker tile, no live check).
     "gemini": ("GEMINI_API_KEY", "gemini_api_key", None),
@@ -52,19 +52,19 @@ PROVIDERS: dict[str, tuple[str, str, str | None]] = {
 # and where a key comes from. Order is display order; DeepSeek is the shipped default.
 PROVIDER_META: list[dict] = [
     {"id": "deepseek", "label": "DeepSeek", "kind": "key", "placeholder": "sk-…",
-     "hint": "The shipped default — cheap flagship tiers",
+     "hint": "The shipped default, cheap flagship tiers",
      "console": "https://platform.deepseek.com/api_keys"},
     {"id": "openai", "label": "OpenAI", "kind": "key", "placeholder": "sk-…",
-     "hint": "GPT models — also powers embeddings (semantic recall)",
+     "hint": "GPT models, also powers embeddings (semantic recall)",
      "console": "https://platform.openai.com/api-keys"},
     {"id": "anthropic", "label": "Anthropic", "kind": "key", "placeholder": "sk-ant-…",
      "hint": "Claude models",
      "console": "https://console.anthropic.com/settings/keys"},
     {"id": "openrouter", "label": "OpenRouter", "kind": "key", "placeholder": "sk-or-…",
-     "hint": "One key, hundreds of models — incl. hosted Ollama cloud models",
+     "hint": "One key, hundreds of models, incl. hosted Ollama cloud models",
      "console": "https://openrouter.ai/settings/keys"},
     {"id": "ollama", "label": "Ollama", "kind": "local", "placeholder": DEFAULT_OLLAMA_BASE,
-     "hint": "LOCAL only — runs on this machine; no key, zero spend",
+     "hint": "LOCAL only, runs on this machine; no key, zero spend",
      "console": "https://ollama.com"},
 ]
 
@@ -108,10 +108,10 @@ def normalize_ollama_base(value: str) -> str:
 async def verify(provider: str, key: str) -> tuple[bool, str]:
     """Try the provider's models endpoint. `ok=False` means THE KEY IS WRONG (401/403);
     network trouble is not the key's fault and is reported as a saved-but-unverified
-    answer instead — the caller decides what that difference is worth.
+    answer instead, the caller decides what that difference is worth.
 
     Local Ollama flips the rule: its server is one loopback hop away, so "cannot
-    reach" is deterministic (nothing is running), not flaky — and a saved base URL
+    reach" is deterministic (nothing is running), not flaky, and a saved base URL
     that nothing answers at would be a lie with a menu of failure modes behind it.
     """
     if provider == "ollama":
@@ -120,10 +120,10 @@ async def verify(provider: str, key: str) -> tuple[bool, str]:
             async with httpx.AsyncClient(timeout=4.0) as client:
                 r = await client.get(f"{base}/api/tags")
         except httpx.HTTPError as e:
-            return False, (f"couldn't reach Ollama at {base} — is `ollama serve` running? "
+            return False, (f"couldn't reach Ollama at {base}, is `ollama serve` running? "
                            f"({type(e).__name__})")
         if r.status_code != 200:
-            return False, (f"the server at {base} answered {r.status_code} — "
+            return False, (f"the server at {base} answered {r.status_code}, "
                            "that does not look like Ollama")
         models: list[str] = []
         with contextlib.suppress(Exception):
@@ -132,7 +132,7 @@ async def verify(provider: str, key: str) -> tuple[bool, str]:
             return False, f"Ollama is up at {base}, but no models are installed. Run `ollama pull llama3.2`."
         if not any(name.split(":")[0] == "llama3.2" for name in models):
             return False, "The selected model is missing. Run `ollama pull llama3.2` first."
-        return True, f"Ollama is up at {base} — {len(models)} model(s) available"
+        return True, f"Ollama is up at {base}, {len(models)} model(s) available"
 
     endpoint = PROVIDERS[provider][2]
     if endpoint is None:

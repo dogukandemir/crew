@@ -21,7 +21,7 @@ const convened = (secAgo = 6) =>
 const position = (agent: string, secAgo: number) =>
   ev('council.position', secAgo, agent, { session_id: 'c1', agent_id: agent, round: 1, option_id: 'o1', claim: 'x', confidence: 0.5, risks: [] });
 
-describe('liveCouncil — the sitting the floor draws', () => {
+describe('liveCouncil, the sitting the floor draws', () => {
   it('is nothing when no council was ever convened', () => {
     expect(liveCouncil([ev('agent.thought', 2, 'a1')], NOW)).toBeNull();
   });

@@ -98,19 +98,19 @@ export function UnitDrawer({
           pairs={[
             ['id', <code className="font-mono text-[11px]">{unit.id}</code>],
             ['kind', unit.kind],
-            ['state', unit.state ?? '—'],
-            ['score', typeof unit.score === 'number' ? unit.score.toFixed(3) : '—'],
-            ['grade', unit.grade !== undefined ? `${unit.grade} · ${gradeLabel(unit.grade)}` : '—'],
-            ['spend', unit.spend_micros !== undefined ? formatMicros(unit.spend_micros) : '—'],
+            ['state', unit.state ?? 'n/a'],
+            ['score', typeof unit.score === 'number' ? unit.score.toFixed(3) : 'n/a'],
+            ['grade', unit.grade !== undefined ? `${unit.grade} · ${gradeLabel(unit.grade)}` : 'n/a'],
+            ['spend', unit.spend_micros !== undefined ? formatMicros(unit.spend_micros) : 'n/a'],
             [
               'budget envelope',
-              unit.budget_envelope_micros !== undefined ? formatMicros(unit.budget_envelope_micros) : '—',
+              unit.budget_envelope_micros !== undefined ? formatMicros(unit.budget_envelope_micros) : 'n/a',
             ],
             [
               'success rate',
               (unit.tasks_done ?? 0) > 0 && unit.success_rate !== undefined
                 ? formatPercent(unit.success_rate)
-                : '—',
+                : 'n/a',
             ],
             [
               'tasks',
@@ -118,10 +118,10 @@ export function UnitDrawer({
                 ? `${unit.tasks_done ?? 0} / ${unit.tasks_total}`
                 : unit.tasks_done !== undefined
                   ? `${unit.tasks_done} done / ${unit.tasks_failed ?? 0} failed`
-                  : '—',
+                  : 'n/a',
             ],
             ['open tasks', unit.open_tasks ?? 0],
-            ['mission', unit.mission ?? '—'],
+            ['mission', unit.mission ?? 'n/a'],
           ]}
         />
 
@@ -130,13 +130,13 @@ export function UnitDrawer({
             <div className="mb-1 font-medium text-slate-300">Agent</div>
             <KeyValue
               pairs={[
-                ['autonomy', agent.data.autonomy ?? '—'],
-                ['model tier', agent.data.model_tier ?? '—'],
-                ['model', agent.data.model_id ?? '—'],
+                ['autonomy', agent.data.autonomy ?? 'n/a'],
+                ['model tier', agent.data.model_tier ?? 'n/a'],
+                ['model', agent.data.model_id ?? 'n/a'],
                 ['spend today', formatMicros(agent.data.spend_today_micros)],
                 ['evidence', agent.data.evidence_count ?? 0],
                 ['penalties', agent.data.penalty_count ?? 0],
-                ['skills', (agent.data.skills ?? []).map((s) => s.label ?? s.skill_id).join(', ') || '—'],
+                ['skills', (agent.data.skills ?? []).map((s) => s.label ?? s.skill_id).join(', ') || 'n/a'],
               ]}
             />
             {onOpenAgent && (
@@ -161,9 +161,9 @@ export function UnitDrawer({
             <KeyValue
               pairs={[
                 ['status', dept.data.status],
-                ['capabilities', (dept.data.capabilities ?? []).join(', ') || '—'],
-                ['roster', (dept.data.roster ?? []).length || '—'],
-                ['brain', dept.data.brain_id ?? '—'],
+                ['capabilities', (dept.data.capabilities ?? []).join(', ') || 'n/a'],
+                ['roster', (dept.data.roster ?? []).length || 'n/a'],
+                ['brain', dept.data.brain_id ?? 'n/a'],
               ]}
             />
           </div>

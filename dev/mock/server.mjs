@@ -1,17 +1,17 @@
 // The demo backend: Northwind Labs, staged so the company looks alive.
 //
-// This is not a contract fixture with canned strings — it is a SCENARIO. A real
+// This is not a contract fixture with canned strings, it is a SCENARIO. A real
 // software company (`Northwind Labs`) with a board, a full-name C-suite, three
 // products in different health, and one launch (`Atlas 2.0`) whose org grows WHILE
 // YOU WATCH: an engineer into Development at t+12, a brand-new Platform department
 // at t+30, more hires after, a council at t+40 that actually convenes over the
 // cutover envelope and decides at t+90, and an engineering manager joining at t+78.
 // The disciplines are the classic product / development / design trio. It implements
-// docs/11 §2 shapes — including the growth fields of ADR 0014 (company_knowledge,
+// docs/11 §2 shapes, including the growth fields of ADR 0014 (company_knowledge,
 // tenure_days, `agent.grew`).
 //
 // Two clocks, deliberately:
-//   · the GROWTH clock (BEAT) starts at the first org request, not at boot — the
+//   · the GROWTH clock (BEAT) starts at the first org request, not at boot, the
 //     tab opens seconds after this process starts, and a clock that began at boot
 //     would have finished hiring before anyone looked;
 //   · the HISTORY clock is re-stamped per request (`ago`), because a snapshot
@@ -29,10 +29,10 @@ const CORS = {
 // ── The working project: Atlas 2.0 ──────────────────────────────────────────
 const PROJECT = {
   id: 'p1',
-  name: 'Atlas — customer data platform',
+  name: 'Atlas: customer data platform',
   goal: 'Ship the Atlas 2.0 public launch without breaking anyone already in production.',
   description:
-    'The customer data platform: ingest, model, publish. Atlas 2.0 turns it into something teams can self-serve — new SDKs, a real migration path, and a launch that does not wake anyone up at 3am.',
+    'The customer data platform: ingest, model, publish. Atlas 2.0 turns it into something teams can self-serve, new SDKs, a real migration path, and a launch that does not wake anyone up at 3am.',
   status: 'active',
   stage: 'EXECUTING',
   company_id: 'co1',
@@ -75,11 +75,11 @@ const BASE_SETTINGS = () => ({
 });
 
 // The two projects you can SWITCH TO (the ⇄ menu): they must answer with their own
-// data, or the tab would wear Nimbus's name over Atlas's org — a demo lying about
+// data, or the tab would wear Nimbus's name over Atlas's org, a demo lying about
 // its own switcher. Their datasets are static: not everything is a stage play.
 const NIMBUS = {
   id: 'p2',
-  name: 'Nimbus — mobile app',
+  name: 'Nimbus: mobile app',
   goal: 'Cut the crash-rate regression and ship the next release without a rollback.',
   description: 'The companion app: offline-first, 400k installs, and a crash rate that tripled with the 4.2 release.',
   status: 'active',
@@ -98,9 +98,9 @@ const NIMBUS = {
 };
 const FORGE = {
   id: 'p3',
-  name: 'Forge — design system',
+  name: 'Forge: design system',
   goal: 'Component audit complete; frozen pending a fresh rationale.',
-  description: 'The design system the whole company was supposed to build on — stopped by the board three sprints over budget.',
+  description: 'The design system the whole company was supposed to build on, stopped by the board three sprints over budget.',
   status: 'paused',
   stage: 'DONE',
   company_id: 'co1',
@@ -119,7 +119,7 @@ const PROJECTS_BY_ID = { p1: PROJECT, p2: NIMBUS, p3: FORGE };
 
 // ── What gets founded/created in THIS session (ADR 0015) ────────────────────
 // The /found wizard and the New-project dialog write here, so the demo flow opens
-// a tab that actually exists — an empty company, not a borrowed one.
+// a tab that actually exists, an empty company, not a borrowed one.
 const FOUND = { companies: [], projects: [], runs: [] };
 const projectsList = () => [PROJECT, NIMBUS, FORGE, ...FOUND.projects];
 // A company IS a project row (ADR 0009): its own detail endpoint must serve too, or
@@ -142,13 +142,13 @@ const companyNameOf = (companyId) =>
   companyId === 'co1' ? 'Northwind Labs'
     : FOUND.companies.find((c) => c.id === companyId)?.name ?? null;
 // Every project payload carries the hierarchy fields (ADR 0015): kind, the company
-// breadcrumb and its run count — the strip and the welcome checklist read them.
+// breadcrumb and its run count, the strip and the welcome checklist read them.
 const projectMeta = (p) => ({ ...p, kind: p.kind ?? 'project', company_name: companyNameOf(p.company_id),
                               runs: runsOf(p.id).length });
 
 // ── The schedule ────────────────────────────────────────────────────────────
-// t+12 Karan (software engineer) joins Development — an existing room gains a desk;
-// t+30 a hire into nothing opens Platform — a brand-new room on the canvas; t+48,
+// t+12 Karan (software engineer) joins Development, an existing room gains a desk;
+// t+30 a hire into nothing opens Platform, a brand-new room on the canvas; t+48,
 // t+64 Platform grows; t+40 the escalated migration puts a COUNCIL in the meeting
 // room (it sits until the decision at t+90); t+78 the engineering manager joins.
 // The frontend keeps each room's slot, so nothing already built moves.
@@ -162,7 +162,7 @@ const ago = (sec) => new Date(Date.now() - sec * 1000).toISOString();
 const daysAgo = (d) => new Date(Date.now() - d * 86_400_000).toISOString();
 
 // ── The cast ────────────────────────────────────────────────────────────────
-// Real people, real jobs — an American company's demographics, not five guys
+// Real people, real jobs, an American company's demographics, not five guys
 // named Dave: Turkish, Indian, French, Italian, English, Korean, Japanese and
 // Latino names around an American core, every one with a mission you could read
 // in a performance review. Growth mirrors ADR 0014: knowledge is earned by
@@ -213,7 +213,7 @@ const A = {
     skills: [{ skill_id: 'regression-testing', proficiency: 0.62, evidence_count: 5 }, { skill_id: 'load-testing', proficiency: 0.55, evidence_count: 4 }],
   }),
   a5: mk('a5', 'Giulia Romano', 'Product Designer', 3, 'busy', 0.66, 'd3', {
-    mission: 'The design system and the hard screens — empty states, first-run, the awkward ones.',
+    mission: 'The design system and the hard screens, empty states, first-run, the awkward ones.',
     manager_id: 'a0', spend_micros: 200_000, tasks_done: 4,
     company_knowledge: 0.4, tenure_days: 28,
     skills: [{ skill_id: 'design-systems', proficiency: 0.74, evidence_count: 6 }, { skill_id: 'prototyping', proficiency: 0.7, evidence_count: 5 }],
@@ -243,7 +243,7 @@ const A = {
     company_knowledge: 0.08, tenure_days: 0,
     skills: [{ skill_id: 'sre', proficiency: 0.7, evidence_count: 2 }, { skill_id: 'observability', proficiency: 0.65, evidence_count: 2 }],
   }),
-  // t+78: Development grows a manager — the person the promotions report to.
+  // t+78: Development grows a manager, the person the promotions report to.
   a10: mk('a10', 'Miguel Torres', 'Engineering Manager', 4, 'idle', 0.79, 'd2', {
     mission: 'Runs the team around the launch: schedules, growth, and the boring protection of both.',
     manager_id: 'a0', spend_micros: 20_000,
@@ -279,7 +279,7 @@ const deptNode = (id, children, over = {}) => ({
 });
 
 /**
- * The org AS IT STANDS RIGHT NOW — a function of the clock, evaluated per request.
+ * The org AS IT STANDS RIGHT NOW, a function of the clock, evaluated per request.
  */
 const orgNow = () => {
   const t = elapsed();
@@ -295,7 +295,7 @@ const orgNow = () => {
     if (t >= BEAT.post) platform.push(A.a12);
     children.push(deptNode('d4', platform, { mission: 'runners, pipelines, the 3am pager' }));
   }
-  // t+78: Development grows a manager — the person the promotions report to.
+  // t+78: Development grows a manager, the person the promotions report to.
   if (t >= BEAT.post) children[2].children.push(A.a10);
   return {
     root: {
@@ -305,7 +305,7 @@ const orgNow = () => {
   };
 };
 
-/** A project with nothing on its record yet — honest emptiness, not borrowed data. */
+/** A project with nothing on its record yet, honest emptiness, not borrowed data. */
 const emptyOrg = (id) => {
   const p = projectById(id);
   return {
@@ -316,7 +316,7 @@ const emptyOrg = (id) => {
 
 /**
  * The tasks AS THEY STAND RIGHT NOW. After the council decides (t+90) the migration
- * is unstuck: `escalated` becomes `running`. Before that it stays escalated — the
+ * is unstuck: `escalated` becomes `running`. Before that it stays escalated, the
  * escalation is the reason the council exists, and a task that resolves before its
  * own decision would be a mock lying about its own story.
  */
@@ -325,7 +325,7 @@ const tasksNow = () => {
   const t3 =
     t >= BEAT.decide
       ? { id: 't3', project_id: 'p1', title: 'Zero-downtime migration: dual-write → cutover', state: 'running', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S' }
-      : { id: 't3', project_id: 'p1', title: 'Zero-downtime migration: dual-write → cutover', state: 'escalated', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S', escalation_reason: 'the dual-run infrastructure runs past the development envelope — a roadmap-level call', escalated_to: 'a0' };
+      : { id: 't3', project_id: 'p1', title: 'Zero-downtime migration: dual-write → cutover', state: 'escalated', assignee_agent_id: 'a4', cost_micros: 120_000, attempts: 1, effort: 'S', escalation_reason: 'the dual-run infrastructure runs past the development envelope, a roadmap-level call', escalated_to: 'a0' };
   return [
     { id: 't2', project_id: 'p1', title: 'Blue/green deploy pipeline for atlas-api', state: 'running', assignee_agent_id: 'a3', cost_micros: 610_000, attempts: 2, effort: 'L' },
     t3,
@@ -343,14 +343,14 @@ const tasksNow = () => {
 /** Full details for one task (the drawer opens whichever card you click). */
 const TASK_META = {
   t2: { description: 'Blue/green deploys for atlas-api: two identical environments, a verified swap, and a rollback under sixty seconds. The pipeline is the launch gate.', required_skills: [{ skill: 'ci-cd', weight: 0.6 }, { skill: 'typescript', weight: 0.4 }], depends_on: ['t7'], output_contract: { format: 'pipeline + runbook' }, verification: null, rewards: [] },
-  t3: { description: 'Dual-write between the old and new storage, run the backfill, verify, then cut over — customers must not see a single 500.', required_skills: [{ skill: 'platform-engineering', weight: 0.6 }, { skill: 'regression-testing', weight: 0.4 }], depends_on: ['t2'], output_contract: { format: 'migration runbook + cutover script' }, verification: null, rewards: [] },
+  t3: { description: 'Dual-write between the old and new storage, run the backfill, verify, then cut over, customers must not see a single 500.', required_skills: [{ skill: 'platform-engineering', weight: 0.6 }, { skill: 'regression-testing', weight: 0.4 }], depends_on: ['t2'], output_contract: { format: 'migration runbook + cutover script' }, verification: null, rewards: [] },
   t4: { description: 'Every v1 SDK call must keep working under 2.0 or fail loudly with a deprecation path. The audit is the contract with existing customers.', required_skills: [{ skill: 'product-management', weight: 0.6 }, { skill: 'api-design', weight: 0.4 }], depends_on: [], output_contract: { format: 'compatibility matrix' }, verification: { id: 'v4', task_id: 't4', verdict: 'running', method: 'deterministic', checks: [{ name: 'all v1 endpoints mapped', ok: true }, { name: 'deprecation paths documented', ok: true }, { name: 'breaking changes listed with owners', ok: false }], confidence: 0.8, created_at: ago(180) }, rewards: [] },
-  t5: { description: 'Tokens, dark mode, and the empty states the research flagged — so the first-run experience is not a wall of gray.', required_skills: [{ skill: 'design-systems', weight: 1 }], depends_on: [], output_contract: { format: 'figma library + token spec' }, verification: null, rewards: [] },
+  t5: { description: 'Tokens, dark mode, and the empty states the research flagged, so the first-run experience is not a wall of gray.', required_skills: [{ skill: 'design-systems', weight: 1 }], depends_on: [], output_contract: { format: 'figma library + token spec' }, verification: null, rewards: [] },
   t6: { description: 'An interactive playground that runs against the staging cluster, embedded in the launch docs. The deploy stream is the verification.', required_skills: [{ skill: 'docs', weight: 0.6 }, { skill: 'typescript', weight: 0.4 }], depends_on: [], output_contract: { format: 'embedded widget + docs page' }, verification: null, rewards: [] },
   t1: { description: 'Every dependency, its licence, and whether we can ship it in a commercial product. Two copyleft surprises were expected.', required_skills: [{ skill: 'analytics', weight: 1 }], depends_on: [], output_contract: { format: 'licence-matrix.csv' }, verification: { id: 'v1', task_id: 't1', verdict: 'pass', method: 'deterministic', checks: [{ name: '14/14 dependencies logged', ok: true }, { name: 'copyleft cleared', ok: true }], confidence: 0.95, created_at: daysAgo(1) }, rewards: [] },
   t7: { description: 'Three times projected launch traffic against staging, with the dual-write path hot. The first run found the retry storm.', required_skills: [{ skill: 'load-testing', weight: 1 }], depends_on: [], output_contract: { format: 'load report + findings' }, verification: { id: 'v7', task_id: 't7', verdict: 'pass', method: 'hybrid', checks: [{ name: 'p99 under 400ms at 3×', ok: true }, { name: 'no connection-pool exhaustion', ok: true }], confidence: 0.9, created_at: daysAgo(2) }, rewards: [] },
   t8: { description: 'Twelve users, one screen: every onboarding drop-off traces back to the same empty state. The design pass started here.', required_skills: [{ skill: 'user-research', weight: 1 }], depends_on: [], output_contract: { format: 'research readout' }, verification: { id: 'v8', task_id: 't8', verdict: 'pass', method: 'deterministic', checks: [{ name: '12 sessions coded', ok: true }, { name: 'drop-off ranked by fix cost', ok: true }], confidence: 0.93, created_at: daysAgo(3) }, rewards: [] },
-  t9: { description: 'Twenty-three flaky tests quarantined, nineteen fixed — the suite has to be trustworthy before it can gate a launch.', required_skills: [{ skill: 'regression-testing', weight: 1 }], depends_on: [], output_contract: { format: 'suite report' }, verification: { id: 'v9', task_id: 't9', verdict: 'pass', method: 'hybrid', checks: [{ name: 'quarantine list published', ok: true }, { name: 'fixed tests stable across 20 runs', ok: true }], confidence: 0.88, created_at: daysAgo(4) }, rewards: [] },
+  t9: { description: 'Twenty-three flaky tests quarantined, nineteen fixed, the suite has to be trustworthy before it can gate a launch.', required_skills: [{ skill: 'regression-testing', weight: 1 }], depends_on: [], output_contract: { format: 'suite report' }, verification: { id: 'v9', task_id: 't9', verdict: 'pass', method: 'hybrid', checks: [{ name: 'quarantine list published', ok: true }, { name: 'fixed tests stable across 20 runs', ok: true }], confidence: 0.88, created_at: daysAgo(4) }, rewards: [] },
   t10: { description: 'One room, three disciplines: what ships, what slips, and what nobody noticed until the review.', required_skills: [{ skill: 'product-management', weight: 1 }], depends_on: [], output_contract: { format: 'review notes' }, verification: { id: 'v10', task_id: 't10', verdict: 'pass', method: 'deterministic', checks: [{ name: 'all open risks assigned', ok: true }], confidence: 0.9, created_at: daysAgo(1) }, rewards: [] },
 };
 
@@ -371,11 +371,11 @@ const RAW_EVENTS = [
   ['a3', 'agent.thought', 'drafting the blue/green cutover plan', 1.5],
   ['a1', 'agent.tool.call', 'tool: web.search("blue/green migration post-mortems")', 2],
   ['a4', 'verify.started', 'verifying: webhook retry hardening', 3],
-  ['a0', 'agent.thought', 'two teams are close to their envelope — one call has to happen', 4],
+  ['a0', 'agent.thought', 'two teams are close to their envelope, one call has to happen', 4],
   ['a4', 'policy.approval.requested', 'approval needed: production deploy window (atlas-api)', 5],
   // A report upward: goes to this agent's manager, and walks there.
   ['a3', 'agent.message', 'report to manager: cutover plan is 80%, the dual-write runbook is the last piece', -4,
-    { to: 'manager', text: 'cutover plan is 80% — the dual-write runbook is the last piece', direction: 'up' }],
+    { to: 'manager', text: 'cutover plan is 80%, the dual-write runbook is the last piece', direction: 'up' }],
   ['a3', 'llm.response', 'llm: 1.9k tokens, 0.41s', 6],
   ['a1', 'agent.thought', 'every onboarding drop-off traces back to the same empty-state screen', 7],
   ['a4', 'verify.check', 'check passed: retry storm reproduced and contained', 8],
@@ -393,11 +393,11 @@ const RAW_EVENTS = [
     { to: 'Elena', text: 'the espresso machine is a war crime', direction: 'side', informal: true }],
   // Office talk between two people who are NOT on that task. The story's own record
   // says the migration keeps failing verification (the task.escalated above), so the
-  // rumour is allowed to say exactly that — no more. Giulia is on the design pass,
+  // rumour is allowed to say exactly that, no more. Giulia is on the design pass,
   // not the migration; Ravi (who escalated it) is deliberately not a mouth here.
   ['a5', 'agent.gossip', 'Giulia ⟷ Elena: the migration keeps failing verification', -14,
     { informal: true, topic: 'failing_work', to: 'Elena', to_name: 'Elena', from_name: 'Giulia',
-      text: 'did you hear — the migration keeps failing verification and nobody has said why?',
+      text: 'did you hear, the migration keeps failing verification and nobody has said why?',
       basis: ['task:t3'] }],
   ['a3', 'agent.thought', 'the cutover wants one more dry run before the window', 18],
   ['a4', 'agent.thought', 're-writing the retry tests from the incident postmortem', 20],
@@ -405,15 +405,15 @@ const RAW_EVENTS = [
   ['a1', 'agent.tool.call', 'tool: read_file("interview-notes.md")', 28],
   // A colleague asking a colleague for something: same department, live task.
   ['a2', 'agent.message', 'message to Anika: licence matrix is in the repo', -12,
-    { to: 'Anika', text: 'licence matrix is in the repo — sanity-check the copyleft list?', direction: 'out' }],
+    { to: 'Anika', text: 'licence matrix is in the repo, sanity-check the copyleft list?', direction: 'out' }],
   // The company has a history, not just a present: day-scale entries so the Events
   // tab reads like a launch in its fifth week.
   ['a0', 'run.started', 'run completed: load-test and harden the deploy path', 95_000],
-  ['a1', 'task.completed', 'completed: User research — onboarding drop-off', 88_000],
-  ['a6', 'agent.hired', 'hired: Karan Shah — Software Engineer', 172_800],
+  ['a1', 'task.completed', 'completed: User research, onboarding drop-off', 88_000],
+  ['a6', 'agent.hired', 'hired: Karan Shah, Software Engineer', 172_800],
   ['a0', 'run.started', 'run started: harden the deploy pipeline ahead of the 2.0 cutover', 99_000],
-  ['a2', 'task.completed', 'completed: OSS licence audit — 14 dependencies cleared', 260_000],
-  ['a4', 'task.completed', 'completed: Flaky-test sweep — 19 of 23 fixed', 90_000],
+  ['a2', 'task.completed', 'completed: OSS licence audit, 14 dependencies cleared', 260_000],
+  ['a4', 'task.completed', 'completed: Flaky-test sweep, 19 of 23 fixed', 90_000],
 ];
 
 // Built per request so the timestamps stay fresh.
@@ -435,13 +435,13 @@ const buildEvents = () => {
   if (t >= BEAT.second) {
     whispers.push(['a7', 'agent.gossip', 'Zeynep ⟷ Ivy: the envelope ask is really about the migration', 2,
       { informal: true, topic: 'failing_work', to: 'Ivy', to_name: 'Ivy', from_name: 'Zeynep',
-        text: 'they are asking Alex for a bigger platform envelope — for a migration that keeps failing',
+        text: 'they are asking Alex for a bigger platform envelope, for a migration that keeps failing',
         basis: ['task:t3'] }]);
   }
   if (t >= BEAT.third) {
     whispers.push(['a8', 'agent.gossip', 'Ivy ⟷ Owen: three mouths, one worry', 2,
       { informal: true, topic: 'failing_work', to: 'Owen', to_name: 'Owen', from_name: 'Ivy',
-        text: 'Zeynep says the council is really about the migration that keeps failing — watch the room',
+        text: 'Zeynep says the council is really about the migration that keeps failing, watch the room',
         basis: ['task:t3'] }]);
   }
   if (t >= BEAT.decide) {
@@ -454,7 +454,7 @@ const buildEvents = () => {
   // makes them a MEMBER, and messages between them give the room something to say.
   // At t+90 `decision.recorded` closes it. The sitting's record AGES after the
   // decision instead of being dropped: the frontend's log dedupes by id, and an
-  // array that loses entries in the middle re-numbers everything after them — a
+  // array that loses entries in the middle re-numbers everything after them, a
   // re-indexed event reads as a duplicate and is silently discarded, which is
   // exactly how a decision once went missing.
   const council = [];
@@ -484,25 +484,25 @@ const buildEvents = () => {
       ['a4', 'council.position', 'Ravi on ship now', 4 + past,
         { session_id: 'c1', agent_id: 'a4', round: 1, option_id: 'o1', claim: 'the pipeline is ready today; verification coverage of the dual-write is thin', confidence: 0.4, risks: ['verification coverage is thin'] }],
       ['a7', 'council.position', 'Zeynep on slip two weeks', 3.5 + past,
-        { session_id: 'c1', agent_id: 'a7', round: 1, option_id: 'o2', claim: 'the dual-write window is cheap now and expensive under load — this is the quarter it fits', confidence: 0.68, risks: ['the raised envelope needs sign-off'] }],
+        { session_id: 'c1', agent_id: 'a7', round: 1, option_id: 'o2', claim: 'the dual-write window is cheap now and expensive under load, this is the quarter it fits', confidence: 0.68, risks: ['the raised envelope needs sign-off'] }],
       ['a0', 'council.position', 'Alex on slip two weeks', 3 + past,
-        { session_id: 'c1', agent_id: 'a0', round: 2, option_id: 'o2', claim: 'the dissent is about verification depth, not the date — the two weeks are a verification window', confidence: 0.74, risks: [] }],
+        { session_id: 'c1', agent_id: 'a0', round: 2, option_id: 'o2', claim: 'the dissent is about verification depth, not the date, the two weeks are a verification window', confidence: 0.74, risks: [] }],
       ['a4', 'agent.message', 'message to Zeynep: who signs the raised platform envelope?', 2.5 + past,
         { to: 'Zeynep', text: 'who signs off the raised platform envelope if we slip?', direction: 'side' }],
       ['a7', 'agent.message', 'message to Ravi: Alex can, above the envelope', 2 + past,
-        { to: 'Ravi', text: 'Alex can, anything above the envelope — that is why we are all in this room', direction: 'side' }],
+        { to: 'Ravi', text: 'Alex can, anything above the envelope, that is why we are all in this room', direction: 'side' }],
     );
   }
   if (t >= BEAT.decide) {
     council.push(
       ['a0', 'decision.recorded', 'council decided: slip two weeks, zero-downtime migration', 1,
         { decision_id: 'dc1', chosen_option: 'o2' }],
-      ['a0', 'agent.message', 'message to Ravi: unstuck — two-week window, dry runs land Friday', 1.5,
-        { to: 'Ravi', text: 'unstuck: two-week window, zero-downtime cutover — dry runs land Friday', direction: 'down' }],
+      ['a0', 'agent.message', 'message to Ravi: unstuck, two-week window, dry runs land Friday', 1.5,
+        { to: 'Ravi', text: 'unstuck: two-week window, zero-downtime cutover, dry runs land Friday', direction: 'down' }],
     );
   }
 
-  // HR's paper trail (ADR 0016): one opening with friction — two walked, the third
+  // HR's paper trail (ADR 0016): one opening with friction, two walked, the third
   // landed. Rejects cite real numbers; the interview note is on the record.
   const hrStory = [];
   if (t >= BEAT.post) {
@@ -514,7 +514,7 @@ const buildEvents = () => {
         { candidate: 'Lena Vogel', role: 'worker', skills: ['documentation'], grade: 1, label }],
       ['a11', 'hiring.candidate.rejected', 'rejected: Lena Vogel', 50,
         { candidate: 'Lena Vogel', dimension: 'skill_shortfall',
-          reason: 'covers 0% of the gap — kubernetes, platform-engineering goes uncovered', label }],
+          reason: 'covers 0% of the gap, kubernetes, platform-engineering goes uncovered', label }],
       ['a11', 'hiring.candidate.proposed', 'candidate: Tomás Ríos', 49,
         { candidate: 'Tomás Ríos', role: 'worker', skills: ['platform-engineering', 'kubernetes'], grade: 3, label }],
       ['a11', 'hiring.candidate.rejected', 'rejected: Tomás Ríos', 48,
@@ -527,14 +527,14 @@ const buildEvents = () => {
           scores: { coverage: 1.0, budget_fit: true, complementarity: 1.0, vision: 1.0, total: 1.0, passed: true },
           note: 'Pass. Covers 100% of the platform gap at 250,000µ$; adds coverage the floor lacks.', label }],
       ['a12', 'org.agent.hired', 'hired Platform Specialist (grade Junior)', 45,
-        { agent_id: 'a12', role: 'worker', grade: 1, name: 'Asha Kapoor', rationale: 'worker 1 for platform — HR: Pass. Covers 100% of the platform gap.' }],
+        { agent_id: 'a12', role: 'worker', grade: 1, name: 'Asha Kapoor', rationale: 'worker 1 for platform, HR: Pass. Covers 100% of the platform gap.' }],
     );
   }
 
   return [...(() => {
     // Two raw events only make sense while the migration is stuck: the approval
     // request and the escalation itself. Once the council has decided they are
-    // history, and history — in this mock — means an old timestamp, not a fresh one
+    // history, and history, in this mock, means an old timestamp, not a fresh one
     // that makes a granted approval look pending forever.
     const t2 = elapsed();
     if (t2 < BEAT.decide) return RAW_EVENTS;
@@ -579,7 +579,7 @@ const agentsNow = () => {
   return out;
 };
 
-// ── The other two products' people — static, so switching tabs is honest ────
+// ── The other two products' people, static, so switching tabs is honest ────
 const xa = (id, project_id, name, role, dept, grade, score, over = {}) => ({
   id, kind: 'agent', project_id, department_id: dept, squad_id: null, manager_id: null,
   name, role, grade, state: over.state ?? 'idle', mission: over.mission ?? `${role} on ${project_id === 'p2' ? 'the Nimbus recovery' : 'the Forge audit'}.`,
@@ -632,7 +632,7 @@ const P3_TASKS = () => [
   { id: 'g1', project_id: 'p3', title: 'Component inventory + API audit', state: 'completed', assignee_agent_id: 'f1', cost_micros: 320_000, attempts: 1, effort: 'L' },
   { id: 'g2', project_id: 'p3', title: 'Token pipeline extraction', state: 'completed', assignee_agent_id: 'f2', cost_micros: 210_000, attempts: 2, effort: 'M' },
   { id: 'g3', project_id: 'p3', title: 'Docs site migration', state: 'completed', assignee_agent_id: 'f3', cost_micros: 150_000, attempts: 1, effort: 'M' },
-  { id: 'g4', project_id: 'p3', title: 'Figma → code sync (freeze pending a fresh rationale)', state: 'blocked', assignee_agent_id: 'f2', cost_micros: 30_000, attempts: 1, effort: 'S', escalation_reason: 'frozen with the project — no spend without a board decision', escalated_to: 'f1' },
+  { id: 'g4', project_id: 'p3', title: 'Figma → code sync (freeze pending a fresh rationale)', state: 'blocked', assignee_agent_id: 'f2', cost_micros: 30_000, attempts: 1, effort: 'S', escalation_reason: 'frozen with the project, no spend without a board decision', escalated_to: 'f1' },
 ];
 
 const ALL_AGENTS = () => {
@@ -641,14 +641,14 @@ const ALL_AGENTS = () => {
   return out;
 };
 
-// ── Souls (ADR 0016): the mock mirrors the shape — deterministic per name ────────
+// ── Souls (ADR 0016): the mock mirrors the shape, deterministic per name ────────
 const SOUL_TRAITS = [
-  'methodical — keeps a scratchpad of dead ends', 'fast to prototype, slow to claim',
+  'methodical, keeps a scratchpad of dead ends', 'fast to prototype, slow to claim',
   'decisive under ambiguity', 'notices the detail everyone else skipped',
-  'keeps promises small — and keeps them', 'reads the footnotes before the headline',
+  'keeps promises small, and keeps them', 'reads the footnotes before the headline',
 ];
 const SOUL_VALUES = [
-  'evidence over opinion', 'clarity is kindness', 'the record is the truth — write it down',
+  'evidence over opinion', 'clarity is kindness', 'the record is the truth, write it down',
   'cite it or drop it', 'small sharp teams over big soft ones',
 ];
 const SOUL_VISIONS = [
@@ -682,7 +682,7 @@ const soulOf = (a) => {
 };
 const soulMd = (a) => {
   const s = soulOf(a);
-  return `# ${s.name} — ${a.role}\n\n> ${s.vision}\n\n## Personality\n` +
+  return `# ${s.name}, ${a.role}\n\n> ${s.vision}\n\n## Personality\n` +
     s.traits.map((t) => `- ${t}`).join('\n') + '\n\n## Values\n' +
     s.values.map((v) => `- ${v}`).join('\n') + `\n\n## Voice\n- ${s.voice}\n`;
 };
@@ -697,16 +697,16 @@ const staticEvents = (project_id, rows) => rows.map((r, i) => {
   };
 });
 const p2Events = () => staticEvents('p2', [
-  ['m3', 'agent.thought', 'the cold-start crash only reproduces on Pixel 8 — chasing the vendor blob', 2],
+  ['m3', 'agent.thought', 'the cold-start crash only reproduces on Pixel 8, chasing the vendor blob', 2],
   ['m6', 'verify.started', 'verifying: 4.3 release candidate', 4],
   ['m5', 'verify.check', 'check passed: crash-free sessions back to 99.4% on the soak build', 9],
   ['m1', 'agent.message', 'message to team: hold the rollout until Elif signs off', 14],
   ['m5', 'task.completed', 'completed: Bisect the 4.2 crash-rate regression', 3200],
 ]);
 const p3Events = () => staticEvents('p3', [
-  ['f1', 'agent.thought', 'the component audit is the part worth keeping — everything else is frozen', 26],
+  ['f1', 'agent.thought', 'the component audit is the part worth keeping, everything else is frozen', 26],
   ['f3', 'task.completed', 'completed: Docs site migration', 86_000],
-  ['a0', 'company.directive', 'company directive: stop — Forge', 90_000],
+  ['a0', 'company.directive', 'company directive: stop, Forge', 90_000],
 ]);
 
 // Lazy per-project lookup: RUNS itself is declared further down (the demo's p1 data
@@ -718,7 +718,7 @@ const P2_RUNS = [
     triggered_by: 'user',
     report: { deliverables: [{ kind: 'file', id: 'ar-n2', name: 'bisect-report.md' }],
               verification_summary: 'the regression traced to the offline cache warm path',
-              lessons: ['roll back first, bisect second — the store reviews wanted neither'],
+              lessons: ['roll back first, bisect second, the store reviews wanted neither'],
               cost_micros: 380_000 } },
 ];
 const runsOf = (id) =>
@@ -733,28 +733,28 @@ const BRAINS_BY_ID = {
   // Four levels in one project: project, department, individual (company above).
   p1: [
     { id: 'b1', project_id: 'p1', scope: 'project', label: 'project',
-      owner_name: 'Atlas — customer data platform', entries: 3 },
+      owner_name: 'Atlas: customer data platform', entries: 3 },
     { id: 'b2', project_id: 'p1', scope: 'department', label: 'Platform department',
       owner_name: 'Platform', entries: 2 },
     { id: 'b-a3', project_id: 'p1', scope: 'agent', label: 'personal',
       owner_name: 'Elena Rossi', entries: 2 },
   ],
   p2: [{ id: 'b-p2', project_id: 'p2', scope: 'project', label: 'project',
-         owner_name: 'Nimbus — mobile app', entries: 2 }],
+         owner_name: 'Nimbus: mobile app', entries: 2 }],
   p3: [{ id: 'b-p3', project_id: 'p3', scope: 'project', label: 'project',
-         owner_name: 'Forge — design system', entries: 1 }],
+         owner_name: 'Forge: design system', entries: 1 }],
 };
 const BRAIN_ENTRIES = {
   'b-co1': [
     { id: 'be-c1', brain_id: 'b-co1', kind: 'fact', title: 'Mission',
-      body: 'Ship software people trust — and make the Atlas 2.0 launch the release that proves it.',
+      body: 'Ship software people trust, and make the Atlas 2.0 launch the release that proves it.',
       trust: 1, importance: 0.9, use_count: 9, tags: ['mission'], source: {}, created_at: daysAgo(28) },
     { id: 'be-c2', brain_id: 'b-co1', kind: 'lesson', title: 'Portfolio review: 3 projects',
-      body: 'Atlas — customer data platform: on_track; Nimbus — mobile app: at_risk; Forge — design system: stop',
+      body: 'Atlas: customer data platform: on_track; Nimbus: mobile app: at_risk; Forge: design system: stop',
       trust: 0.8, importance: 0.7, use_count: 4, tags: ['review', 'portfolio'],
       source: { via: 'company.review' }, created_at: ago(12) },
     { id: 'be-c3', brain_id: 'b-co1', kind: 'decision', title: 'Portfolio allocation (3 projects)',
-      body: 'Atlas: priority 1 ($4.52 cap); Nimbus: priority 2 ($2.61 cap); Forge: priority 3 — no new money.',
+      body: 'Atlas: priority 1 ($4.52 cap); Nimbus: priority 2 ($2.61 cap); Forge: priority 3, no new money.',
       trust: 0.85, importance: 0.8, use_count: 3, tags: ['allocation', 'portfolio'],
       source: { via: 'company.allocate' }, created_at: ago(1460) },
   ],
@@ -762,7 +762,7 @@ const BRAIN_ENTRIES = {
     { id: 'be-a31', brain_id: 'b-a3', kind: 'lesson', title: 'Rollback #112: in-place deploys are the enemy',
       body: 'The March rollback was mine. Blue/green first, even when the window looks comfortable.', trust: 0.9, importance: 0.75, use_count: 5, tags: ['deploy'], source: { run_id: 'r1' }, created_at: daysAgo(3.5) },
     { id: 'be-a32', brain_id: 'b-a3', kind: 'procedure', title: 'My release checklist before paging anyone',
-      body: 'Regression suite green, canary at 5% for ten minutes, rollback command in the runbook — then escalate.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['release'], source: {}, created_at: daysAgo(2.2) },
+      body: 'Regression suite green, canary at 5% for ten minutes, rollback command in the runbook, then escalate.', trust: 0.8, importance: 0.6, use_count: 3, tags: ['release'], source: {}, created_at: daysAgo(2.2) },
   ],
   'b-p2': [
     { id: 'be-n1', brain_id: 'b-p2', kind: 'fact', title: 'Crash rate correlates with the offline cache warm path', body: 'Cold starts that miss the cache warm step crash on Android 15 only.', trust: 0.7, importance: 0.7, use_count: 2, tags: ['mobile'], source: { run_id: 'r-p2' }, created_at: daysAgo(1.3) },
@@ -826,20 +826,20 @@ const MEMBERS = [
             { id: 'd3', name: 'Design', head_name: 'Giulia Romano', agents: 1 },
             { id: 'd4', name: 'Platform', head_name: 'Zeynep Arslan', agents: 3 },
             { id: 'd5', name: 'People', head_name: 'Greta Keller', agents: 1 }] },
-  { id: 'p2', name: 'Nimbus — mobile app', status: 'active', verdict: 'at_risk', spend_ratio: 0.84,
-    directive: 'quality alarm: 2 of the last 5 releases rolled back — pair an SRE with mobile on the crash-rate regression',
+  { id: 'p2', name: 'Nimbus: mobile app', status: 'active', verdict: 'at_risk', spend_ratio: 0.84,
+    directive: 'quality alarm: 2 of the last 5 releases rolled back, pair an SRE with mobile on the crash-rate regression',
     completed: 2, failed: 3, open_tasks: 4,
     teams: [{ id: 'd21', name: 'Mobile', head_name: 'Sofia Alvarez', agents: 4 },
             { id: 'd22', name: 'Quality', head_name: 'Hiro Tanaka', agents: 2 }] },
-  { id: 'p3', name: 'Forge — design system', status: 'paused', verdict: 'stop', spend_ratio: 0.97,
-    directive: 'stop and fold: three sprints overran the envelope — keep the component audit, freeze the rest',
+  { id: 'p3', name: 'Forge: design system', status: 'paused', verdict: 'stop', spend_ratio: 0.97,
+    directive: 'stop and fold: three sprints overran the envelope, keep the component audit, freeze the rest',
     completed: 6, failed: 1, open_tasks: 0,
     teams: [{ id: 'd31', name: 'Components', head_name: 'Leo Fischer', agents: 2 },
             { id: 'd32', name: 'Docs', head_name: 'Amelia Stone', agents: 3 }] },
 ];
 const COMPANY = () => ({
   id: 'co1', name: 'Northwind Labs',
-  mission: 'Ship software people trust — and make the Atlas 2.0 launch the release that proves it.',
+  mission: 'Ship software people trust, and make the Atlas 2.0 launch the release that proves it.',
   status: 'active',
   budget_usd: 10, spend_usd: 3.8, spend_ratio: 0.38,
   ceo: { id: 'c1', name: 'Katherine Brooks', grade: 5 },
@@ -861,7 +861,7 @@ const COMPANY = () => ({
 const HQ = () => ({
   company: {
     id: 'co1', name: 'Northwind Labs',
-    mission: 'Ship software people trust — and make the Atlas 2.0 launch the release that proves it.',
+    mission: 'Ship software people trust, and make the Atlas 2.0 launch the release that proves it.',
     budget_usd: 10, spend_usd: 3.8, spend_ratio: 0.38,
   },
   ceo: { id: 'c1', name: 'Katherine Brooks', grade: 5 },
@@ -882,18 +882,18 @@ const HQ = () => ({
       payload: { allocations: [
         { project_id: 'p1', name: PROJECT.name, priority: 1, verdict: 'on_track', share: 0.55,
           old_cap_micros: 3_800_000, new_cap_micros: 4_300_000 },
-        { project_id: 'p2', name: 'Nimbus — mobile app', priority: 2, verdict: 'at_risk',
+        { project_id: 'p2', name: 'Nimbus: mobile app', priority: 2, verdict: 'at_risk',
           share: 0.29, old_cap_micros: 3_400_000, new_cap_micros: 3_100_000 },
-        { project_id: 'p3', name: 'Forge — design system', priority: 3, verdict: 'stop',
+        { project_id: 'p3', name: 'Forge: design system', priority: 3, verdict: 'stop',
           share: 0.0, old_cap_micros: 2_800_000, new_cap_micros: 2_600_000 }] } },
     { type: 'decision.recorded', at: ago(2400), project_id: 'co1',
       text: 'the board approved the allocation', summary: 'approve the plan as recorded',
       payload: { session_id: 'cs-0' } },
     { type: 'company.directive', at: ago(16), project_id: 'p2',
-      text: 'company directive: at_risk — Nimbus', summary: MEMBERS[1].directive,
+      text: 'company directive: at_risk, Nimbus', summary: MEMBERS[1].directive,
       payload: { verdict: 'at_risk', project_id: 'p2', directive: MEMBERS[1].directive } },
     { type: 'company.directive', at: ago(900), project_id: 'p3',
-      text: 'company directive: stop — Forge', summary: MEMBERS[2].directive,
+      text: 'company directive: stop, Forge', summary: MEMBERS[2].directive,
       payload: { verdict: 'stop', project_id: 'p3', directive: MEMBERS[2].directive } },
     { type: 'board.seated', at: ago(1800), project_id: 'co1',
       text: "board seated: Rebecca Sterling chairs, 2 owners' seats", summary: null,
@@ -924,7 +924,7 @@ const RUNS = [
     trace_id: 'tr-0001', cost_micros: 1_450_000, tokens_in: 380_000, tokens_out: 52_000,
     triggered_by: 'user',
     report: { deliverables: [{ kind: 'file', id: 'ar4', name: 'load-report.html' }],
-              verification_summary: '11/12 checks passed — one pool-exhaustion note carried into the runbook',
+              verification_summary: '11/12 checks passed, one pool-exhaustion note carried into the runbook',
               lessons: ['the dual-write adds ~9 minutes to cutover', "Ravi's regression suite catches three of the four webhook races"],
               cost_micros: 1_450_000 } },
 ];
@@ -958,7 +958,7 @@ const CONTEXT = (agentId) => {
       mission: a.mission,
       instructions: `You are ${a.name}, ${a.role} on the Atlas 2.0 launch. Stay inside your envelope; escalate anything above it to the orchestrator.`,
       growth: { company_knowledge: a.company_knowledge, tenure_days: a.tenure_days,
-                note: 'earned by verified work (ADR 0014) — the prompt carries a TENURE line' },
+                note: 'earned by verified work (ADR 0014), the prompt carries a TENURE line' },
       recent_tasks: tasksNow().filter((x) => x.assignee_agent_id === agentId).slice(0, 3)
         .map((x) => ({ id: x.id, title: x.title, state: x.state })),
       brain_hits: [
@@ -974,13 +974,13 @@ const ack = { accepted: true, event_seq: 4123, unit: { kind: 'project', id: 'p1'
 
 // ── Onboarding (ADR 0013 revision): the picker's roster + a session-only save ───
 // The demo must show the card (that is the first-run experience), and the save flow
-// must complete — but the mock never checks a key and never stores one.
+// must complete, but the mock never checks a key and never stores one.
 const ONBOARDING_PROVIDERS = [
-  { id: 'deepseek', label: 'DeepSeek', kind: 'key', placeholder: 'sk-…', hint: 'The shipped default — cheap flagship tiers', console: 'https://platform.deepseek.com/api_keys' },
-  { id: 'openai', label: 'OpenAI', kind: 'key', placeholder: 'sk-…', hint: 'GPT models — also powers embeddings (semantic recall)', console: 'https://platform.openai.com/api-keys' },
+  { id: 'deepseek', label: 'DeepSeek', kind: 'key', placeholder: 'sk-…', hint: 'The shipped default, cheap flagship tiers', console: 'https://platform.deepseek.com/api_keys' },
+  { id: 'openai', label: 'OpenAI', kind: 'key', placeholder: 'sk-…', hint: 'GPT models, also powers embeddings (semantic recall)', console: 'https://platform.openai.com/api-keys' },
   { id: 'anthropic', label: 'Anthropic', kind: 'key', placeholder: 'sk-ant-…', hint: 'Claude models', console: 'https://console.anthropic.com/settings/keys' },
-  { id: 'openrouter', label: 'OpenRouter', kind: 'key', placeholder: 'sk-or-…', hint: 'One key, hundreds of models — incl. hosted Ollama cloud models', console: 'https://openrouter.ai/settings/keys' },
-  { id: 'ollama', label: 'Ollama', kind: 'local', placeholder: 'http://localhost:11434', hint: 'LOCAL only — runs on this machine; no key, zero spend', console: 'https://ollama.com' },
+  { id: 'openrouter', label: 'OpenRouter', kind: 'key', placeholder: 'sk-or-…', hint: 'One key, hundreds of models, incl. hosted Ollama cloud models', console: 'https://openrouter.ai/settings/keys' },
+  { id: 'ollama', label: 'Ollama', kind: 'local', placeholder: 'http://localhost:11434', hint: 'LOCAL only, runs on this machine; no key, zero spend', console: 'https://ollama.com' },
 ];
 const ONBOARDING_CONFIGURED = {};
 const onboardingState = () => ({
@@ -1011,7 +1011,7 @@ const routes = [
     if (m[1] !== 'p1') return paged([]);
     const t = elapsed();
     // The approval that was waiting on the roadmap decision: pending during the
-    // council, granted once it decides — the story and the list agree. The two
+    // council, granted once it decides, the story and the list agree. The two
     // review items are the security gate (ADR 0017) on display: a held command and
     // a quarantined page, each carrying the context the human decides on.
     return paged([
@@ -1049,7 +1049,7 @@ const routes = [
                      company_knowledge: a.company_knowledge })))],
   [/^\/api\/projects\/([^/]+)\/reward-transitions$/, (m) => paged(m[1] === 'p1' ? [
     { id: 'rt1', agent_id: 'a3', agent_name: 'Elena Rossi', from_grade: 3, to_grade: 4, kind: 'promotion', rule: 'score > 0.9 sustained across 5 releases', score_after: 0.91, created_at: daysAgo(3) },
-    { id: 'rt2', agent_id: 'a4', agent_name: 'Ravi Iyer', from_grade: 2, to_grade: 2, kind: 'probation', rule: 'QA accuracy < 0.6 — the webhook race slipped past twice', score_after: 0.42, created_at: daysAgo(3) },
+    { id: 'rt2', agent_id: 'a4', agent_name: 'Ravi Iyer', from_grade: 2, to_grade: 2, kind: 'probation', rule: 'QA accuracy < 0.6, the webhook race slipped past twice', score_after: 0.42, created_at: daysAgo(3) },
   ] : [])],
   [/^\/api\/projects\/([^/]+)\/brains$/, (m) => paged(BRAINS_BY_ID[m[1]] ?? [])],
   [/^\/api\/brains\/([^/]+)\/entries$/, (m) => paged(BRAIN_ENTRIES[m[1]] ?? [])],
@@ -1089,7 +1089,7 @@ const COMMANDS = [
   { id: 'cm-1', role: 'captain', text: 'What’s the status?', mode: 'question', ok: null,
     actions: [], mentions: [], at: ago(340) },
   { id: 'cr-1', role: 'orchestrator',
-    text: 'Atlas 2.0: 11 agents — 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
+    text: 'Atlas 2.0: 11 agents, 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
     mode: 'question', ok: true, actions: [], mentions: [], at: ago(339) },
   { id: 'cm-2', role: 'captain', text: '@Anika, update the launch checklist', mode: 'order',
     ok: null, actions: [], mentions: ['a1'], at: ago(120) },
@@ -1119,13 +1119,13 @@ function COMMAND_MODE(text) {
 
 function COMMAND_REPLY(norm, text, ids, names) {
   if (/fire|let .* go|dismiss|terminate/.test(norm)) {
-    return { text: `Done: @${names[0] || '—'} is archived (reason: “the Captain's call”).`, actions: [] };
+    return { text: `Done: @${names[0] || 'n/a'} is archived (reason: “the Captain's call”).`, actions: [] };
   }
   if (/break/.test(norm)) {
     return {
       text: (norm.includes('everyone') || norm.includes('all '))
         ? 'Everyone on a break for 15 minutes (no new assignments until then; work already in their hands finishes first).'
-        : `@${names[0] || '—'} on a break for 10 minutes (no new assignments until then; work already in their hands finishes first).`,
+        : `@${names[0] || 'n/a'} on a break for 10 minutes (no new assignments until then; work already in their hands finishes first).`,
       actions: [{ kind: 'agent.break.started', event_id: null, ref: ids[0] || null }],
     };
   }
@@ -1137,12 +1137,12 @@ function COMMAND_REPLY(norm, text, ids, names) {
   }
   if (/\?|status|what.*doing/.test(norm)) {
     return {
-      text: 'Atlas 2.0: 11 agents — 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
+      text: 'Atlas 2.0: 11 agents, 4 busy, 1 on probation · tasks: 5 open, 5 done · latest on the record: verify.check passed',
       actions: [],
     };
   }
   if (names.length > 0) {
-    const title = text.replace(/@[^\s,;:!?]+/g, '').replace(/^[\s,;:—-]+/, '').slice(0, 80);
+    const title = text.replace(/@[^\s,;:!?]+/g, '').replace(/^[\s,;:-]+/, '').slice(0, 80);
     return {
       text: `On it: “${title || 'the assignment'}” is assigned to @${names[0]}. It runs with the next wave.`,
       actions: [
@@ -1158,19 +1158,19 @@ function COMMAND_REPLY(norm, text, ids, names) {
 }
 
 // The board demo (ADR 0010): a live task behind one story, a bug waiting for the wave,
-// a helper pair, and done stories — one card per column state. Every task link points
+// a helper pair, and done stories, one card per column state. Every task link points
 // at a task whose state agrees (the migration is blocked only while its escalation
 // stands; the board cannot disagree with the engine).
 const BOARD_ITEMS = [
   { id: 'w1', kind: 'epic', title: 'Launch Atlas 2.0', body: "The run's goal: pipeline, migration, launch surface.", state: 'in_progress', own_state: 'in_progress', severity: 'normal', priority: 2, parent_id: null, department_id: null, squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
-  { id: 'w2', kind: 'feature', title: 'Launch workstream — deploy + migration', body: 'Everything the run needs from Development: pipeline, cutover, rollback path.', state: 'in_progress', own_state: 'backlog', severity: 'normal', priority: 3, parent_id: 'w1', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
+  { id: 'w2', kind: 'feature', title: 'Launch workstream, deploy + migration', body: 'Everything the run needs from Development: pipeline, cutover, rollback path.', state: 'in_progress', own_state: 'backlog', severity: 'normal', priority: 3, parent_id: 'w1', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
   { id: 'w3', kind: 'feature', title: 'Product & docs workstream', body: 'Everything the run needs from Product: compatibility, checklist, launch copy.', state: 'review', own_state: 'backlog', severity: 'normal', priority: 2, parent_id: 'w1', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
   { id: 'w4', kind: 'story', title: 'Blue/green deploy pipeline for atlas-api', body: 'Two identical environments, a verified swap, rollback under 60s.', state: 'in_progress', own_state: 'ready', severity: 'normal', priority: 3, parent_id: 'w2', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a3', assignee_name: 'Elena Rossi', task_id: 't2', task_state: 'running', attempts: 2, helpers: ['a6'], acceptance: ['zero-downtime swap verified on staging', 'rollback under 60 seconds'], tags: ['deploy'] },
   { id: 'w5', kind: 'story', title: 'SDK compatibility audit (v1 → v2)', body: 'Every v1 call keeps working or fails loudly, with a deprecation path.', state: 'review', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w3', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a1', assignee_name: 'Anika Rao', task_id: 't4', task_state: 'verifying', attempts: 1, helpers: [], acceptance: ['all v1 endpoints mapped', 'breaking changes listed with owners'], tags: [] },
   { id: 'w6', kind: 'story', title: 'Draft the v2 pricing page copy', body: '', state: 'backlog', own_state: 'backlog', severity: 'normal', priority: 2, parent_id: 'w3', department_id: null, squad_id: null, created_by: 'user:demo', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: [] },
   { id: 'w7', kind: 'story', title: 'OSS licence audit (14 dependencies)', body: 'Two copyleft surprises were expected; both cleared.', state: 'done', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w3', department_id: 'd1', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a2', assignee_name: 'Deniz Kaya', task_id: 't1', task_state: 'completed', attempts: 1, helpers: [], acceptance: ['14/14 dependencies logged'], tags: ['licensing'] },
-  { id: 'w8', kind: 'bug', title: 'Race condition in webhook retries — duplicate charges under 500s', body: 'Found while hardening the retry path — two in-flight retries both re-post.', state: 'ready', own_state: 'ready', severity: 'high', priority: 1, parent_id: null, department_id: null, squad_id: null, created_by: 'a4', creator_name: 'Ravi Iyer', assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: ['The reported problem is fixed and the fix is verified'], tags: ['webhooks'] },
-  { id: 'w9', kind: 'story', title: 'Zero-downtime migration: dual-write → cutover', body: 'Backfill, verify, cut over — no customer sees a 500.', state: 'blocked', own_state: 'ready', severity: 'normal', priority: 3, parent_id: 'w2', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a4', assignee_name: 'Ravi Iyer', task_id: 't3', task_state: 'escalated', attempts: 1, helpers: [], acceptance: ['zero 5xx during cutover', 'backfill verified row-for-row'], tags: ['migration'] },
+  { id: 'w8', kind: 'bug', title: 'Race condition in webhook retries, duplicate charges under 500s', body: 'Found while hardening the retry path, two in-flight retries both re-post.', state: 'ready', own_state: 'ready', severity: 'high', priority: 1, parent_id: null, department_id: null, squad_id: null, created_by: 'a4', creator_name: 'Ravi Iyer', assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: ['The reported problem is fixed and the fix is verified'], tags: ['webhooks'] },
+  { id: 'w9', kind: 'story', title: 'Zero-downtime migration: dual-write → cutover', body: 'Backfill, verify, cut over, no customer sees a 500.', state: 'blocked', own_state: 'ready', severity: 'normal', priority: 3, parent_id: 'w2', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a4', assignee_name: 'Ravi Iyer', task_id: 't3', task_state: 'escalated', attempts: 1, helpers: [], acceptance: ['zero 5xx during cutover', 'backfill verified row-for-row'], tags: ['migration'] },
   { id: 'w10', kind: 'story', title: 'Design pass: tokens + dark mode', body: 'The empty states the research flagged finally get a real design.', state: 'in_progress', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w1', department_id: 'd3', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a5', assignee_name: 'Giulia Romano', task_id: 't5', task_state: 'running', attempts: 1, helpers: [], acceptance: [], tags: ['design'] },
   { id: 'w11', kind: 'story', title: 'Interactive API playground for the launch docs', body: 'Runs against staging, embedded in the docs.', state: 'in_progress', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w2', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: 'a6', assignee_name: 'Karan Shah', task_id: 't6', task_state: 'running', attempts: 1, helpers: [], acceptance: [], tags: ['docs'] },
   { id: 'w12', kind: 'story', title: 'Refresh the load-test numbers after the SDK changes', body: '', state: 'ready', own_state: 'ready', severity: 'normal', priority: 2, parent_id: 'w2', department_id: 'd2', squad_id: null, created_by: 'system:planner', creator_name: null, assignee_agent_id: null, assignee_name: null, task_id: null, task_state: null, attempts: 0, helpers: [], acceptance: [], tags: ['perf'] },
@@ -1181,7 +1181,7 @@ function BOARD(url) {
   const titles = { backlog: 'Backlog', ready: 'Ready', in_progress: 'In progress', review: 'Review', done: 'Done', blocked: 'Blocked' };
   const pid = url.pathname.split('/')[3] ?? 'p1';
   if (pid !== 'p1') {
-    // A switched-to project answers with its own board — honestly empty, not Atlas's.
+    // A switched-to project answers with its own board, honestly empty, not Atlas's.
     return { project_id: pid, columns: cols.map((k) => ({ key: k, title: titles[k], items: [] })), filter: {} };
   }
   const dept = url.searchParams.get('department_id');
@@ -1189,7 +1189,7 @@ function BOARD(url) {
   let items = BOARD_ITEMS;
   if (dept) items = items.filter((i) => i.department_id === dept && i.kind !== 'epic');
   if (squad) items = items.filter((i) => i.squad_id === squad);
-  // Once the council decides, the migration is unstuck — the blocked card moves with
+  // Once the council decides, the migration is unstuck, the blocked card moves with
   // the task, because the column is derived from the task state.
   const decided = elapsed() >= BEAT.decide;
   items = items.map((i) => i.id === 'w9' && decided
@@ -1202,7 +1202,7 @@ function BOARD(url) {
   };
 }
 
-// ── Founding/creating helpers (ADR 0015) — the demo writes real rows ────────────
+// ── Founding/creating helpers (ADR 0015), the demo writes real rows ────────────
 const CEO_POOL = ['Diane Okafor', 'Samuel Whitfield', 'Priya Raghunathan'];
 const BOARD_POOL = [['Margaret Ellis', 'chair'], ['Devon Price', 'board_member'],
                     ['Aiko Nakamura', 'board_member']];
@@ -1273,7 +1273,7 @@ const server = http.createServer((req, res) => {
         tags: [], budget_cap_micros: Math.round(Number(b.project_budget_usd ?? 5) * 1_000_000),
         spend_micros: 0, pending_approvals: 0, org_size: 0, tasks_done: 0, tasks_total: 0,
         settings: { ...BASE_SETTINGS(),
-          // ADR 0017: the demo mirrors the materialized workspace path — the chosen root
+          // ADR 0017: the demo mirrors the materialized workspace path, the chosen root
           // when one was given, else the default tree's shape.
           workspace: b.workspace_path
             ? `${String(b.workspace_path).replace(/[\\/]+$/, '')}/${String(b.project_name || 'First project')}`
@@ -1321,7 +1321,7 @@ const server = http.createServer((req, res) => {
         label: 'project', owner_name: project.name, entries: 0 }];
       if (companyId === 'co1') {
         MEMBERS.push({ id: pid, name: project.name, status: 'active', verdict: 'no_activity',
-          directive: 'new — nothing on the record yet', completed: 0, failed: 0, open_tasks: 0,
+          directive: 'new, nothing on the record yet', completed: 0, failed: 0, open_tasks: 0,
           teams: [] });
       } else {
         const c = FOUND.companies.find((x) => x.id === companyId);
@@ -1469,7 +1469,7 @@ const server = http.createServer((req, res) => {
     if (url.pathname.split('/')[3] !== 'p1') {
       res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
       return res.end(JSON.stringify({ message_id: 'n/a', reply_event_id: null,
-        reply: { text: 'This demo wires the command desk to Atlas — open Atlas to give orders.', ok: true, mode: 'question', actions: [] } }));
+        reply: { text: 'This demo wires the command desk to Atlas, open Atlas to give orders.', ok: true, mode: 'question', actions: [] } }));
     }
     let raw = '';
     req.on('data', (c) => { raw += c; });
@@ -1527,8 +1527,8 @@ const server = http.createServer((req, res) => {
       }
       ONBOARDING_CONFIGURED[pid] = true;
       const detail = meta.kind === 'local'
-        ? 'noted for this session — the demo mock does not reach your machine'
-        : 'saved for this session — the demo mock accepts any key without checking it';
+        ? 'noted for this session, the demo mock does not reach your machine'
+        : 'saved for this session, the demo mock accepts any key without checking it';
       res.writeHead(201, { 'Content-Type': 'application/json', ...CORS });
       res.end(JSON.stringify({ provider: pid, verified: true, detail, tiers: {} }));
     });

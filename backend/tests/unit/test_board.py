@@ -1,4 +1,4 @@
-"""ADR 0010: the board — hierarchy, derivation, promotion, bug intake, and helpers."""
+"""ADR 0010: the board, hierarchy, derivation, promotion, bug intake, and helpers."""
 
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ async def test_a_ready_bug_is_promoted_once_and_its_column_follows_the_task(boun
 
     # a second pass never duplicates the work
     assert await backlog.promote_ready(project_id=project["id"], run_id="r-2") == []
-    # and a promoted item cannot be moved by hand — its column is the task's
+    # and a promoted item cannot be moved by hand, its column is the task's
     with pytest.raises(ValueError, match="follows the task"):
         await backlog.move_item(project_id=project["id"], item_id=item["id"], state="done")
 
@@ -162,7 +162,7 @@ async def test_join_task_and_the_helper_takes_the_retry(tool_context, bound_loop
                                                       Event.type == "task.helper.joined"))).all()
     assert helper_id in (t.helpers or []) and joined
 
-    # the first failure goes to the helper who joined — joint work finishes together
+    # the first failure goes to the helper who joined, joint work finishes together
     async with session_scope() as s:
         row = await s.get(Task, t_id)
         row.state = TaskState.FAILED.value

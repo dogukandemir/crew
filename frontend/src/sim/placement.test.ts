@@ -5,7 +5,7 @@ import { MAX_ROW_WIDTH, ROOM_COL_GAP, SPINE_W, placeRooms } from './floorplan';
  * The placement's one promise: a room that exists does not move.
  *
  * This is not tidiness. `buildOffice` runs again on every office update, and the
- * version this replaced packed the shelves from scratch each time — so hiring one
+ * version this replaced packed the shelves from scratch each time, so hiring one
  * agent widened its department, slid every room after it along the shelf and could
  * push an entire shelf onto the next one. On screen the whole building jumped, and a
  * room could not be pointed at across two updates, which is what a floor plan is for.
@@ -36,7 +36,7 @@ describe('placeRooms', () => {
     expect(overlaps).toBe(false);
     // Either beside `a` on the same shelf, clear of `a`'s whole bay, or on a shelf of
     // its own below. A bay is a desk wider than the room it holds, so two rooms that
-    // look like they fit can genuinely not — which is the placement working.
+    // look like they fit can genuinely not, which is the placement working.
     if (b.row === a.row) {
       expect(b.x).toBeGreaterThanOrEqual(a.x + a.bayW);
       expect(b.y).toBe(a.y);
@@ -48,7 +48,7 @@ describe('placeRooms', () => {
 
   it('fills the block in reading order, and grows the SQUARE when it is full', () => {
     // Nine rooms make a three-by-three. The ninth completes it; the tenth starts a
-    // four-by-four, and the nine that were already there do not move — which is what
+    // four-by-four, and the nine that were already there do not move, which is what
     // "the new office completes the square" means as arithmetic.
     const nine = Array.from({ length: 9 }, (_, i) => sized(`r${i}`, 300, 200));
     const full = placeRooms(nine);

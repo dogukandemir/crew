@@ -18,7 +18,7 @@ log = logging.getLogger("crew.events")
 
 
 class EventBus:
-    """In-process pub/sub. Swap for Redis Streams in prod (docs/01 §4.2) — same interface."""
+    """In-process pub/sub. Swap for Redis Streams in prod (docs/01 §4.2), same interface."""
 
     def __init__(self) -> None:
         self._subs: dict[str, set[asyncio.Queue]] = defaultdict(set)
@@ -83,7 +83,7 @@ def utc_iso(dt: datetime) -> str:
     """Serialize a timestamp WITH the UTC offset.
 
     SQLite drops tzinfo on the way in, so every datetime read back from the DB is
-    naive — and a naive ISO string makes browsers parse it as LOCAL time. That is
+    naive, and a naive ISO string makes browsers parse it as LOCAL time. That is
     how the Events feed showed "2h ago" on rows emitted seconds earlier (UTC+2
     host). Every API/WS timestamp goes through this helper instead.
     """
@@ -219,7 +219,7 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "decision.recorded": ("decision_id", "chosen_option"),
     "policy.denied": ("capability",),
     "policy.approval.requested": ("capability",),
-    # HR (ADR 0016): every growth opening is a small, bounded story —
+    # HR (ADR 0016): every growth opening is a small, bounded story,
     # an opening, its candidates, their interviews, and who walked away.
     "hiring.role.opened": ("role", "skills", "headroom_micros"),
     "hiring.candidate.proposed": ("candidate", "role"),

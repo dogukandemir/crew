@@ -1,4 +1,4 @@
-"""ADR 0016: HR interviews — the bounded ladder, the grounded rubric, the seated
+"""ADR 0016: HR interviews, the bounded ladder, the grounded rubric, the seated
 Head of People, and a soul on every hire."""
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def test_the_ladder_never_exceeds_two_rejections():
     assert set(counts) <= {1, 2}, "friction forces a rejection, never a third"
     clean = sum(1 for i in range(400)
                 if hiring.roll_rejects(0.28, random.Random(f"s{i}")) == 0)
-    assert 240 <= clean <= 340, f"most openings land clean — got {clean}/400"
+    assert 240 <= clean <= 340, f"most openings land clean, got {clean}/400"
 
 
 def test_the_rubric_rejects_each_flaw_for_its_own_reason():
@@ -99,14 +99,14 @@ async def test_growth_hires_go_through_interviews_with_a_bounded_ladder(bound_lo
     per_label = Counter(e.payload.get("label") for e in rejected)
     assert all(n <= 2 for n in per_label.values()), f"the cap holds: {per_label}"
 
-    # every planned role still landed — the candidate after the rejects always hires
+    # every planned role still landed, the candidate after the rejects always hires
     hired_roles = [a.role for a in agents]
     assert hired_roles.count("head") == 1 and hired_roles.count("lead") == 1
     assert hired_roles.count("worker") >= 1
     # every fresh hire is a person with a soul, and names are human
     for a in agents:
         assert a.soul and a.soul.get("traits") and " " in a.name
-    # rejected candidates are NOT agents — they exist only on the record
+    # rejected candidates are NOT agents, they exist only on the record
     on_floor = {a.name for a in agents}
     for e in rejected:
         assert e.payload["candidate"] not in on_floor
@@ -128,7 +128,7 @@ async def test_friction_off_means_a_clean_hiring_wave(bound_loop, project):
             Event.project_id == project["id"],
             Event.type == "hiring.candidate.proposed"))).all()
     assert not rejected, "no drama when friction is off"
-    assert proposed, "but the interviews still happen — one candidate per opening"
+    assert proposed, "but the interviews still happen, one candidate per opening"
 
 
 @pytest.mark.asyncio

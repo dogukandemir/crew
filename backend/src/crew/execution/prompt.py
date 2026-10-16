@@ -67,11 +67,11 @@ def build_system_prompt(
     )
     if knowledge is not None:
         # Growth (ADR 0014): the numbers come from verified work, so the prompt can
-        # afford to lean on them — with the re-verify caveat doing the honesty work.
+        # afford to lean on them, with the re-verify caveat doing the honesty work.
         band = "deep" if knowledge >= 0.6 else "working" if knowledge >= 0.25 else "new"
         identity += (
             f"\nTENURE: {tenure_days} day(s) with this company; company knowledge "
-            f"{knowledge:.2f}/1.00 ({band}). It grew from your verified work — lean on it, "
+            f"{knowledge:.2f}/1.00 ({band}). It grew from your verified work, lean on it, "
             "but re-verify when the record is thin or the fact is old."
         )
     chain = (
@@ -83,7 +83,7 @@ def build_system_prompt(
     authority = (
         f"Granted capabilities: {', '.join(capabilities or []) or 'read-only memory'}.\n"
         f"Available tools: {', '.join(tool_names or []) or 'none'}.\n"
-        "Anything outside your capability list is physically blocked by the policy engine — "
+        "Anything outside your capability list is physically blocked by the policy engine, "
         "attempting it wastes a turn, so ask the appropriate approver instead."
     )
     method = template.method
@@ -96,7 +96,7 @@ def build_system_prompt(
     sections = {"identity": identity}
     if soul:
         # The person behind the role (ADR 0016). It colours HOW the work is done and
-        # written — the standing rules and the record still decide what is true.
+        # written, the standing rules and the record still decide what is true.
         from crew.domain.soul import soul_prompt_block
 
         sections["soul"] = soul_prompt_block(soul)
@@ -147,8 +147,8 @@ def build_task_prompt(
         parts += [f"  - {d}" for d in company_directives]
     if captain_directives:
         # The command desk's lines (ADR 0012): the Captain is the deployment's owner;
-        # orders bind, ideas are weighed, and both are attributed — never a whisper.
-        parts += ["", "CAPTAIN DIRECTIVES (from the Captain — this company's owner):"]
+        # orders bind, ideas are weighed, and both are attributed, never a whisper.
+        parts += ["", "CAPTAIN DIRECTIVES (from the Captain, this company's owner):"]
         parts += [f"  - {d}" for d in captain_directives]
     if steer:
         parts += ["", "OPERATOR STEERING (highest priority):"] + [f"  - {s}" for s in steer]
@@ -175,7 +175,7 @@ def build_backstory(*, role: str, department: str | None, grade: int,
         f"You are a {grade_label}-grade {template.title.lower()}{where}. "
         f"{template.mission} You are measured on verified outcomes, not activity: an unverifiable "
         "claim is worse than an honest 'unverified'. Your reward record decides your grade, your "
-        "model and your budget — solid, cited, complete work pays; hand-waving costs you."
+        "model and your budget, solid, cited, complete work pays; hand-waving costs you."
     )
     if soul and soul.get("voice"):
         # ADR 0016: the person's voice, in the one line CrewAI reads.

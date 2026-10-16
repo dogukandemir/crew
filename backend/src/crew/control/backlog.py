@@ -5,7 +5,7 @@ point: a board full of epics cannot be dispatched, and a task table cannot tell 
 story. A READY story or bug is promoted into a real task by the orchestrator's board
 pass, and the wave/verify/reward machinery takes it from there; after promotion the
 board column is DERIVED from the task state, so the board cannot disagree with the
-engine — the "one metre" rule, applied to workflow.
+engine, the "one metre" rule, applied to workflow.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ async def create_item(*, project_id: str, kind: str, title: str, body: str = "",
 @transactional
 async def plan_items(*, project_id: str, goal: str, tasks: list[Task]) -> dict:
     """Turn a run's plan into the hierarchy: one epic (the goal), features per capability
-    category, and stories 1:1 with the plan's tasks — linked, never re-promoted."""
+    category, and stories 1:1 with the plan's tasks, linked, never re-promoted."""
     epic = await create_item(project_id=project_id, kind="epic", title=goal[:280],
                              body=f"The run's goal, decomposed into {len(tasks)} stories.",
                              created_by="system:planner", state="in_progress")
@@ -121,7 +121,7 @@ async def move_item(*, project_id: str, item_id: str, state: str, actor: str = "
             raise KeyError(item_id)
         if item.task_id:
             # a promoted item's column is the task's truth; allowing a manual move here
-            # would be a second source of workflow — refuse, and say why
+            # would be a second source of workflow, refuse, and say why
             raise ValueError("this item is a live task's record; its column follows the task")
         item.state = state
         s.add(item)
@@ -192,7 +192,7 @@ async def promote_ready(*, project_id: str, run_id: str) -> list[dict]:
 
 async def board(*, project_id: str, department_id: str | None = None,
                 squad_id: str | None = None) -> dict:
-    """The kanban view. Columns are derived; filters use each item's EFFECTIVE team —
+    """The kanban view. Columns are derived; filters use each item's EFFECTIVE team,
     the task's once promoted, the item's own before that."""
     async with session_scope() as s:
         items = (await s.scalars(select(WorkItem).where(WorkItem.project_id == project_id)

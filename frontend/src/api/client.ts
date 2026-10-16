@@ -142,7 +142,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
-      // REST auth is `Authorization: Bearer` (docs/11) — sending credentials on
+      // REST auth is `Authorization: Bearer` (docs/11), sending credentials on
       // every call would make the browser reject responses from a backend whose
       // CORS origin is not an exact echo, so we keep the default `same-origin`.
       credentials: 'same-origin',
@@ -180,7 +180,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       parsed && typeof parsed === 'object' && 'title' in (parsed as object)
         ? (parsed as Problem)
         : null;
-    // FastAPI's plain HTTPException body is `{"detail": "…"}` — the reason is right there;
+    // FastAPI's plain HTTPException body is `{"detail": "…"}`, the reason is right there;
     // a transport line ("POST … failed with 400") is the last resort, not the default.
     const detailText =
       parsed &&
@@ -213,7 +213,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 }
 
 /** Assemble a flat {reason} control body. Endpoints take plain models with
- * extra="forbid" — a payload envelope is rejected (review 2026-10-14). */
+ * extra="forbid", a payload envelope is rejected (review 2026-10-14). */
 function cmdBody(reason?: string): CommandBody {
   const body: CommandBody = {};
   if (reason) body.reason = reason;
@@ -531,7 +531,7 @@ export const api = {
   listApprovals: (id: string, state?: string) =>
     request<Paged<Approval>>(`/api/projects/${id}/approvals`, { query: { state } }),
   /** Grant an approval. `always` (command reviews only, ADR 0017) also writes the
-   * normalized command to the project's allowlist — it never asks again. */
+   * normalized command to the project's allowlist, it never asks again. */
   grantApproval: (approvalId: string, reason?: string, opts?: { ttlMinutes?: number; always?: boolean }) =>
     request<{ approval_id: string; state: string; allow_id?: string | null }>(
       `/api/approvals/${approvalId}/grant`,

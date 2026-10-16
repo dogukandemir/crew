@@ -1,4 +1,4 @@
-"""ADR 0014: agents grow with verified work — skills compound, company knowledge
+"""ADR 0014: agents grow with verified work, skills compound, company knowledge
 accrues, and both land on the record as one `agent.grew` event (never inferred)."""
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ async def test_growth_is_bounded(bound_loop, project):
 
 @pytest.mark.asyncio
 async def test_the_evidence_rule_runs_both_ways(bound_loop, project):
-    """A pass thin enough to carry penalties is not a full pass — the skill slides."""
+    """A pass thin enough to carry penalties is not a full pass, the skill slides."""
     async with session_scope() as s:
         a = await _worker(s, project["id"])
         aid = a.id

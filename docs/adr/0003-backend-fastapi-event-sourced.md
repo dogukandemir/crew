@@ -1,4 +1,4 @@
-# ADR 0003 — Python/FastAPI backend with an event-sourced core
+# ADR 0003: Python/FastAPI backend with an event-sourced core
 
 - **Status:** Accepted
 - **Date:** 2026-10-06
@@ -17,4 +17,4 @@ table as the primary record and current-state tables as projections.
 - Event sourcing makes replay, audit and per-unit observability cheap: they are queries, not
   features that need separate instrumentation.
 - Cost: Python for the whole backend (accepted; the heavy logic is orchestration and I/O).
-- Risk: event table growth — mitigated by retention/rollup policy (docs/10 §5).
+- Risk: event table growth, mitigated by retention/rollup policy (docs/10 §5).

@@ -1,12 +1,12 @@
 """Company and project workspaces (ADR 0017).
 
 One rule: a project's workspace is a real folder, chosen (or defaulted) at founding and
-never re-derived silently. Agents see exactly this folder — the fs tools jail to it and
+never re-derived silently. Agents see exactly this folder, the fs tools jail to it and
 the execution sandbox mounts it at /work and nothing else.
 
 - Founding may pick the company's root (`company.settings.workspace_root`); the default
   is `{CREW_WORKSPACE_ROOT or ~/crew/workspace}/{company}/{project}`, per the owner's
-  formula. The company segment exists only in the default case — an explicit path is
+  formula. The company segment exists only in the default case, an explicit path is
   used as-is.
 - Projects under a company materialize their path once (`project.settings.workspace`)
   and every later resolver reads it from there; standalone projects keep the internal
@@ -47,7 +47,7 @@ def company_root(company: Project) -> Path:
 
 def validate_company_path(raw: str) -> str:
     """Validate a wizard-supplied workspace path and create it. Refuses quietly-correct-looking
-    relative paths — a chosen root must be absolute, so there is never doubt where it landed."""
+    relative paths, a chosen root must be absolute, so there is never doubt where it landed."""
     p = Path((raw or "").strip()).expanduser()
     if not p.is_absolute():
         raise ValueError("workspace path must be absolute")
@@ -60,7 +60,7 @@ def validate_company_path(raw: str) -> str:
 
 def resolve_workspace(project: Project) -> Path:
     """Where this project's files live: its materialized choice, else the internal dir.
-    Self-heals a missing folder — a run must never die on an unmade directory."""
+    Self-heals a missing folder, a run must never die on an unmade directory."""
     chosen = str((project.settings or {}).get("workspace") or "").strip()
     path = Path(chosen) if chosen else settings.workspace_dir(project.id)
     path.mkdir(parents=True, exist_ok=True)
@@ -72,7 +72,7 @@ async def allocate_project_workspace(project_id: str, *, company_id: str | None 
 
     Company projects: `{company_root}/{project_name}` (created now, written once).
     Standalone projects: the internal data-dir path (unchanged, jailed the same way).
-    Idempotent — an already-recorded path is kept, never silently re-derived.
+    Idempotent, an already-recorded path is kept, never silently re-derived.
     """
     async with session_scope() as s:
         project = await s.get(Project, project_id)

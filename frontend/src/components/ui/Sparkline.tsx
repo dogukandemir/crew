@@ -27,7 +27,7 @@ export function Sparkline({
   );
 
   if (series.length < 2) {
-    return <span className={cn('text-slate-600', className)}>—</span>;
+    return <span className={cn('text-slate-600', className)}>n/a</span>;
   }
 
   const min = Math.min(...series);

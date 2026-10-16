@@ -1,4 +1,4 @@
-"""ADR 0013 (revision): the provider picker — roster, tier presets, local Ollama."""
+"""ADR 0013 (revision): the provider picker, roster, tier presets, local Ollama."""
 
 from __future__ import annotations
 

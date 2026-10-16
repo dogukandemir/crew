@@ -1,6 +1,6 @@
 """The company layer (ADR 0009): a headquarters project whose agents run the portfolio.
 
-A company IS a project row (kind='company') — that schema economy is the whole point:
+A company IS a project row (kind='company'), that schema economy is the whole point:
 its agents, budgets, brains and event stream are the machinery every project already
 has, so governance needs nothing invented. Its working parts:
 
@@ -8,11 +8,11 @@ has, so governance needs nothing invented. Its working parts:
 - company chiefs (the ADR 0008 C-roles) join on demand and own functions across projects;
 - a member project's orchestrator reports to the CEO once the project joins;
 - a review reads every member project's numbers and writes ONE grounded directive into
-  each member's stream — the orchestrator reads directives into its task prompts, so a
+  each member's stream, the orchestrator reads directives into its task prompts, so a
   directive is binding work, not a dashboard;
 - the company brain (ADR 0015, `BrainScope.COMPANY`) is the umbrella memory: the mission
   seeds it, reviews and allocations land in it, and every member project's agents
-  retrieve from it — one directive, available everywhere.
+  retrieve from it, one directive, available everywhere.
 
 The review is deliberately deterministic for now: every line cites the numbers it came
 from (spend ratio, completed, failed). An LLM garnish can come later; a lie cannot.
@@ -55,7 +55,7 @@ VERDICT_WEIGHT: dict[str, float] = {
 async def create_company(*, name: str, mission: str = "", budget_usd: float | None = None,
                          owner_id: str | None = None, workspace_root: str | None = None) -> dict:
     """Create the company (a kind='company' project), hire its CEO, and fix its workspace
-    root (ADR 0017): the owner-chosen path if given, else the default tree — the exact
+    root (ADR 0017): the owner-chosen path if given, else the default tree, the exact
     root is written to the audit log either way."""
     patch: dict | None = None
     if workspace_root and str(workspace_root).strip():
@@ -80,7 +80,7 @@ async def found_company(*, name: str, mission: str = "", budget_usd: float | Non
     The wizard's single call. `workspace_path` is the optional workspace root chosen at
     founding (ADR 0017); when absent the default `{root}/{company}/{project}` tree is
     materialized. The first run is started by the API layer (it owns the background
-    driving), so this returns the rows that now exist — nothing is claimed that was not
+    driving), so this returns the rows that now exist, nothing is claimed that was not
     written."""
     company = await create_company(name=name, mission=mission, budget_usd=budget_usd,
                                    owner_id=owner_id, workspace_root=workspace_path)
@@ -91,7 +91,7 @@ async def found_company(*, name: str, mission: str = "", budget_usd: float | Non
 
 
 async def brains_overview(company_id: str) -> dict:
-    """The umbrella brain plus every member's memory index — one honest page (ADR 0015).
+    """The umbrella brain plus every member's memory index, one honest page (ADR 0015).
 
     The company brain is served with its entry count; members list their brains with
     per-brain counts so the UI can show WHERE knowledge lives without fetching every
@@ -115,7 +115,7 @@ async def brains_overview(company_id: str) -> dict:
                 select(BrainEntry.brain_id, func.count(BrainEntry.id))
                 .where(BrainEntry.project_id == m.id).group_by(BrainEntry.brain_id))).all()}
             # Resolve owner names: "person · personal" is a database, a name
-            # is an org — the same resolution list_brains does, one scope up.
+            # is an org, the same resolution list_brains does, one scope up.
             dept_names = {d.id: d.name for d in (await s.scalars(
                 select(Department).where(Department.project_id == m.id))).all()}
             agent_names = {a.id: a.name for a in (await s.scalars(
@@ -161,7 +161,7 @@ async def _review_payload(s, company_id: str) -> dict | None:
 
 
 async def _member_stats(s, m: Project, stale_hours: int) -> dict:
-    """One member's numbers, read from its own stream — the only lens the review,
+    """One member's numbers, read from its own stream, the only lens the review,
     the portfolio and the HQ floor all share."""
     completed = int(await s.scalar(select(func.count(Event.id)).where(
         Event.project_id == m.id, Event.type == "task.completed")) or 0)
@@ -187,26 +187,26 @@ def _verdict_of(st: dict, now: datetime) -> tuple[str, str, str, dict]:
     if st["ratio"] >= 0.95:
         verdict, severity = "stop", "error"
         line = (f"stop and fold: {st['ratio']:.0%} of the budget is spent with "
-                f"{st['completed']} completed — no new spend without a fresh rationale")
+                f"{st['completed']} completed, no new spend without a fresh rationale")
     elif attempted >= 3 and st["failed"] / attempted >= 0.5:
         verdict, severity = "at_risk", "warning"
-        line = (f"quality alarm: {st['failed']} of {attempted} tasks failed — put a senior pair "
+        line = (f"quality alarm: {st['failed']} of {attempted} tasks failed, put a senior pair "
                 f"on the recurring failure before the next attempt")
     elif st["ratio"] >= 0.8:
         verdict, severity = "at_risk", "warning"
-        line = (f"tighten: {st['ratio']:.0%} of the budget is used — shrink reservations and "
+        line = (f"tighten: {st['ratio']:.0%} of the budget is used, shrink reservations and "
                 f"cheap models until the run lands")
     elif st["completed"] == 0 and st["failed"] == 0:
         # Nothing has EVER finished here: "on track" is a guess with no
         # completed work to stand on. If a run is in flight, say that; if nothing is,
-        # say THAT — both sentences cite the record.
+        # say THAT, both sentences cite the record.
         verdict, severity = "no_activity", "notice"
         line = (f"first run in flight: {st['open_tasks']} task(s) underway, nothing completed yet"
                 if st["open_tasks"] else
-                "nothing on the record yet — start a run, or archive it if the goal moved on")
+                "nothing on the record yet, start a run, or archive it if the goal moved on")
     elif st["last_ts"] is None or (now - _aware(st["last_ts"])) > timedelta(hours=st["stale_hours"]):
         verdict, severity = "no_activity", "notice"
-        line = (f"status check: nothing on the record for {st['stale_hours'] // 24}d — "
+        line = (f"status check: nothing on the record for {st['stale_hours'] // 24}d, "
                 f"resume it or archive it")
     else:
         verdict, severity = "on_track", "info"
@@ -267,7 +267,7 @@ async def get_company(company_id: str) -> dict:
 
 @transactional
 async def attach_project(*, company_id: str, project_id: str) -> dict:
-    """A project joins the company: the report chain gains a top — orchestrator → CEO."""
+    """A project joins the company: the report chain gains a top, orchestrator → CEO."""
     async with session_scope() as s:
         company = await s.get(Project, company_id)
         project = await s.get(Project, project_id)
@@ -350,7 +350,7 @@ async def review(*, company_id: str, actor: str = "system") -> dict:
         verdicts.append({"project_id": st["id"], "name": st["name"], "verdict": verdict,
                          "directive": line, "basis": basis})
         await ev.emit("company.directive", project_id=st["id"], agent_id=ceo_id, severity=severity,
-                      title=f"company directive: {verdict} — {st['name']}",
+                      title=f"company directive: {verdict}, {st['name']}",
                       summary=line,
                       payload={"company_id": company_id, "directive": line, "verdict": verdict,
                                "basis": basis},
@@ -381,7 +381,7 @@ async def review(*, company_id: str, actor: str = "system") -> dict:
 
 async def portfolio(company_id: str) -> dict:
     """The C-level's view before the money moves: each member's verdict, the share of the
-    company's headroom its record justifies, and its priority rank. Deterministic — every
+    company's headroom its record justifies, and its priority rank. Deterministic, every
     line cites the numbers it came from, and a `stop` project funds nothing new."""
     async with session_scope() as s:
         company = await s.get(Project, company_id)
@@ -422,7 +422,7 @@ async def portfolio(company_id: str) -> dict:
 
 async def allocate(*, company_id: str, actor: str = "system") -> dict:
     """The CEO's portfolio call: rank the members by their record and write the caps.
-    A `stop` verdict lands its cap exactly on what the project has already spent —
+    A `stop` verdict lands its cap exactly on what the project has already spent,
     the decision is "no new money", and the ledger says so."""
     view = await portfolio(company_id=company_id)
     allocations: list[dict] = []
@@ -498,7 +498,7 @@ async def add_board_member(*, company_id: str, role: str = "board_member") -> di
 async def board_session(*, company_id: str, topic: str,
                         options: list[str] | None = None, actor: str = "user") -> dict:
     """Convene the board of directors: the chair, the seated members and the CEO around
-    one topic. Runs on the ordinary council machinery — one ledger, one decision log."""
+    one topic. Runs on the ordinary council machinery, one ledger, one decision log."""
     from crew.control.council import council
 
     async with session_scope() as s:
@@ -530,7 +530,7 @@ async def board_session(*, company_id: str, topic: str,
 async def hq(company_id: str) -> dict:
     """The whole company on one floor (ADR 0011): the executive suites and the board
     room, each member project's pod with its teams, and the governance activity the
-    scene animates from — all read from the record, none of it invented."""
+    scene animates from, all read from the record, none of it invented."""
     from crew.domain.catalog import ROLE_TEMPLATES
 
     async with session_scope() as s:

@@ -1,4 +1,4 @@
-# 06 — Memory & Brains
+# 06: Memory & Brains
 
 Four brains, four scopes, one retrieval interface. The point is that an agent sees *enough*
 context to act well and not so much that it is slow, expensive or confused.
@@ -7,7 +7,7 @@ context to act well and not so much that it is slow, expensive or confused.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ COMPANY BRAIN  (scope: company — ADR 0015)                                    │
+│ COMPANY BRAIN  (scope: company, ADR 0015)                                    │
 │ Mission · portfolio review lessons · allocation decisions · company policy    │
 │ The umbrella: retrieved by EVERY member project's agents (brain-id scoped)    │
 │ Readers: every member's agents    Writers: the company's CEO / board chair     │
@@ -41,7 +41,7 @@ context to act well and not so much that it is slow, expensive or confused.
   the company brain of the project's parent company (the umbrella).
 - Write: own brain always; department brain if role ≥ lead; project brain only
   Orchestrator/Librarian; company brain only the company's own CEO/chair. Retrieval is
-  scoped by brain id — a member project finds the company brain's entries even though they
+  scoped by brain id, a member project finds the company brain's entries even though they
   live on the company's row (ADR 0015).
 - The council is special: while a debate is open, the panel gets read access to a
   **shared evidence pack** (snapshot, not live memory) so debate is fair and reproducible.
@@ -57,7 +57,7 @@ BrainEntry
 ├─ importance: 0..1 (set at write, adjustable by use/feedback)
 ├─ tags[], skill_ids[], department_id?
 ├─ embedding (vector), created_at, last_used_at, use_count, decay_score
-└─ superseded_by? (never delete — supersede)
+└─ superseded_by? (never delete, supersede)
 ```
 
 Retrieval score (hybrid, inspired by generative-agent memory streams):
@@ -77,7 +77,7 @@ and always rendered **with provenance and trust labels**.
 
 ## 3. Working memory vs. long-term
 
-- **Working set**: per task, bounded, explicit — the task, its inputs by reference, assigned
+- **Working set**: per task, bounded, explicit, the task, its inputs by reference, assigned
   brain pack, recent tool results (sliding window), the current plan slice. Dropped when the
   task ends, except for a summary that is written to the agent brain.
 - **Long-term**: everything in the tables + vectors; never truncated, only decayed in
@@ -89,17 +89,17 @@ and always rendered **with provenance and trust labels**.
 
 Run by the Librarian agent at the LEARNING stage and on demand:
 
-1. **Collect** — task outcomes, verifications, retries, escalations, decision records.
-2. **Extract** — candidate lessons: "X worked for Y because Z" / "X failed because Z";
+1. **Collect**, task outcomes, verifications, retries, escalations, decision records.
+2. **Extract**, candidate lessons: "X worked for Y because Z" / "X failed because Z";
    each candidate must cite the events it came from.
-3. **Score** — is it generalizable? does it contradict an existing entry? does it have ≥2
+3. **Score**, is it generalizable? does it contradict an existing entry? does it have ≥2
    independent instances? (single-instance lessons stay in the agent brain).
-4. **Place** — agent → department → project, one level at a time. Promotion upward requires
+4. **Place**, agent → department → project, one level at a time. Promotion upward requires
    either a second department independently producing the same lesson, or a Head's explicit
    endorsement, or a Decision Record.
-5. **Reconcile** — conflicting entries are marked `superseded_by` (never deleted) with a note
+5. **Reconcile**, conflicting entries are marked `superseded_by` (never deleted) with a note
    on why the new one wins; the old one remains visible in history.
-6. **Prune** — entries with `use_count = 0` and low importance past their decay window are
+6. **Prune**, entries with `use_count = 0` and low importance past their decay window are
    archived (not deleted) and excluded from retrieval, keeping retrieval quality high.
 
 Every promotion emits an event and is visible in the UI (brain activity panel), so you can
@@ -131,7 +131,7 @@ export(project_id) / import(...)                              # portability, bac
 Because context is the scarcest resource in an agent org. Separate scopes give:
 - **cheaper** steps (workers retrieve 8 items, not the project's whole history),
 - **less contamination** (a Research agent's speculation must not become an Engineering
-  agent's fact — trust labels and scopes keep them apart),
+  agent's fact, trust labels and scopes keep them apart),
 - **auditability** (you can point at the exact memory that caused a decision),
 - **governance** (deleting/archiving a department's brain is a one-scope operation).
 

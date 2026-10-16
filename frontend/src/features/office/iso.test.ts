@@ -26,7 +26,7 @@ describe('projection', () => {
   it('spreads the two floor axes symmetrically at a 2:1 ratio', () => {
     expect(project(100, 0)).toEqual({ x: 100 * ISO.kx, y: 100 * ISO.ky });
     expect(project(0, 100)).toEqual({ x: -100 * ISO.kx, y: 100 * ISO.ky });
-    // 2:1 — a unit square is a diamond twice as wide as it is tall.
+    // 2:1, a unit square is a diamond twice as wide as it is tall.
     expect(ISO.kx / ISO.ky).toBe(2);
   });
 

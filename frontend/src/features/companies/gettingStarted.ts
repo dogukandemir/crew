@@ -1,5 +1,5 @@
 /** The welcome checklist (ADR 0015): what the first hour with Crew looks like.
- * Every step reads the record — a provider with no key stays open, honestly; it
+ * Every step reads the record, a provider with no key stays open, honestly; it
  * never marks a step done because the card was dismissed. */
 export interface GettingStartedStep {
   key: 'provider' | 'company' | 'project' | 'run';
@@ -14,7 +14,7 @@ export interface GettingStartedInput {
   providerReady: boolean;
   companies: number;
   projects: number;
-  /** Runs ever started across projects — the list endpoint carries the count. */
+  /** Runs ever started across projects, the list endpoint carries the count. */
   runs: number;
 }
 
@@ -41,7 +41,7 @@ export function gettingStartedSteps(input: GettingStartedInput): GettingStartedS
     {
       key: 'run',
       label: 'Start the first run',
-      hint: 'Give the goal — the Orchestrator forms the org and executes.',
+      hint: 'Give the goal, the Orchestrator forms the org and executes.',
       done: input.runs > 0,
     },
   ];

@@ -1,11 +1,11 @@
 /**
  * First-run onboarding (ADR 0013, revision): pick a provider, hand over the key once.
  *
- * A row of brand tiles — DeepSeek, OpenAI, Anthropic, OpenRouter, and LOCAL Ollama —
+ * A row of brand tiles, DeepSeek, OpenAI, Anthropic, OpenRouter, and LOCAL Ollama,
  * then exactly one input and one button. The key is verified by the backend against
  * the provider, stored encrypted in the local vault, and never returned or shown
  * again. Ollama's tile is deliberately the odd one: it is the machine's own server
- * (no key, zero spend, the slot carries its address) — cloud-hosted Ollama models
+ * (no key, zero spend, the slot carries its address), cloud-hosted Ollama models
  * ride through OpenRouter, so there is no separate cloud tile to confuse the local one.
  */
 import { useState } from 'react';
@@ -100,7 +100,7 @@ export function OnboardingCard({
         <p className="mt-2 text-sm leading-relaxed text-slate-400">
           Pick the model provider this org runs on. The key is checked, stored{' '}
           <span className="text-slate-200">encrypted</span> in the local vault, and never shown
-          again — and the choice points every model tier at that provider.
+          again. The choice points every model tier at that provider.
         </p>
 
         <div className="mt-4 grid grid-cols-5 gap-1.5" role="group" aria-label="Model provider">

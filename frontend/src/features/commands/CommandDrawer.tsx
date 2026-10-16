@@ -3,10 +3,10 @@
  *
  * One channel, attributed end to end: what the Captain writes lands in the record,
  * the reply cites the actions it took, and a message the desk can't carry out says
- * so plainly. No whispers, no god-hands — the floor knows who spoke.
+ * so plainly. No whispers, no god-hands, the floor knows who spoke.
  *
  * Layout rule: the composer lives in the Drawer's footer, so it is pinned to the
- * bottom of the pane by the layout itself — the transcript scrolls above it and the
+ * bottom of the pane by the layout itself, the transcript scrolls above it and the
  * input is on screen at all times. A sent message scrolls the record, never the
  * Captain's hands.
  */
@@ -39,9 +39,9 @@ const MODE_TONE: Record<CommandMode, 'accent' | 'info' | 'neutral'> = {
 };
 
 const MODE_HINT: Record<CommandMode, string> = {
-  order: 'an order — it binds the floor',
-  idea: 'an idea — the desk weighs it',
-  question: 'a question — answered, not obeyed',
+  order: 'an order, it binds the floor',
+  idea: 'an idea, the desk weighs it',
+  question: 'a question, answered, not obeyed',
 };
 
 export function CommandDrawer({ projectId, onClose }: { projectId: string; onClose: () => void }) {
@@ -73,7 +73,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
   const send = useMutation({
     mutationFn: (text: string) => api.postCommand(projectId, text),
     onSuccess: (data, text) => {
-      // The reply arrives on the POST itself — show it now; the refetch below quietly
+      // The reply arrives on the POST itself, show it now; the refetch below quietly
       // takes over when the record catches up (one source of truth, no blank in between).
       setDraft('');
       setCaret(0);
@@ -99,7 +99,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
   }, [tailLanded]);
 
   // Keep the newest line in view whenever the record grows (or a send is in flight).
-  // The sentinel scrolls the drawer's transcript region only — the composer sits in
+  // The sentinel scrolls the drawer's transcript region only, the composer sits in
   // the footer, outside that region, and never moves.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -116,7 +116,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
     const text = draft.trim();
     if (!text || send.isPending) return;
     if (mention && mention.matches.length > 0) {
-      // Enter completes the tag first — it never sends a half-typed @name.
+      // Enter completes the tag first, it never sends a half-typed @name.
       applyMention(mention.matches[0]);
       return;
     }
@@ -134,7 +134,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
           Command desk <Badge tone="accent">the Captain</Badge>
         </span>
       }
-      subtitle="Write to the company in plain words — orders, ideas, questions. The orchestrator reads it, the chain acts, the record keeps it."
+      subtitle="Write to the company in plain words, orders, ideas, questions. The orchestrator reads it, the chain acts, the record keeps it."
       footer={
         <Composer
           mention={mention}
@@ -152,12 +152,12 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
           {commands.isLoading && <p className="text-xs text-slate-500">opening the desk…</p>}
           {commands.isError && (
             <p className="text-xs text-rose-400">
-              The record is unreachable — the desk is blind until it returns.
+              The record is unreachable, the desk is blind until it returns.
             </p>
           )}
           {messages.length === 0 && !commands.isLoading && !send.isPending && !tail && (
             <div className="rounded-lg border border-dashed border-slate-700/70 bg-slate-900/40 p-3 text-xs leading-relaxed text-slate-400">
-              <p className="font-medium text-slate-300">Nothing yet — the record is empty.</p>
+              <p className="font-medium text-slate-300">Nothing yet, the record is empty.</p>
               <p className="mt-1 text-slate-300">
                 Try: <em>what&apos;s the status?</em> · <em>@Orchestrator, prepare a launch summary</em> ·{' '}
                 <em>take a 15-minute break, everyone</em> · <em>move @Ada&apos;s task to @Bo</em> ·{' '}
@@ -205,7 +205,7 @@ export function CommandDrawer({ projectId, onClose }: { projectId: string; onClo
 }
 
 /**
- * The Captain's line — mention chips, the box, and the live mode preview. It lives in
+ * The Captain's line, mention chips, the box, and the live mode preview. It lives in
  * the Drawer's footer: pinned to the bottom of the pane, on screen at all times,
  * whatever the transcript above does.
  */
@@ -317,7 +317,7 @@ function Bubble({ m }: { m: CommandMessage }) {
           </div>
         )}
         <div className={cn('mt-1 text-[10px]', captain ? 'text-emerald-300/50' : 'text-slate-500')}>
-          {captain ? 'the Captain' : m.ok === false ? 'the desk — not carried out' : 'the orchestrator'}
+          {captain ? 'the Captain' : m.ok === false ? 'the desk, not carried out' : 'the orchestrator'}
           {m.at ? ` · ${formatRelativeTime(m.at)}` : ''}
         </div>
       </div>

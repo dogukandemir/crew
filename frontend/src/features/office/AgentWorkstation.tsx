@@ -22,7 +22,7 @@ type StationTab = 'thinking' | 'output' | 'stats';
 
 /**
  * The workstation panel: what the character you clicked is *thinking* and what
- * they have *produced*. Thinking is the live event stream scoped to one agent —
+ * they have *produced*. Thinking is the live event stream scoped to one agent,
  * the same events driving the animation, so the panel and the sprite can never
  * disagree.
  */
@@ -73,7 +73,7 @@ export function AgentWorkstation({
             {a?.grade !== undefined && <Badge tone="accent">G{a.grade}</Badge>}
           </div>
           <div className="station-sub truncate">
-            {a?.role ?? '—'}
+            {a?.role ?? 'n/a'}
             {a?.model_tier ? ` · ${a.model_tier}` : ''}
           </div>
           {activity && (
@@ -139,7 +139,7 @@ export function AgentWorkstation({
             {stream.length === 0 ? (
               <EmptyState
                 title="Nothing on the wire yet"
-                description="Thoughts, tool calls and messages appear here the moment the agent emits them. Nothing is polled — this is the same event stream the office is animating from."
+                description="Thoughts, tool calls and messages appear here the moment the agent emits them. Nothing is polled, this is the same event stream the office is animating from."
               />
             ) : (
               <div className="station-stream">
@@ -256,7 +256,7 @@ export function AgentWorkstation({
               {rewards.isLoading && <SkeletonRows rows={2} />}
               {rewards.isSuccess && rewards.data.items.length === 0 && (
                 <div className="station-card text-[11px] text-slate-400">
-                  Nothing settled yet — rewards follow verification.
+                  Nothing settled yet, rewards follow verification.
                 </div>
               )}
               {rewards.isSuccess && rewards.data.items.length > 0 && (
@@ -291,7 +291,7 @@ export function AgentWorkstation({
                 </span>
                 <span className="text-[11px] text-slate-400">
                   confidence{' '}
-                  {a.score_confidence !== undefined ? formatPercent(a.score_confidence) : '—'}
+                  {a.score_confidence !== undefined ? formatPercent(a.score_confidence) : 'n/a'}
                 </span>
                 <span className="ml-auto text-[11px] text-slate-400">
                   grade {a.grade}
@@ -305,7 +305,7 @@ export function AgentWorkstation({
                 <dd className="tabular-nums text-slate-200">
                   {(a.tasks_done ?? 0) > 0 && a.success_rate !== undefined
                     ? formatPercent(a.success_rate)
-                    : '—'}
+                    : 'n/a'}
                 </dd>
                 <dt className="text-slate-500">tasks</dt>
                 <dd className="tabular-nums text-slate-200">
@@ -324,9 +324,9 @@ export function AgentWorkstation({
                   {formatTokens(a.token_cap_per_step)}
                 </dd>
                 <dt className="text-slate-500">autonomy</dt>
-                <dd className="text-slate-200">{a.autonomy ?? '—'}</dd>
+                <dd className="text-slate-200">{a.autonomy ?? 'n/a'}</dd>
                 <dt className="text-slate-500">model</dt>
-                <dd className="truncate text-slate-200">{a.model_id ?? '—'}</dd>
+                <dd className="truncate text-slate-200">{a.model_id ?? 'n/a'}</dd>
                 <dt className="text-slate-500">last active</dt>
                 <dd className="text-slate-200">{formatRelativeTime(a.last_active_at)}</dd>
               </dl>

@@ -1,4 +1,4 @@
-"""Tool-handler behaviour — the surface the mutation run flagged as unexercised:
+"""Tool-handler behaviour, the surface the mutation run flagged as unexercised:
 the fs workspace jail, search parsing, the colleague/join tools, truncation and
 the CrewAI wrappers. (pytest-gremlins survivors, docs/13.)"""
 
@@ -41,7 +41,7 @@ def test_actor_is_agent_scoped_or_system():
 
 
 def test_run_on_loop_without_a_bound_loop_raises(monkeypatch):
-    """Closes: the `loop is None or loop.is_closed()` guard — swapped to `and` it
+    """Closes: the `loop is None or loop.is_closed()` guard, swapped to `and` it
     would AttributeError instead of refusing."""
     monkeypatch.setattr(tools_mod.ev, "current_loop", lambda: None)
     coro = asyncio.sleep(0)
@@ -158,7 +158,7 @@ async def test_fs_roundtrip_jail_and_delete_flow(tool_context, bound_loop, proje
 # ── web_search parsing ──────────────────────────────────────────────────────────────
 def _serp(n: int) -> str:
     rows = "".join(f'<a rel="nofollow" class="result__a" href="https://s{i}.example">'
-                   f"<b>Hit</b> {i} — title</a>" for i in range(n))
+                   f"<b>Hit</b> {i}, title</a>" for i in range(n))
     return f"<html><body>{rows}</body></html>"
 
 
@@ -173,7 +173,7 @@ async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, 
     assert r["review"]["verdict"] == "clean" and r["review"]["method"] == "deterministic"
     assert r["meta"]["provider"] == "duckduckgo"
     assert len(r["data"]) == 5, "at most five hits"
-    assert r["data"][0] == {"url": "https://s0.example", "title": "Hit 0 — title"}
+    assert r["data"][0] == {"url": "https://s0.example", "title": "Hit 0, title"}
 
     monkeypatch.setattr(tools_mod, "_search_page", lambda q: "<html>no results</html>")
     r2 = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
@@ -186,7 +186,7 @@ async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, 
 @pytest.mark.asyncio
 async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(tool_context,
         bound_loop, project, tmp_path, monkeypatch):
-    """Closes: the egress-denied return and the search-failure return — both must be
+    """Closes: the egress-denied return and the search-failure return, both must be
     honest refusals, never an empty 'success'."""
     from types import SimpleNamespace
 

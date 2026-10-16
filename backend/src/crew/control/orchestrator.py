@@ -328,7 +328,7 @@ class Orchestrator:
                     t.state = TaskState.ASSIGNED.value
                     t.escalation_reason = f"retry {t.attempts}"
                     # the ladder's first rung (docs/03 §5): the FIRST failure goes back to
-                    # the producer's Lead, who re-plans it — rather than watching the same
+                    # the producer's Lead, who re-plans it, rather than watching the same
                     # worker fail the same way again.
                     if t.attempts == 1 and t.assignee_agent_id:
                         worker = await s.get(Agent, t.assignee_agent_id)
@@ -354,7 +354,7 @@ class Orchestrator:
                             h = await s.get(Agent, helper_id)
                             t.assignee_agent_id = helper_id
                             t.assignee_squad_id = h.squad_id if h else None
-                            t.escalation_reason = f"retry {t.attempts} — helper takes over"
+                            t.escalation_reason = f"retry {t.attempts}, helper takes over"
                             await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
                                           task_id=t.id, agent_id=helper_id, severity="warning",
                                           title=f"helper takes over: {t.title[:50]}",
@@ -368,7 +368,7 @@ class Orchestrator:
                                     and lead.state not in ("archived", "suspended")):
                                 t.assignee_agent_id = lead.id
                                 t.assignee_squad_id = lead.squad_id
-                                t.escalation_reason = f"retry {t.attempts} — lead re-plans"
+                                t.escalation_reason = f"retry {t.attempts}, lead re-plans"
                                 await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
                                               task_id=t.id, agent_id=lead.id, severity="warning",
                                               title=f"lead re-plans: {t.title[:50]}",
@@ -392,7 +392,7 @@ class Orchestrator:
                     return
                 # One agent, one task at a time. The claim is an atomic conditional UPDATE
                 # on purpose: a read-then-write would race its sibling coroutine in the
-                # same wave. `busy` is what org.assign_tasks filters on — nothing used to
+                # same wave. `busy` is what org.assign_tasks filters on, nothing used to
                 # set it, so the filter never bit and one agent could be handed several
                 # concurrent tasks (docs/17 batch 1).
                 claimed = await s.execute(update(Agent)
@@ -496,7 +496,7 @@ class Orchestrator:
                     s.add(row)
                 await ev.emit("budget.exceeded", project_id=project.id, run_id=run.id, task_id=task_id,
                               agent_id=snapshot.id, severity="error",
-                              title="budget exceeded — task refused",
+                              title="budget exceeded, task refused",
                               summary=str(e), payload={"scope_kind": "agent", "scope_id": snapshot.id,
                                                        "needed_micros": e.needed_micros,
                                                        "available_micros": e.available_micros},
@@ -577,7 +577,7 @@ class Orchestrator:
 
     async def _inbox_notes(self, project_id: str, agent_id: str) -> list[str]:
         """Colleague traffic for this agent's prompt: open questions to answer and answers
-        that arrived for it (docs/17 batch 2 — without this the inbox exists but nobody
+        that arrived for it (docs/17 batch 2, without this the inbox exists but nobody
         ever reads it, which would be the same defect in a new suit)."""
         notes: list[str] = []
         try:
@@ -587,9 +587,9 @@ class Orchestrator:
             log.exception("inbox read failed")
             return notes
         for q in open_qs[:4]:
-            notes.append(f"{q['from']} asks you (answer_to='{q['id']}'): {q['text'][:300]} — answer "
+            notes.append(f"{q['from']} asks you (answer_to='{q['id']}'): {q['text'][:300]}, answer "
                          f"with reply_colleague(agent='{q['from']}', answer_to='{q['id']}', text=...)"
-                         + (f" — or join_task(task_id='{q['task_id']}') to help them directly"
+                         + (f", or join_task(task_id='{q['task_id']}') to help them directly"
                             if q.get("task_id") else ""))
         for a in answers[:4]:
             notes.append(f"{a['from']} answered your question: {a['text'][:300]}")
@@ -601,7 +601,7 @@ class Orchestrator:
         Agent requests: `request_decision` promised "the orchestrator will convene a
         council" with nothing behind it; a collected question becomes a real session here.
         Office concerns: a `gossip.surfaced` topic gets a question of its own with
-        topic-shaped options — a rumour enough people repeat reaches the agenda, and
+        topic-shaped options, a rumour enough people repeat reaches the agenda, and
         either outcome binds following work through council.decision_constraints."""
         concern_options: dict[str, list[dict]] = {
             "budget": [
@@ -725,7 +725,7 @@ class Orchestrator:
         """The safety net: any agent marked busy with no task RUNNING is freed.
 
         An exception between claim and release must not quietly remove somebody from
-        every future assignment — this runs at the head of every wave, so the fleet
+        every future assignment, this runs at the head of every wave, so the fleet
         heals itself within one tick.
         """
         async with session_scope() as s:
@@ -883,11 +883,11 @@ class Orchestrator:
             s.add(row)
 
     # The desk intents that become directives in task prompts (ADR 0012). Everything
-    # else — status, help, an unparsed sentence — is conversation, not an order.
+    # else, status, help, an unparsed sentence, is conversation, not an order.
     _DIRECTIVE_INTENTS = ("assign", "reassign", "fire", "break", "goal", "budget", "hire")
 
     async def _captain_notes(self, project_id: str, agent_id: str) -> list[str]:
-        """The command desk's lines for this agent (ADR 0012) — but only the words that
+        """The command desk's lines for this agent (ADR 0012), but only the words that
         actually landed. A message the desk could not carry out (an unparsed sentence, a
         refusal, a question already answered) stays in the record and must NOT come back
         to the floor dressed as a binding directive. Attribution: always the Captain."""
@@ -910,7 +910,7 @@ class Orchestrator:
                 continue
             rep = outcome.get(r.id)
             if rep is not None and (rep.get("ok") is False or rep.get("executed") is False):
-                continue  # the desk said it didn't land — it must not bind the floor
+                continue  # the desk said it didn't land, it must not bind the floor
             ts = r.ts.replace(tzinfo=UTC) if r.ts is not None and r.ts.tzinfo is None else r.ts
             if ts is not None and (now - ts) > timedelta(hours=6):
                 continue
@@ -1066,7 +1066,7 @@ class Orchestrator:
         """After a COMPLETED run, keep the floor moving: 'operating cadence' starts a
         follow-on pass while the consecutive-follow-on cap has not been hit.
 
-        Conservative by design — off unless the project turned it on; the streak counts
+        Conservative by design, off unless the project turned it on; the streak counts
         consecutive follow-on passes and resets whenever a person starts a run. A failed
         or paused run never kicks one.
         """
@@ -1081,7 +1081,7 @@ class Orchestrator:
             if streak >= cap:
                 await ev.emit("run.cadence.held", project_id=project.id, run_id=run.id,
                               severity="info",
-                              title=f"cadence stopped — {cap} follow-on pass{'es' if cap > 1 else ''} done",
+                              title=f"cadence stopped, {cap} follow-on pass{'es' if cap > 1 else ''} done",
                               summary="Start a run by hand to continue.",
                               payload={"max_runs": cap, "streak": streak},
                               actor="system:orchestrator")

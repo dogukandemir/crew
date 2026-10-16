@@ -1,6 +1,6 @@
 /**
- * The HQ tab (ADR 0011): the whole company on one screen — executive suites, the
- * board room and one pod per project — with the three governance actions that make
+ * The HQ tab (ADR 0011): the whole company on one screen, executive suites, the
+ * board room and one pod per project, with the three governance actions that make
  * the floor move: review the books, allocate the portfolio, convene the board.
  */
 import { useState } from 'react';

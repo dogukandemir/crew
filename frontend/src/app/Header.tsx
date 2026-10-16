@@ -79,7 +79,7 @@ function GlobalBudgetMeter() {
   return (
     <div
       className="hidden min-w-[10rem] items-center gap-2 md:flex"
-      title={`all projects — ${formatMicros(spend)} of ${formatMicros(cap)}`}
+      title={`all projects, ${formatMicros(spend)} of ${formatMicros(cap)}`}
     >
       <div className="w-24">
         <ProgressBar
@@ -131,9 +131,9 @@ function KillSwitch() {
         onClick={() => setOpen(true)}
         title={active
           ? 'Stop every run in every project'
-          : 'Emergency stop — nothing is running right now, but this always stops everything'}
+          : 'Emergency stop, nothing is running right now, but this always stops everything'}
       >
-        ⏹ Kill all
+        Kill all
       </Button>
       <Modal
         open={open}
@@ -200,7 +200,7 @@ export function Header() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 bg-slate-950/80 px-3 py-1.5">
       <div className="flex items-center gap-3">
-        <button type="button" onClick={goHome} aria-label="Home — companies and projects" title="Home: companies and projects"
+        <button type="button" onClick={goHome} aria-label="Home, companies and projects" title="Home: companies and projects"
           className="rounded px-1 py-1 text-sm font-semibold tracking-tight text-slate-100 hover:bg-slate-800">
           <span className="mr-1 text-emerald-400">◈</span>Crew
         </button>

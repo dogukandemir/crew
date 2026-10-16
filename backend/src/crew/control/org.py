@@ -73,7 +73,7 @@ COMMON_CAPS = [Capability.BRAIN_READ, Capability.BRAIN_WRITE, Capability.COMMS_A
                Capability.HUMAN_APPROVE]
 
 # Who actually does the work: individual contributors first, managers only when nobody else can
-# (docs/02 §2 authority matrix — a lead sequences and integrates, it does not absorb the backlog).
+# (docs/02 §2 authority matrix: a lead sequences and integrates, it does not absorb the backlog).
 ROLE_ASSIGNMENT_PENALTY: dict[str, float] = {
     "worker": 0.0, "specialist": 0.0, "analyst": 0.0, "critic": 0.05,
     "evaluator": 0.10, "architect": 0.10, "lead": 0.30, "librarian": 0.30,
@@ -84,7 +84,7 @@ ROLE_ASSIGNMENT_PENALTY: dict[str, float] = {
     "cfo": 0.80, "chair": 1.0, "board_member": 1.0,
 }
 
-# The executive tier (ADR 0008, docs/02 §2): each C-role owns a FUNCTION — a group of
+# The executive tier (ADR 0008, docs/02 §2): each C-role owns a FUNCTION: a group of
 # departments that share an executive concern. A chief appears once a function has two
 # departments to chair; the chain then reads orchestrator → chief → head → lead → worker.
 FUNCTION_OF_CATEGORY: dict[str, str] = {
@@ -125,7 +125,7 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
         await s.flush()
         pid = p.id
     if kind == "company":
-        # The company's memory is the umbrella brain (ADR 0015) — member projects'
+        # The company's memory is the umbrella brain (ADR 0015), member projects'
         # agents retrieve from it, review/allocate decisions land in it.
         company_brain = await brain_service.ensure_company_brain(pid, label=f"{name} · company")
     else:
@@ -138,7 +138,7 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
             row.settings = {**row.settings, "project_brain_id": project_brain}
         s.add(row)
     if kind != "company":
-        # A company holds no workspace of its own — its projects do (ADR 0017). This
+        # A company holds no workspace of its own, its projects do (ADR 0017). This
         # materializes the folder now (company tree or internal) and records the path
         # once on the project; every later resolver reads it from there.
         await workspaces.allocate_project_workspace(pid, company_id=company_id)
@@ -155,8 +155,8 @@ async def create_project(*, name: str, goal: str = "", budget_usd: float | None 
                                       tags=["mission"])
         ceo = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CEO),
                                rationale="company bootstrap: the portfolio chair")
-        # governance (ADR 0011): the board is seated with the company — a chair and two
-        # owners' seats — and the CEO reports to the chair, not to the floor.
+        # governance (ADR 0011): the board is seated with the company, a chair and two
+        # owners' seats, and the CEO reports to the chair, not to the floor.
         chair = await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.CHAIR),
                                  rationale="company bootstrap: the board's chair")
         members = [await hire_agent(project_id=pid, spec=RoleSpec.from_template(Role.BOARD_MEMBER),
@@ -233,10 +233,10 @@ def serialize_project(p: Project) -> dict:
         "id": p.id, "name": p.name, "slug": p.slug, "goal": p.goal, "status": p.status,
         "stage": p.stage, "description": p.description, "kind": p.kind, "company_id": p.company_id,
         # The breadcrumb's upper half (ADR 0015): always present, filled by get_project /
-        # list_projects when the project reports to a company — the UI reads `?? null`.
+        # list_projects when the project reports to a company, the UI reads `?? null`.
         "company_name": None,
         "budget_usd": p.budget_usd, "spend_usd": p.spend_usd,
-        # The UI's ledgers read raw micros (omitting them rendered "— / —" and
+        # The UI's ledgers read raw micros (omitting them rendered "n/a / n/a" and
         # "$0.00 / $0.00" on every budget surface against the real backend, while the mock
         # masked it). Contract §5 allows additive fields; ship both units.
         "budget_cap_micros": p.budget_cap_micros, "spend_micros": p.spend_micros,
@@ -347,7 +347,7 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
     # staffed into the ground by a planner loop. estimate_agent_cost finally guards a decision.
     est = estimate_agent_cost(spec.role)
     available = await budget.available_micros(project_id)
-    # The estimate rides in the message; the gate itself is the breaker — a project whose
+    # The estimate rides in the message; the gate itself is the breaker, a project whose
     # ceiling was already reached must not grow, while a fresh project's bootstrap hire
     # passes (the cap governs SPEND, and staff_gaps' plan gate is what stops a planner
     # loop from over-building a small project).
@@ -366,7 +366,7 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
         if active >= cap:
             raise ValueError(f"org_limit_reached: {active}/{cap} agents")
         # anti-thrash: refuse an identical role laid off RECENTLY (docs/02 §5). "Recently"
-        # needs a clock — without the window an archive from any era blocks a no-rationale
+        # needs a clock, without the window an archive from any era blocks a no-rationale
         # rehire until the project dies: a policy nothing ever expires (docs/17 batch 3).
         from datetime import UTC, datetime, timedelta
 
@@ -381,7 +381,7 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
             raise ValueError("hire refused: identical role was laid off recently without a new rationale")
     # The person (ADR 0016): every hire gets a soul. Composed deterministically from
     # the role's banks; deepened by the model only when a provider answers (the source
-    # is recorded on the soul — never silently mixed). HR candidates arrive pre-named.
+    # is recorded on the soul, never silently mixed). HR candidates arrive pre-named.
     grade_pre = spec.grade
     if spec.role in (Role.WORKER, Role.ANALYST) and grade_pre > Grade.JUNIOR:
         grade_pre = Grade.JUNIOR       # cheap by default; promotion is earned (docs/02 §5)
@@ -400,10 +400,10 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
         soul = await _polish_soul(candidate_soul, project_id=project_id) or candidate_soul
     chosen_name = (name or str(soul.get("name") or "")).strip()
     if not chosen_name:
-        raise ValueError("hire needs a name — the soul carried none and none was given")
+        raise ValueError("hire needs a name, the soul carried none and none was given")
     grade = grade_pre
     async with session_scope() as s0:
-        # Review 2026-10-14: department/squad ids used to be stored unchecked — a foreign
+        # Review 2026-10-14: department/squad ids used to be stored unchecked, a foreign
         # id put the agent in another project's roster and stalled this one's budget.
         if department_id:
             dept = await s0.get(Department, department_id)
@@ -462,7 +462,7 @@ async def _ensure_agent_brain(s, project_id: str, agent_id: str) -> str:
 
 
 async def _polish_soul(soul: dict, *, project_id: str) -> dict | None:
-    """Best effort (ADR 0016): the model may deepen the wording — never invent facts.
+    """Best effort (ADR 0016): the model may deepen the wording, never invent facts.
 
     Returns None when no provider answers (offline, no key) so the deterministic soul
     stands untouched. Only `background` and `vision` may change; the source is stamped.
@@ -846,7 +846,7 @@ async def _staff_function_chiefs(*, project: Project, run_id: str,
                                  orchestrator_id: str | None) -> list[dict]:
     """Hire a function's chief once it has two departments, and re-seat the chain (ADR 0008).
 
-    One chief per function at a time — the check is against ACTIVE agents, so a laid-off
+    One chief per function at a time, the check is against ACTIVE agents, so a laid-off
     chief can be replaced but a working one is never duplicated. A refused hire (budget)
     leaves the function headless: the departments keep reporting to the orchestrator,
     a legal chain, just a flatter one.
@@ -912,7 +912,7 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
     """Turn capability gaps into departments/agents (docs/02 §5). Cheap by default.
 
     Growth hires go through HR (ADR 0016): the Head of People is seated before the
-    first wave that actually hires, and every opening is interviewed — rejections are
+    first wave that actually hires, and every opening is interviewed, rejections are
     bounded (at most two) and always grounded in the rubric's real numbers.
     """
     from crew.control import hiring
@@ -927,7 +927,7 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
 
     for category, skill_ids in by_category.items():
         # the cost of staffing this gap, checked before a single row is written
-        # (docs/17 batch 2 — estimate_agent_cost guards the decision it was written for)
+        # (docs/17 batch 2, estimate_agent_cost guards the decision it was written for)
         est_workers = max(1, len(skill_ids) // 2)
         plan_cost = (estimate_agent_cost(Role.HEAD) + estimate_agent_cost(Role.LEAD)
                      + est_workers * estimate_agent_cost(Role.WORKER))
@@ -940,7 +940,7 @@ async def staff_gaps(*, project: Project, gaps: list[str], run_id: str, trace_id
                                    "needed_micros": plan_cost, "available_micros": headroom})
             continue
         # Seat the Head of People before the first hiring wave (ADR 0016). The
-        # bootstrap hire is direct — the first HR head cannot interview themselves.
+        # bootstrap hire is direct, the first HR head cannot interview themselves.
         hr_created = await hiring.ensure_hr(
             project=project, run_id=run_id, orchestrator_id=orchestrator_id,
             actor=f"agent:{orchestrator_id}" if orchestrator_id else "system")
@@ -1078,7 +1078,7 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
                     bu = a.break_until.replace(tzinfo=UTC) if a.break_until.tzinfo is None \
                         else a.break_until
                     if bu > datetime.now(UTC):
-                        continue  # on a break (ADR 0012) — the Captain's call, until it passes
+                        continue  # on a break (ADR 0012), the Captain's call, until it passes
                 prof = skills_by_agent.get(a.id, {})
                 coverage = sum(w * prof.get(sid, 0.0) for sid, w in needed.items())
                 # Grade is not coverage: without this check an agent holding NONE of the
@@ -1123,7 +1123,7 @@ async def assign_tasks(*, project_id: str, run_id: str) -> int:
 async def ready_tasks(project_id: str, run_id: str | None = None) -> list[Task]:
     """Pure read: tasks whose dependencies are satisfied.
 
-    Never mutates state — mutating ORM rows inside a read session commits them (a real bug this
+    Never mutates state, mutating ORM rows inside a read session commits them (a real bug this
     replaced: dependent tasks were being written as 'blocked' just by being inspected).
     """
     async with session_scope() as s:
@@ -1131,7 +1131,7 @@ async def ready_tasks(project_id: str, run_id: str | None = None) -> list[Task]:
         if run_id:
             # a wave works the project's ready work: its own plan PLUS standalone tasks
             # (created by the command desk / manual assignment, run_id NULL). Without
-            # this the Captain's orders sat assigned forever — no wave ever saw them.
+            # this the Captain's orders sat assigned forever, no wave ever saw them.
             stmt = stmt.where((Task.run_id == run_id) | (Task.run_id.is_(None)))
         tasks = (await s.scalars(stmt.order_by(Task.priority, Task.created_at))).all()
         done = {t.id for t in tasks if t.state == TaskState.COMPLETED.value}
@@ -1170,9 +1170,9 @@ async def revive_blocked(project_id: str, run_id: str) -> int:
 
 
 async def org_tree(project_id: str) -> dict:
-    """The org as the UI renders it (docs/11, ADR 0015 era): one `root` tree —
+    """The org as the UI renders it (docs/11, ADR 0015 era): one `root` tree,
     project → orchestrator, departments → squads → agents, unassigned agents at the
-    root — with every node carrying BOTH units (micros for the ledgers, usd for the
+    root, with every node carrying BOTH units (micros for the ledgers, usd for the
     drawers). The flat keys (project/orchestrator/departments/unassigned) that the
     command desk's first reader consumed ride along additively: nothing that predates
     the tree breaks, and `nodes` is the flat index for lookup shortcuts."""
@@ -1214,7 +1214,7 @@ async def org_tree(project_id: str) -> dict:
     orchestrator = next((a for a in live if a.id == orch_id), None)
 
     def squad_node(sq: Squad, members: list[Agent]) -> dict:
-        # A squad tracks no budget of its own — no invented spend fields.
+        # A squad tracks no budget of its own, no invented spend fields.
         return {"id": sq.id, "kind": "squad", "name": sq.name, "mission": sq.mission,
                 "state": sq.status, "lead_agent_id": sq.lead_agent_id,
                 "children": [agent_node(a) for a in members]}

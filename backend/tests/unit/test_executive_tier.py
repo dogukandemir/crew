@@ -1,4 +1,4 @@
-"""ADR 0008 / docs/02 §2: the executive tier — one chief per function, once a function
+"""ADR 0008 / docs/02 §2: the executive tier, one chief per function, once a function
 reaches two departments, with the heads re-seated to report through it."""
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ async def test_two_departments_of_a_function_earn_one_chief(bound_loop, project)
         p = await s.get(Project, project["id"])
 
     created = await org._staff_function_chiefs(project=p, run_id="r-1", orchestrator_id=None)
-    # growth hires seat the Head of People first (ADR 0016) — the chief is the story here
+    # growth hires seat the Head of People first (ADR 0016), the chief is the story here
     hr = [c for c in created if c.get("role") == Role.HR.value]
     assert len(hr) == 1, "the first growth wave seats a Head of People"
     assert hr[0]["name"] and " " in hr[0]["name"], "and it is a person, not a 'Head #1'"

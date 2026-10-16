@@ -25,7 +25,7 @@ describe('money (micro-USD, docs/11 §1)', () => {
     expect(microsToUsd(null)).toBe(0);
     expect(microsToUsd(undefined)).toBe(0);
     expect(microsToUsd(Number.NaN)).toBe(0);
-    expect(formatMicros(null)).toBe('—');
+    expect(formatMicros(null)).toBe('n/a');
   });
 
   it('round-trips USD back to micros', () => {
@@ -49,7 +49,7 @@ describe('money (micro-USD, docs/11 §1)', () => {
   it('formats plain USD and keeps an explicit unknown', () => {
     expect(formatUsd(1.24)).toBe('$1.24');
     expect(formatUsd(0)).toBe('$0.00');
-    expect(formatUsd(null)).toBe('—');
+    expect(formatUsd(null)).toBe('n/a');
     expect(formatUsd(1.5, { signed: true })).toBe('+$1.50');
     expect(formatMoney(1_240_000)).toBe('$1.24');
   });
@@ -76,8 +76,8 @@ describe('tokens', () => {
 
   it('handles negatives and unknown', () => {
     expect(formatTokens(-1500)).toBe('-1.5k');
-    expect(formatTokens(null)).toBe('—');
-    expect(formatTokens(undefined)).toBe('—');
+    expect(formatTokens(null)).toBe('n/a');
+    expect(formatTokens(undefined)).toBe('n/a');
   });
 });
 
@@ -85,7 +85,7 @@ describe('percent, duration, relative time', () => {
   it('formats fractions as percentages', () => {
     expect(formatPercent(0.812)).toBe('81%');
     expect(formatPercent(0.5, 1)).toBe('50.0%');
-    expect(formatPercent(null)).toBe('—');
+    expect(formatPercent(null)).toBe('n/a');
   });
 
   it('formats durations with a unit that fits', () => {
@@ -93,7 +93,7 @@ describe('percent, duration, relative time', () => {
     expect(formatDuration(1500)).toBe('1.5s');
     expect(formatDuration(125_000)).toBe('2m 5s');
     expect(formatDuration(7_200_000)).toBe('2h 0m');
-    expect(formatDuration(null)).toBe('—');
+    expect(formatDuration(null)).toBe('n/a');
   });
 
   it('formats relative time against an injected clock', () => {
@@ -104,11 +104,11 @@ describe('percent, duration, relative time', () => {
     expect(ago(180_000)).toBe('3m ago');
     expect(ago(7_200_000)).toBe('2h ago');
     expect(ago(432_000_000)).toBe('5d ago');
-    expect(formatRelativeTime(null, now)).toBe('—');
-    expect(formatRelativeTime('not-a-date', now)).toBe('—');
+    expect(formatRelativeTime(null, now)).toBe('n/a');
+    expect(formatRelativeTime('not-a-date', now)).toBe('n/a');
   });
 
-  it('reads naive timestamps as UTC — history must not shift by the local offset', () => {
+  it('reads naive timestamps as UTC, history must not shift by the local offset', () => {
     const naive = '2026-10-09T20:40:27.123456';
     const zoned = '2026-10-09T20:40:27.123456+00:00';
     const now = Date.parse('2026-10-09T20:40:30.000000Z');

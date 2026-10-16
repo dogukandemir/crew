@@ -1,5 +1,5 @@
 /**
- * Activity derivation (pure) — the bridge from the domain to the animation.
+ * Activity derivation (pure), the bridge from the domain to the animation.
  *
  * Everything the office does is a projection of real state: the agent's own
  * state, the state of the task it currently holds, and the live event stream.
@@ -44,8 +44,8 @@ export type WalkTarget = 'desk' | 'commons' | 'orchestrator' | 'peer' | 'meeting
  *
  * The distinction matters to a viewer: a report to a manager, a directive coming
  * back down, an escalation and a chat between colleagues should not look the
- * same. The kind is read off the event — its type and the payload's own
- * `direction`/`informal` fields — never off the text.
+ * same. The kind is read off the event, its type and the payload's own
+ * `direction`/`informal` fields, never off the text.
  */
 export type SpeechKind = 'talk' | 'gossip' | 'report' | 'directive' | 'escalation' | 'delegation';
 
@@ -118,7 +118,7 @@ function textOf(event: EventRow): string | undefined {
  * Explicit wins, and the more specific marker wins over the more general: an
  * escalation is an escalation, a hand-off is a hand-off, and a message the
  * harness itself marked informal is chat no matter which way it travelled.
- * Otherwise `direction` decides — `up` is a report to a manager, `down` is a
+ * Otherwise `direction` decides, `up` is a report to a manager, `down` is a
  * directive from one. Failing all of that, a message sent by somebody who is
  * not working on anything is water-cooler talk, which is the most this system
  * can honestly claim to know about it.
@@ -217,15 +217,15 @@ export function deriveActivity({ agent, task, events, now, arriving, inCouncil }
   }
 
   if (arriving) {
-    return { kind: 'walking', bubble: '👋', note: 'just hired — walking to their desk', where: 'desk' };
+    return { kind: 'walking', bubble: '👋', note: 'just hired, walking to their desk', where: 'desk' };
   }
 
   // 0. In a council. The meeting is the fact about this person, whatever else the
   // log says: a panel member is not "working on a task" mid-sitting, they are
-  // deliberating — and the rule takes precedence over the escalation that called
+  // deliberating, and the rule takes precedence over the escalation that called
   // the council in the first place.
   if (inCouncil) {
-    return { kind: 'talking', note: 'in council — deciding together', where: 'meeting' };
+    return { kind: 'talking', note: 'in council, deciding together', where: 'meeting' };
   }
 
   // 1. Something is wrong and a human/orchestrator may be needed.
@@ -258,10 +258,10 @@ export function deriveActivity({ agent, task, events, now, arriving, inCouncil }
     };
   }
 
-  // 2. Something just finished — visible payoff.
+  // 2. Something just finished, visible payoff.
   const done = newest(events, (e) => e.type === 'task.completed', WINDOWS.done, now);
   if (done) {
-    return { kind: 'celebrating', bubble: '✅', note: `finished: ${done.title}`, where: 'desk', at: Date.parse(done.ts) };
+    return { kind: 'celebrating', bubble: '✓', note: `finished: ${done.title}`, where: 'desk', at: Date.parse(done.ts) };
   }
 
   // 3. Verification happens at the shared table, not at the desk.
@@ -315,7 +315,7 @@ export function deriveActivity({ agent, task, events, now, arriving, inCouncil }
     return { kind: 'thinking', bubble: '💭', note: thought.title, where: 'desk', at: Date.parse(thought.ts) };
   }
 
-  return { kind: 'idle', note: 'idle — no work assigned', where: 'desk' };
+  return { kind: 'idle', note: 'idle, no work assigned', where: 'desk' };
 }
 
 /** Status-dot colour key for a room nameplate / department filter chip. */

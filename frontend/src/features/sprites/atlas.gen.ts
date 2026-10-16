@@ -1,9 +1,9 @@
 /**
- * GENERATED — do not edit. Produced by the project's in-house atlas generator
+ * GENERATED, do not edit. Produced by the project's in-house atlas generator
  * (a deterministic pixel-art tool); regenerate with it rather than editing here.
  *
  * Every sprite this project can draw, with the cell it occupies in atlas.png and
- * the anchor — the pixel that touches the floor. A renderer needs the anchor to
+ * the anchor, the pixel that touches the floor. A renderer needs the anchor to
  * place a sprite in the same space as everything else it draws.
  */
 

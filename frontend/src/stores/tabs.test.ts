@@ -8,7 +8,7 @@ import {
 } from './tabs';
 
 describe('workspace scopes (ADR 0015)', () => {
-  it('a company shows HQ, the portfolio, deliverables, memory, events and settings — no office', () => {
+  it('a company shows HQ, the portfolio, deliverables, memory, events and settings, no office', () => {
     expect(workspaceTabsFor('company')).toEqual([
       'hq',
       'projects',
@@ -20,7 +20,7 @@ describe('workspace scopes (ADR 0015)', () => {
     expect(workspaceTabsFor('company')).not.toContain('office');
   });
 
-  it('a member project has no HQ — the company is one breadcrumb up', () => {
+  it('a member project has no HQ, the company is one breadcrumb up', () => {
     expect(workspaceTabsFor('project')).not.toContain('hq');
     expect(workspaceTabsFor('project')).toContain('office');
     expect(defaultWorkspaceTab('company')).toBe('hq');

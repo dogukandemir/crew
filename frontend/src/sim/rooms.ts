@@ -3,7 +3,7 @@
  *
  * A room is not just a box on the floor: it produces things, it can be blocked,
  * and it can be brand new. Everything here is counted from the agents the org
- * actually seated in that room and from the event log — so a sign that says a
+ * actually seated in that room and from the event log, so a sign that says a
  * department is producing is reporting a fact, and a sign that says it shipped
  * three things is counting three real `task.completed` events.
  */

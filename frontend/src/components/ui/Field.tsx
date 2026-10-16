@@ -98,7 +98,7 @@ export function Toggle({
 export function Unknown({ title = 'not reported by the backend' }: { title?: string }) {
   return (
     <span className="text-slate-600" title={title}>
-      —
+    ,
     </span>
   );
 }

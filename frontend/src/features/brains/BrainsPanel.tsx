@@ -31,8 +31,8 @@ const LEVELS = [
 ] as const;
 
 /**
- * Brains (docs/09 §2.6, docs/06): the four levels side by side — company, project,
- * departments, individuals — with entries, provenance and the same scored retrieval
+ * Brains (docs/09 §2.6, docs/06): the four levels side by side, company, project,
+ * departments, individuals, with entries, provenance and the same scored retrieval
  * the agents get. A member project links up to its company brain (ADR 0015): that
  * memory is retrieved by this project's agents, so it is honestly in scope here.
  */
@@ -76,7 +76,7 @@ export function BrainsPanel({ projectId }: { projectId: string }) {
           className="flex w-full items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-900/40 px-2.5 py-1.5 text-left text-[11px] text-slate-400 hover:border-slate-500/70 hover:text-emerald-300"
           title="Open the company's memory page"
         >
-          ⌂ <span className="text-slate-200">{project.data?.company_name ?? 'Company'}</span> — company
+          ⌂ <span className="text-slate-200">{project.data?.company_name ?? 'Company'}</span>, company
           brain
           <span className="truncate text-slate-500">
             · one directive there is retrieved by this project&apos;s agents
@@ -133,7 +133,7 @@ export function BrainsPanel({ projectId }: { projectId: string }) {
 
         <div className="space-y-2">
           <div className="flex items-end gap-2">
-            <Field label="search entries" className="w-56" hint="Search scored memories — this filters the list below">
+            <Field label="search entries" className="w-56" hint="Search scored memories, this filters the list below">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -196,17 +196,17 @@ export function BrainsPanel({ projectId }: { projectId: string }) {
                     <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 text-[11px]">
                       <dt className="text-slate-500">trust</dt>
                       <dd className="tabular-nums text-slate-300">
-                        {selected.trust !== undefined ? formatPercent(selected.trust) : '—'}
+                        {selected.trust !== undefined ? formatPercent(selected.trust) : 'n/a'}
                       </dd>
                       <dt className="text-slate-500">importance</dt>
-                      <dd className="tabular-nums text-slate-300">{selected.importance ?? '—'}</dd>
+                      <dd className="tabular-nums text-slate-300">{selected.importance ?? 'n/a'}</dd>
                       <dt className="text-slate-500">uses</dt>
                       <dd className="tabular-nums text-slate-300">{selected.use_count ?? 0}</dd>
                       <dt className="text-slate-500">decay</dt>
-                      <dd className="tabular-nums text-slate-300">{selected.decay_score ?? '—'}</dd>
+                      <dd className="tabular-nums text-slate-300">{selected.decay_score ?? 'n/a'}</dd>
                       <dt className="text-slate-500">source</dt>
                       <dd className="truncate font-mono text-slate-300" title={JSON.stringify(selected.source)}>
-                        {selected.source ? JSON.stringify(selected.source) : '—'}
+                        {selected.source ? JSON.stringify(selected.source) : 'n/a'}
                       </dd>
                     </dl>
                     {(selected.tags ?? []).length > 0 && (
@@ -233,7 +233,7 @@ function RetrievalDebug({ projectId, query }: { projectId: string; query: string
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Esc closes the score panel while it is open — it is an overlay, not a tray.
+  // Esc closes the score panel while it is open, it is an overlay, not a tray.
   useEffect(() => {
     if (result === null) return;
     const onKey = (event: KeyboardEvent) => {

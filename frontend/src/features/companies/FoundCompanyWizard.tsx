@@ -13,11 +13,11 @@ import { FOUND_TEMPLATES, templateById } from './foundTemplates';
 
 /**
  * Found your company (ADR 0015): company first, its first project born under it, and
- * the first run — one call (`POST /api/found`), one landing on the company floor.
+ * the first run, one call (`POST /api/found`), one landing on the company floor.
  *
  * Quick setup: pick a template, name the company, done. Detailed setup opens the
  * same form with every field visible (mission, project, goals, budgets, run mode);
- * both paths create exactly the same thing — the preview line says so.
+ * both paths create exactly the same thing, the preview line says so.
  */
 export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
   const requestKey = useRef(crypto.randomUUID());
@@ -81,7 +81,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
       openTab(company.id, 'main', 'hq');
       setToast({
         kind: 'success',
-        message: `“${company.name}” founded — ${project.name} ${startRun ? "is planning its first run" : "is ready for your first run"}.`,
+        message: `“${company.name}” founded, ${project.name} ${startRun ? "is planning its first run" : "is ready for your first run"}.`,
       });
       void qc.invalidateQueries({ queryKey: ['projects'] });
       void qc.invalidateQueries({ queryKey: ['companies'] });
@@ -97,7 +97,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
       if (r.path) {
         setWorkspacePath(r.path);
       } else if (!r.supported) {
-        setToast({ kind: 'error', message: 'No folder picker on this machine — type the path instead.' });
+        setToast({ kind: 'error', message: 'No folder picker on this machine, type the path instead.' });
       }
       // cancelled: stay silent; the input keeps whatever it had
     },
@@ -175,7 +175,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
 
         {mode === 'detailed' && (
           <>
-            <Field label="Mission" hint="The company brain's first entry — every member agent retrieves it.">
+            <Field label="Mission" hint="The company brain's first entry, every member agent retrieves it.">
               <Textarea value={mission} onChange={(e) => setMission(e.target.value)} rows={2} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -203,7 +203,7 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
             </Field>
             <Field
               label="Workspace root"
-              hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree — use a dedicated empty folder. Default folders include unique company and project IDs."
+              hint="Where this company's project folders live. Agents are jailed to (and sandboxed inside) this tree, use a dedicated empty folder. Default folders include unique company and project IDs."
             >
               <div className="flex items-center gap-2">
                 <Input
@@ -259,8 +259,8 @@ export function FoundCompanyWizard({ open, onClose }: { open: boolean; onClose: 
         </section>
 
         <p className="rounded border border-slate-800 bg-slate-950/60 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-          Will create: <span className="text-slate-300">{name.trim() || '—'}</span> (company, CEO +
-          board), <span className="text-slate-300">{projectName.trim() || '—'}</span> under it, and{' '}
+          Will create: <span className="text-slate-300">{name.trim() || 'n/a'}</span> (company, CEO +
+          board), <span className="text-slate-300">{projectName.trim() || 'n/a'}</span> under it, and{' '}
           {startRun ? 'start its first run' : 'wait for you to start its first run'}{runMode === 'autonomous' ? '' : ' (interactive)'}. Agents work inside{' '}
           <span className="font-mono text-slate-400">
             {workspacePath.trim() || 'a dedicated project folder'}

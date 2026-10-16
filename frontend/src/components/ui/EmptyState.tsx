@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
 /**
- * Every panel has an empty state that teaches (docs/09 §4) — no blank boxes.
+ * Every panel has an empty state that teaches (docs/09 §4), no blank boxes.
  */
 export function EmptyState({
   title,

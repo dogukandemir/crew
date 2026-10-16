@@ -1,4 +1,4 @@
-# 07 — Observability
+# 07: Observability
 
 You must be able to see the organization think. Observability here is not a logging
 afterthought: the **event log is the primary data structure** and the UI is a projection of it.
@@ -34,7 +34,7 @@ Types are namespaced so the UI can filter and the replay can reconstruct:
 | `brain.*` | `brain.written`, `brain.promoted`, `brain.superseded` |
 | `verify.*` | `verify.started`, `verify.check`, `verify.verdict` |
 | `policy.*` | `policy.allowed`, `policy.denied`, `policy.approval.requested`, `policy.approval.granted` |
-| `security.*` | `security.injection.detected`, `security.egress.blocked`, `security.content.reviewed`, `security.content.quarantined`, `security.content.released`, `security.command.reviewed`, `security.command.allowed`, `security.allow.added`, `security.allow.removed`, `security.sandbox.unavailable`, `security.secret.redaction` — the review gate's trail (ADR 0017); quarantines and releases are audited too |
+| `security.*` | `security.injection.detected`, `security.egress.blocked`, `security.content.reviewed`, `security.content.quarantined`, `security.content.released`, `security.command.reviewed`, `security.command.allowed`, `security.allow.added`, `security.allow.removed`, `security.sandbox.unavailable`, `security.secret.redaction`, the review gate's trail (ADR 0017); quarantines and releases are audited too |
 | `budget.*` | `budget.reserved`, `budget.spent`, `budget.exceeded`, `budget.circuit_open` |
 | `user.*` | `user.steering`, `user.approval`, `user.command`, `user.message` |
 
@@ -60,7 +60,7 @@ run (goal)
 
 - Spans are materialized from events (`parent_span_id`), so the trace view needs no separate
   collector.
-- OTEL export is opt-in (`settings.otel.enabled`) — spans are already OTEL-shaped
+- OTEL export is opt-in (`settings.otel.enabled`), spans are already OTEL-shaped
   (`trace_id`, `span_id`, attributes incl. `crew.agent.id`, `crew.cost_usd`), so wiring an
   OTLP exporter later is a small adapter.
 - **Cost attribution** rides the same tree: `llm.*` events carry tokens + `cost_micros`,
@@ -76,7 +76,7 @@ run (goal)
 - Health: failure taxonomy breakdown, stuck jobs (heartbeat stale), rate-limit pressure.
 
 ### 3.2 By department / group
-- Roster table: agent, grade, score, state, cost, tasks, last action — sortable, clickable.
+- Roster table: agent, grade, score, state, cost, tasks, last action, sortable, clickable.
 - Backlog: tasks owned, in-flight, blocked (and *why* they're blocked).
 - Department brain activity: recent writes, promotions, supersessions.
 - Department KPIs: success rate, rework rate, avg cost per task, escalations to/from.
@@ -86,7 +86,7 @@ run (goal)
 - Live timeline of thoughts, tool calls (request + result, truncated), messages, escalations,
   with per-step latency and cost.
 - Context inspector: exactly what was retrieved from memory for the current step (with
-  provenance), the prompt hash/version, and the token budget used — this is the single most
+  provenance), the prompt hash/version, and the token budget used, this is the single most
   useful debugging surface in the whole product.
 - Score card: reputation + trend, per-skill proficiency bars, reward ledger, penalties,
   promotions, grade progress.
@@ -94,7 +94,7 @@ run (goal)
 
 ## 4. Real-time transport
 
-- `ws://…/ws/projects/{project_id}` — sends `{type:"event", seq, …}` frames.
+- `ws://…/ws/projects/{project_id}`, sends `{type:"event", seq, …}` frames.
 - Client sends `{action:"subscribe", filters:{department_id|squad_id|agent_id, types[]}, since_seq}`;
   the hub honors filters server-side (no client-side firehose).
 - Resume: reconnect with `since_seq` → server replays from the store then streams live

@@ -1,18 +1,18 @@
-# 0012 — The command desk: the Captain speaks, the orchestrator answers
+# 0012: The command desk: the Captain speaks, the orchestrator answers
 
-Status: accepted · Supersedes: — · Relates to: 0009 (the company), 0010 (the board),
+Status: accepted · Supersedes: · Relates to: 0009 (the company), 0010 (the board),
 0011 (the board of directors)
 
 ## Context
 
-The owner wants to *direct the company* — assign work, move it, fire, give breaks,
-set goals and budgets — by writing plain sentences into a chat pane on the right of
+The owner wants to *direct the company*, assign work, move it, fire, give breaks,
+set goals and budgets, by writing plain sentences into a chat pane on the right of
 the workspace, tagging agents by name. Two design questions dominated the refinement:
 
 1. **God effect or direct command?** The owner asked explicitly. A god effect (the
    message arriving as the agent's own inner voice, or as formless inspiration) was
    rejected: it fabricates provenance, pollutes the record, and breaks the chain of
-   responsibility — a direct violation of the system's "never lie" constraint. The
+   responsibility, a direct violation of the system's "never lie" constraint. The
    decision is **direct, attributed instruction**: the channel is
    *you → the orchestrator (which parses and frames) → the command chain → the agent*,
    and the agent always knows who spoke.
@@ -20,8 +20,8 @@ the workspace, tagging agents by name. Two design questions dominated the refine
    **the Captain**. Machined into the product (not a localized label): prompt block,
    event payloads, UI badge, glossary.
 
-The "godlike feel" is delivered honestly instead: three **modes** — an `order`, an
-`idea`, a `question` — a first-class `CAPTAIN DIRECTIVES` block in prompts, and a
+The "godlike feel" is delivered honestly instead: three **modes**, an `order`, an
+`idea`, a `question`, a first-class `CAPTAIN DIRECTIVES` block in prompts, and a
 stage/desk presence in the UI. A future note: the agent's *inner voice* (its own
 reflection) will be a separate strip; Captain messages never mix into it.
 
@@ -41,22 +41,22 @@ A lexicon parser (English) turns the message into a typed command:
 `status | assign | reassign | fire | break | goal | budget | hire | help`, with
 mentions resolved against the live roster and quantities (`15 minutes`, `%20`, `$25`)
 extracted. Only when confidence is low **and** a provider key is configured does the
-orchestrator's model interpret the text — into the same strict schema, validated
+orchestrator's model interpret the text, into the same strict schema, validated
 against the roster. Offline, the desk says what it can and cannot carry out; it never
 guesses a destructive act.
 
-**Revision (2026-10) — English-only at launch.** The Turkish keyword set was removed
+**Revision (2026-10), English-only at launch.** The Turkish keyword set was removed
 with the rest of the non-English copy: the product ships in English first, and other
 languages come back deliberately, as locale packs, not as hidden second lexicons. The
 parser stayed a pure, table-driven function so a pack is a data change.
 
 ### Modes: orders bind, ideas are weighed, questions are answered
 
-- `order` (default) — reaches the agent's next prompt as a **binding** line under
-  `CAPTAIN DIRECTIVES (from the Captain — this company's owner)`.
-- `idea` (an “I have an idea:…” or “maybe…”) — the same block, labeled
+- `order` (default), reaches the agent's next prompt as a **binding** line under
+  `CAPTAIN DIRECTIVES (from the Captain, this company's owner)`.
+- `idea` (an “I have an idea:…” or “maybe…”), the same block, labeled
   as something to weigh.
-- `question` (a question mark) — answered by the desk; **never** enters a task prompt.
+- `question` (a question mark), answered by the desk; **never** enters a task prompt.
 
 A directed message (`@Ada …`) reaches only its addressee; an undirected one reaches
 the floor. Window: last 6 hours, at most 3 lines, newest first.
@@ -67,8 +67,8 @@ the floor. Window: last 6 hours, at most 3 lines, newest first.
 |---|---|
 | assign | `Task` created (`run_id=null`): tagged → state `assigned`; untagged → `pending`, matched at the next wave by the existing engine |
 | reassign | the old owner's latest open task moves; the old owner is freed (`busy → idle`); `task.reassigned` |
-| fire | `org.layoff_agent` (audited archive). Engine seats — orchestrator, CEO, chair, board members — **refuse**; that decision belongs to the board |
-| break | `agents.break_until = now + minutes` (default 10, cap 120; "everyone" = everyone except the engine); matching skips the agent until it passes — **work already in their hands finishes first**; "clear the breaks"/"end the breaks" clears, targeting whoever is on one |
+| fire | `org.layoff_agent` (audited archive). Engine seats, orchestrator, CEO, chair, board members, **refuse**; that decision belongs to the board |
+| break | `agents.break_until = now + minutes` (default 10, cap 120; "everyone" = everyone except the engine); matching skips the agent until it passes, **work already in their hands finishes first**; "clear the breaks"/"end the breaks" clears, targeting whoever is on one |
 | goal | `orchestrator.start_run` |
 | budget | the cap only (`budget_cap_micros`); what is spent stays spent; audited |
 | hire | `org.hire_agent` from the closest role template (analyst/engineer/researcher/designer/writer) |
@@ -87,8 +87,8 @@ so).
 - The transcript is honest by construction: a refused or failed action replies
   "I couldn't carry that out: …" and is recorded as such (`ok=false`). `command.reply`
   also carries `executed` + `in_reply_to`: the prompt boundary can tell words that landed
-  from words that only echoed — only landed orders bind the floor (`_captain_notes` joins
+  from words that only echoed, only landed orders bind the floor (`_captain_notes` joins
   message and reply; an unparsed sentence, a refused dismissal or an answered question
   never comes back as a directive).
-- Deferred deliberately: the agents' "inner voice" strip; streamed (SSE) replies —
+- Deferred deliberately: the agents' "inner voice" strip; streamed (SSE) replies,
   the drawer polls at 5s while open.

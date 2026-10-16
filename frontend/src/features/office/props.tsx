@@ -4,7 +4,7 @@
  * Everything here is drawn as a **volume**, never as a flat rectangle: a lit top
  * face plus the two visible side faces, darker in the order the light would hit
  * them. That contrast is the whole difference between a floor plan and a place
- * that looks inhabited — a flat rectangle of the right colour still reads as
+ * that looks inhabited, a flat rectangle of the right colour still reads as
  * lying down, which is exactly what was wrong with the previous version.
  *
  * Screen-up is negative y, so a prop's height is drawn by lifting its points;
@@ -138,7 +138,7 @@ export function Panel({
 /** The desk's top surface: 0.74 m, which is a desk. */
 export const DESK_H_M = 0.74;
 export const DESK_Z = mh(DESK_H_M);
-/** The seated hip height — a chair's seat has to meet it exactly. */
+/** The seated hip height, a chair's seat has to meet it exactly. */
 export const SEAT_Z = mh(0.5);
 
 /**
@@ -151,7 +151,7 @@ export const SEAT_Z = mh(0.5);
  */
 export function Chair({ at, color: _color = '#1c1f26', turned = false }: { at: { x: number; y: number }; color?: string; turned?: boolean }) {
   // `at` is the seat itself: the point the simulation uses. The art is placed by its
-  // anchor, so it comes back by half its own footprint — read out of the atlas, since
+  // anchor, so it comes back by half its own footprint, read out of the atlas, since
   // a hand-typed half-metre is how the chair ended up 30 cm from its sitter.
   //
   // `turned` is the chair facing the table rather than the viewer. A chair at a
@@ -184,7 +184,7 @@ export function Workstation({
 }: {
   x: number;
   y: number;
-  /** Where the person who works here sits — `deskSeat()` in the floor plan. */
+  /** Where the person who works here sits, `deskSeat()` in the floor plan. */
   seat: { x: number; y: number };
   color?: string;
   busy?: boolean;
@@ -192,14 +192,14 @@ export function Workstation({
   screen?: boolean;
 }) {
   // The desk, its monitor, the lit screen and the keyboard are one sprite, in two
-  // states — and `busy` is exactly the distinction the atlas carries a second cell
+  // states, and `busy` is exactly the distinction the atlas carries a second cell
   // for.
   //
   // It is placed at the bay's own origin, because that is where the sprite's anchor
   // is: a sprite is anchored at its footprint's far corner (see Sprite.tsx), and so
   // is a bay. This used to offset the art by a metre and a half a metre, computed
   // from the art's DECLARED half-footprint while the art was drawn at two thirds of
-  // it — so every desk sat 30 cm up and to the left of the bay it belonged to, and
+  // it, so every desk sat 30 cm up and to the left of the bay it belonged to, and
   // the chair, which came from the bay, was no longer under it.
   return (
     <g>
@@ -212,7 +212,7 @@ export function Workstation({
   );
 }
 
-/** A potted plant — the cheapest way to make an office look alive. */
+/** A potted plant, the cheapest way to make an office look alive. */
 export function Plant({ x, y, scale: _scale = 1 }: { x: number; y: number; scale?: number }) {
   // `x, y` is the middle of the plant; the art is anchored at a corner.
   const c = spriteCentreOffset('prop.plant');
@@ -227,7 +227,7 @@ export function Plant({ x, y, scale: _scale = 1 }: { x: number; y: number; scale
 /**
  * A bay partition: the low panel that bounds one unit's workspace.
  *
- * StarNet's unit is a bay, and a bay is what its own partitions enclose — a room
+ * StarNet's unit is a bay, and a bay is what its own partitions enclose, a room
  * only says which department, not where one person's place ends and the next
  * begins. `prop.partition.1` is one bay's worth, `.2` two, `prop.partition` a run
  * of three, all of them drawn from the atlas like everything else here.
@@ -241,12 +241,12 @@ export function Partition({ at, tiles = 1 }: { at: { x: number; y: number }; til
 export function Whiteboard({ x, y, w = 120, h: _h = 56 }: { x: number; y: number; w?: number; h?: number }) {
   // The atlas has ONE board, and `scaleForWidth` reads its actual width out of the
   // entry: the caller's width becomes a scale. Without this the lab's 74-unit board
-  // was drawn at its art's two metres and read as a wall of its own — the board
+  // was drawn at its art's two metres and read as a wall of its own, the board
   // stopping respecting its caller is what "why did the lab change" was. The height
   // is the atlas's: a board of a different SHAPE belongs in the atlas, not in a
   // stretched sprite.
   //
-  // The width used to be divided by a hand-typed `2 × UNITS_PER_METRE` — a number
+  // The width used to be divided by a hand-typed `2 × UNITS_PER_METRE`, a number
   // that was supposed to be the art's width, was wrong by 17%, and would have been
   // wrong again the moment the art changed.
   return <Sprite name="prop.whiteboard" x={x} y={y} scale={scaleForWidth('prop.whiteboard', w)} />;
@@ -258,7 +258,7 @@ export function CoffeeBar({ x, y, w = 150 }: { x: number; y: number; w?: number 
   return (
     <g>
       <GroundShadow cx={x + w / 2} cy={y + 14} r={w * 0.5} />
-      {/* The counter stays a box — a counter is a box — and the machine on it is a
+      {/* The counter stays a box, a counter is a box, and the machine on it is a
           sprite, placed where the machine was: half its own footprint in from the
           counter's left, at the counter's back edge. */}
       <Box x={x} y={y} w={w} d={30} h={z} color="#3a3026" top="#4d4033" />
@@ -273,8 +273,8 @@ export function CoffeeBar({ x, y, w = 150 }: { x: number; y: number; w?: number 
 /**
  * A table with chairs, for review and stand-ups.
  *
- * A SURFACE, in StarNet's taxonomy — the thing you place that gives a place to work
- * — so it is a sprite, and the chairs around it are the same chair sprite the desks
+ * A SURFACE, in StarNet's taxonomy, the thing you place that gives a place to work
+ *, so it is a sprite, and the chairs around it are the same chair sprite the desks
  * use. The caller's width becomes a scale: the atlas has one table, three metres
  * across, and a room that asks for two gets two.
  */
@@ -304,7 +304,7 @@ export function MeetingTable({ x, y, w = 210, d: _d = 96, seats = 4 }: { x: numb
 /**
  * A round table: a cylinder, so it has a lit elliptical top and a visible side.
  *
- * Used in the break corner, where the point is that people sit *together* — the
+ * Used in the break corner, where the point is that people sit *together*, the
  * chairs come from `breakSeats()` in the floor plan, which is the same list the
  * simulation seats people on, so a chair and its sitter can never disagree.
  */

@@ -48,13 +48,13 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
         render: (e) => <span className="font-medium text-slate-100">{e.name}</span>,
         sortValue: (e) => e.name,
       },
-      { key: 'role', header: 'Role', render: (e) => <span className="text-slate-300">{e.role ?? '—'}</span>, sortValue: (e) => e.role ?? '' },
+      { key: 'role', header: 'Role', render: (e) => <span className="text-slate-300">{e.role ?? 'n/a'}</span>, sortValue: (e) => e.role ?? '' },
       {
         key: 'grade',
         header: 'Grade',
         width: '4rem',
         align: 'center',
-        render: (e) => (e.grade === undefined ? '—' : <Badge tone="accent">G{e.grade}</Badge>),
+        render: (e) => (e.grade === undefined ? 'n/a' : <Badge tone="accent">G{e.grade}</Badge>),
         sortValue: (e) => e.grade ?? -1,
       },
       {
@@ -76,7 +76,7 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
         align: 'right',
         render: (e) => (
           <span className="tabular-nums" title={!(e.tasks_done ?? 0) ? 'No completed tasks yet' : undefined}>
-            {!(e.tasks_done ?? 0) || e.success_rate === undefined ? '—' : formatPercent(e.success_rate)}
+            {!(e.tasks_done ?? 0) || e.success_rate === undefined ? 'n/a' : formatPercent(e.success_rate)}
           </span>
         ),
         sortValue: (e) => e.success_rate ?? -1,
@@ -86,7 +86,7 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
         header: 'Cost',
         width: '5.5rem',
         align: 'right',
-        render: (e) => <span className="tabular-nums">{e.cost_micros === undefined ? '—' : formatMicros(e.cost_micros)}</span>,
+        render: (e) => <span className="tabular-nums">{e.cost_micros === undefined ? 'n/a' : formatMicros(e.cost_micros)}</span>,
         sortValue: (e) => e.cost_micros ?? 0,
       },
     ],
@@ -161,7 +161,7 @@ export function RewardsPanel({ projectId, tabId }: { projectId: string; tabId: s
                     {t.agent_name ?? t.agent_id.slice(0, 8)}
                   </button>
                   <span className="tabular-nums text-slate-400">
-                    G{t.from_grade ?? '—'} → G{t.to_grade ?? '—'}
+                    G{t.from_grade ?? 'n/a'} → G{t.to_grade ?? 'n/a'}
                   </span>
                   {t.score_after !== undefined && (
                     <span className="tabular-nums text-slate-500">score {t.score_after.toFixed(3)}</span>

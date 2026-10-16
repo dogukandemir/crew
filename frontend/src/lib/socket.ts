@@ -11,7 +11,7 @@
  *  - surface `gap` frames instead of silently dropping events.
  *
  * The class is transport-only: consumers (the socket provider) own where the
- * frames land. It never throws on a dead backend — it reports state.
+ * frames land. It never throws on a dead backend, it reports state.
  */
 import { api } from '../api/client';
 import type { EventRow, EventFilters, UnitRef, WsError, WsFrame, WsGap, WsHello, WsMetrics, WsStage } from '../api/types';
@@ -72,7 +72,7 @@ export function writeSinceSeq(projectId: string, seq: number): void {
   try {
     store.setItem(sinceSeqKey(projectId), String(seq));
   } catch {
-    /* quota / private mode — the in-memory cursor still works */
+    /* quota / private mode, the in-memory cursor still works */
   }
 }
 

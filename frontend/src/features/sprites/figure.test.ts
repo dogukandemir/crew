@@ -4,7 +4,7 @@ import { figureCell } from './SpriteCharacter';
 /**
  * The floor's rule about faces, as assertions: only somebody working at their own
  * desk looks away from the room. A back turned all day is what "some characters
- * look permanently turned away" was — and a walker or a talker with their back to
+ * look permanently turned away" was, and a walker or a talker with their back to
  * the camera is the same complaint in miniature.
  */
 describe('figureCell', () => {

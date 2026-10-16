@@ -1,7 +1,7 @@
 """Four-level memory: company / project / department / agent brains (docs/06, ADR 0015).
 
 The company brain is the umbrella: it lives on the company's own row, review and
-allocation decisions land in it, and every member project's agents retrieve from it —
+allocation decisions land in it, and every member project's agents retrieve from it,
 so a directive written once is available across the whole portfolio.
 
 MVP retrieval is lexical (token overlap) + recency + importance + trust, which keeps the
@@ -74,7 +74,7 @@ class BrainService:
 
     async def ensure_company_brain(self, company_id: str, label: str = "company") -> str:
         """The umbrella memory (ADR 0015). Companies created before the company scope
-        existed kept their memory in a project-scope brain on the same row — flip it
+        existed kept their memory in a project-scope brain on the same row, flip it
         rather than strand the entries."""
         async with session_scope() as s:
             row = await s.scalar(select(Brain).where(Brain.project_id == company_id,
@@ -104,7 +104,7 @@ class BrainService:
                     BrainEntry.project_id == project_id).group_by(BrainEntry.brain_id)
             )).all()
             counts = {bid: int(n) for bid, n in rows}
-            # Resolve owner names (ADR 0015): the four levels get human labels —
+            # Resolve owner names (ADR 0015): the four levels get human labels,
             # "department · 3fa2c1" is a database, "Design" is an org.
             proj = await s.get(Project, project_id)
             dept_names = {d.id: d.name for d in (await s.scalars(
@@ -233,7 +233,7 @@ class BrainService:
     async def search(self, *, project_id: str, brain_ids: list[str] | None, query: str, top_k: int = 8,
                      kinds: list[str] | None = None, record_use: bool = True) -> list[dict]:
         """Retrieval scoped by BRAIN, not by row: the company brain's entries live on the
-        company's row (ADR 0015), so a member's agents must still find them — the brain
+        company's row (ADR 0015), so a member's agents must still find them, the brain
         list handed in IS the scope."""
         qtok = _tokens(query)
         async with session_scope() as s:

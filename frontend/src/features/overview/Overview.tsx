@@ -44,7 +44,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
   const pending = approvals.data?.items.length ?? project.data?.pending_approvals ?? 0;
 
   // Never a fabricated 0%: with no finished task history the rate is unknown, not zero
-  // (review 2026-10-14 — the API reports 0.0 for an empty denominator).
+  // (review 2026-10-14, the API reports 0.0 for an empty denominator).
   const hasTaskHistory = (metrics.data?.tasks_total ?? total) > 0;
   const successRate = hasTaskHistory
     ? metrics.data?.task_success_rate ?? metrics.data?.success_rate ?? project.data?.success_rate
@@ -54,7 +54,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
 
   const recent = log.items.slice(-50).reverse();
 
-  // Cumulative burn by event — real data, straight off the firehose.
+  // Cumulative burn by event, real data, straight off the firehose.
   const burn = useMemo(() => {
     let cum = 0;
     return log.items
@@ -71,13 +71,13 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
       <div className="flex flex-wrap gap-2">
         <StatCard
           label="Latest run tasks"
-          value={`${done}/${total || '—'}`}
+          value={`${done}/${total || 'n/a'}`}
           hint={total ? formatPercent(total ? done / total : 0) + ' complete' : 'no plan yet'}
           tone={total > 0 && done === total ? 'success' : 'neutral'}
         />
         <StatCard
           label="Org size"
-          value={counts.agent || '—'}
+          value={counts.agent || 'n/a'}
           hint={`${counts.department} dept · ${counts.squad} squad`}
         />
         <StatCard
@@ -88,7 +88,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
         />
         <StatCard
           label="Success rate"
-          value={successRate !== undefined ? formatPercent(successRate) : '—'}
+          value={successRate !== undefined ? formatPercent(successRate) : 'n/a'}
           tone={successRate !== undefined && successRate >= 0.8 ? 'success' : 'neutral'}
         />
         <StatCard
@@ -111,7 +111,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
         <Card title="Budget burn" subtitle="Cumulative cost by event seq (live)" className="lg:col-span-2">
           {burn.length < 2 ? (
             <p className="py-6 text-center text-xs text-slate-500">
-              No spend events yet — the chart fills as the org works.
+              No spend events yet, the chart fills as the org works.
             </p>
           ) : (
             <div className="h-40">
@@ -136,7 +136,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                       // Recharts 3 widens a tooltip value to ValueType | undefined;
                       // format only real numbers and never print a fake "$NaN".
                       const usd = typeof v === 'number' && Number.isFinite(v) ? v : null;
-                      return [usd === null ? '—' : `$${usd.toFixed(4)}`, 'cumulative'];
+                      return [usd === null ? 'n/a' : `$${usd.toFixed(4)}`, 'cumulative'];
                     }}
                     labelFormatter={(l) => `seq ${l}`}
                   />
@@ -150,7 +150,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
 
       <Card
         title="Activity"
-        subtitle={`${recent.length} recent events — click a row to jump to its unit`}
+        subtitle={`${recent.length} recent events, click a row to jump to its unit`}
         actions={
           <span className="text-[11px] text-slate-500">
             stream {log.maxSeq > 0 ? `@ seq ${log.maxSeq}` : 'idle'}
@@ -229,7 +229,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
   const start = useMutation({
     mutationFn: () => api.startRun(projectId, { goal: goal.trim() || defaultGoal, mode }),
     onSuccess: () => {
-      setToast({ kind: 'success', message: 'Run accepted — watching the event stream.' });
+      setToast({ kind: 'success', message: 'Run accepted, watching the event stream.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
@@ -243,7 +243,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
           e.preventDefault();
           if (runActive) return;
           if (needsConfirm) {
-            setConfirmOpen(true);   // a fresh run re-plans from scratch — say so first
+            setConfirmOpen(true);   // a fresh run re-plans from scratch, say so first
             return;
           }
           start.mutate();
@@ -299,7 +299,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
             : `A previous pass already completed ${done} of ${total} tasks.`}
         </p>
         <p className="mt-2 text-sm text-slate-300">
-          A new run <span className="text-slate-100">re-plans the goal from scratch</span> — it does not
+          A new run <span className="text-slate-100">re-plans the goal from scratch</span>, it does not
           continue the previous run and will redo (and re-charge) equivalent work. If you want the org to
           build on what it already made, edit the goal first.
         </p>
@@ -330,7 +330,7 @@ function ProgressHint({ projectId }: { projectId: string }) {
   return (
     <div className="pt-1">
       <div className="mb-1 text-[11px] text-slate-500">
-        previous run: {done}/{total} tasks · stage {project.data?.stage ?? '—'}
+        previous run: {done}/{total} tasks · stage {project.data?.stage ?? 'n/a'}
       </div>
     </div>
   );

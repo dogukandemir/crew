@@ -1,7 +1,7 @@
 [project]
 name = "crew-backend"
 version = "0.1.0"
-description = "Crew control room backend — the FastAPI/event-sourced engine behind a local-first CrewAI agent company."
+description = "Crew control room backend, the FastAPI/event-sourced engine behind a local-first CrewAI agent company."
 license = { text = "MIT" }
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -57,10 +57,10 @@ dev = [
 ]
 
 [tool.pytest-gremlins]
-# Mutation testing (docs/13). Default scope: the security spine — the modules where a
+# Mutation testing (docs/13). Default scope: the security spine: the modules where a
 # wrong answer costs the most. CLI --gremlin-targets overrides this per run; keep the
 # pytest file selection tight (only the tests covering the target) so each mutant's
-# run stays fast. Note: the incremental cache keys on SOURCE, not tests — after
+# run stays fast. Note: the incremental cache keys on SOURCE, not tests: after
 # editing tests, re-run with --gremlin-clear-cache or you will read stale verdicts.
 paths = [
     "src/crew/control/security_review.py",

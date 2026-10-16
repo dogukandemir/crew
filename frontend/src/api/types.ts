@@ -275,7 +275,7 @@ export interface Company {
 }
 
 /** The company's memory page (GET /companies/{id}/brains, ADR 0015): the umbrella
- * brain plus a per-member index of where memory lives. Read-only — a member's
+ * brain plus a per-member index of where memory lives. Read-only, a member's
  * entries open from its own Brains tab. */
 export interface CompanyBrainsPage {
   company_id: string;
@@ -348,7 +348,7 @@ export interface Project {
   tasks_done?: number;
   tasks_total?: number;
   success_rate?: number;
-  /** Runs ever started (ADR 0015) — the welcome checklist reads it honestly. */
+  /** Runs ever started (ADR 0015), the welcome checklist reads it honestly. */
   runs?: number;
   pending_approvals?: number;
   badge?: number;
@@ -477,7 +477,7 @@ export interface OrgTree {
 export type AgentState = 'idle' | 'busy' | 'probation' | 'suspended' | 'archived';
 export type Autonomy = 'supervised' | 'bounded' | 'autonomous';
 
-/** Soul (ADR 0016): the person behind the role — composed at hire, never authored. */
+/** Soul (ADR 0016): the person behind the role, composed at hire, never authored. */
 export interface AgentSoul {
   name?: string;
   first?: string;
@@ -488,7 +488,7 @@ export interface AgentSoul {
   voice?: string;
   quirks?: string[];
   background?: string;
-  /** `deterministic` or `model:<id>` — which one wrote it is part of the record. */
+  /** `deterministic` or `model:<id>`, which one wrote it is part of the record. */
   source?: string;
 }
 
@@ -816,7 +816,7 @@ export interface Brain {
   scope: 'company' | 'project' | 'department' | 'agent';
   owner_id?: string | null;
   /** The human owner (ADR 0015): company name, project name, department name or
-   * agent name — resolved by the backend so the four levels read as an org. */
+   * agent name, resolved by the backend so the four levels read as an org. */
   owner_name?: string;
   label?: string;
   created_at?: string;
@@ -931,7 +931,7 @@ export interface Approval {
 
 /** A standing "always allow" grant (ADR 0017): an approved risky command that runs
  * without re-asking. Created only by a human grant; revocable. */
-/** A standing tool approval ("⚡ Always allow" on a tool gate). */
+/** A standing tool approval ("Always allow" on a tool gate). */
 export interface CapabilityAllow {
   id: string;
   capability: string;

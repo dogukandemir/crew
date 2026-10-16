@@ -1,4 +1,4 @@
-# ADR 0007 — The run pipeline is our own resumable state machine, not a CrewAI Flow
+# ADR 0007: The run pipeline is our own resumable state machine, not a CrewAI Flow
 
 - **Status:** Accepted (supersedes the "Flows drive organisation-level control flow" part of ADR 0005)
 - **Date:** 2026-10-06
@@ -13,7 +13,7 @@ needs properties CrewAI Flows do not give us:
    ourselves anyway, doubling the model.
 2. **Cancellation.** The user must be able to pause or kill a project and have spend stop at the
    next step boundary. That needs a check *between* stages and tasks against our own flags and
-   the budget circuit breaker — precisely the points we already control.
+   the budget circuit breaker, precisely the points we already control.
 3. **Budget pre-flight.** Reserving budget before an LLM call is a cross-cutting gate that must
    wrap dispatch; a Flow hides the dispatch boundary behind its own orchestration.
 4. **Async-native concurrency.** Crews run in threads with a semaphore, tasks in one wave run

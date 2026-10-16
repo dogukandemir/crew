@@ -28,7 +28,7 @@ const STATUS_TONE = {
 } as const;
 
 /**
- * Shown when no project tab is open — the empty state teaches (docs/09 §4). Since
+ * Shown when no project tab is open, the empty state teaches (docs/09 §4). Since
  * ADR 0015 the path is company-first: found a company (wizard), then its projects;
  * a standalone project stays one click away.
  */
@@ -46,7 +46,7 @@ export function WelcomeScreen() {
   const [hideCard, setHideCard] = useState(false);
   const [providerOpen, setProviderOpen] = useState(false);
   // The wizard lives in the ui store: the Companies section and the welcome
-  // CTAs all open THE SAME one — there is no second way to create a company.
+  // CTAs all open THE SAME one, there is no second way to create a company.
   const wizardOpen = useUi((s) => s.foundWizardOpen);
   const setWizardOpen = useUi((s) => s.setFoundWizardOpen);
   const showCard = !scenario && (providerOpen || (!hideCard && !!health.data && !demo && onboarding.data?.offline_llm === false && shouldShowOnboarding(onboarding.data, dismissed)));
@@ -71,7 +71,7 @@ export function WelcomeScreen() {
           }}
           className="mt-3 rounded-full border border-amber-500/40 bg-amber-950/30 px-3 py-1 text-[11px] text-amber-200 hover:border-amber-400/60"
         >
-          ⚠ No provider key yet — add one to run real agents
+          ⚠ No provider key yet, add one to run real agents
         </button>
       )}
 
@@ -117,7 +117,7 @@ export function WelcomeScreen() {
         {projects.isSuccess && projects.data.items.length === 0 && (
           <EmptyState
             title="No projects yet"
-            description="A company holds the portfolio; a project is what its org works on. Found the company first — or start a standalone project."
+            description="A company holds the portfolio; a project is what its org works on. Found the company first, or start a standalone project."
             action={
               hasCompanies ? (
                 <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
@@ -174,7 +174,7 @@ export function WelcomeScreen() {
           onDone={(detail) => {
             setHideCard(true);
             setProviderOpen(false);
-            setToast({ kind: 'success', message: `Provider saved — ${detail}. Choose Live to run real agents.` });
+            setToast({ kind: 'success', message: `Provider saved, ${detail}. Choose Live to run real agents.` });
             void onboarding.refetch();
           }}
           onSkip={() => {

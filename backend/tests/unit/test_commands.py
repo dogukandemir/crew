@@ -1,4 +1,4 @@
-"""ADR 0012: the command desk — the Captain writes, the orchestrator answers, the
+"""ADR 0012: the command desk, the Captain writes, the orchestrator answers, the
 company moves. Lexicon parse, execution against real services, and the transcript."""
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ async def test_break_parks_matching_and_clears(bound_loop, project):
                                                      Event.type == "agent.break.started"))).all()
     assert row.break_until is not None and broke
 
-    # a fresh pending task cannot find this agent — it parks instead of running badly
+    # a fresh pending task cannot find this agent, it parks instead of running badly
     async with session_scope() as s:
         s.add(Task(project_id=project["id"], run_id="r-break", title="t2", state="pending"))
     n = await org.assign_tasks(project_id=project["id"], run_id="r-break")
@@ -221,7 +221,7 @@ async def test_only_landed_words_bind_the_floor(bound_loop, project):
         ada = await _agent(s, project["id"], "Ada")
         eng = await _agent(s, project["id"], "Onyx", role="orchestrator")
         ada_id, eng_id = ada.id, eng.id
-    # an unparsed sentence, a refused dismissal, an answered question — all recorded:
+    # an unparsed sentence, a refused dismissal, an answered question, all recorded:
     await commands.handle_command(project_id=project["id"], text="the weather is nice today",
                                   actor="user:t")
     await commands.handle_command(project_id=project["id"], text="fire @Onyx",
@@ -265,7 +265,7 @@ def test_ambiguous_first_name_does_not_choose_a_random_recipient():
 
 
 def test_parse_qa_verb_and_comma_mention_assign():
-    """'@Ada, qa the page' is an order — the lexicon knew draft/write but not QA, and
+    """'@Ada, qa the page' is an order, the lexicon knew draft/write but not QA, and
     the punctuation form only accepted a colon."""
     c = commands.parse_command("@Ada, qa the pricing page", ROSTER)
     assert c.intent == "assign" and c.confidence >= 0.8

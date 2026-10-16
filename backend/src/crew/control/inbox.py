@@ -1,10 +1,10 @@
-"""Colleague messaging — the loop closes (docs/17 batch 2).
+"""Colleague messaging, the loop closes (docs/17 batch 2).
 
 A message IS an `agent.message` event: no second ledger, no delivery state that can go
 stale. `ask_colleague` delivers into the recipient's inbox; the recipient's next run
 sees the open question in its task prompt and answers with `reply_colleague`; the answer
 is delivered back and the asker sees it before ITS next task. A question that never
-reaches a recipient stays open and visible — honest, rather than pretend-answered.
+reaches a recipient stays open and visible, honest, rather than pretend-answered.
 """
 
 from __future__ import annotations

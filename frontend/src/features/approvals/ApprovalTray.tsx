@@ -74,7 +74,7 @@ function ProjectApprovals({ projectId }: { projectId: string }) {
     // A dead backend must never look like "nothing to approve".
     return (
       <p className="px-1 py-2 text-[11px] text-amber-300/80">
-        Approvals unavailable for {label} — backend unreachable.
+        Approvals unavailable for {label}, backend unreachable.
       </p>
     );
   }
@@ -98,7 +98,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
 
   // Review approvals carry their context in `request` (ADR 0017): a held command's
   // text + reasons, or a quarantined page's URL + preview. The human decides on what
-  // they can actually see — everything else falls back to the raw view.
+  // they can actually see, everything else falls back to the raw view.
   const req = approval.request ?? {};
   const kind = typeof req.kind === 'string' ? req.kind : 'generic';
   const isCommand = kind === 'command_review';
@@ -124,8 +124,8 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
             ? 'Approval denied.'
             : action === 'always'
               ? isTool
-                ? 'Standing approval saved — this agent’s calls skip the gate until revoked (Settings → Tool allowlist).'
-                : 'Always allowed — it will not ask again until revoked (Settings → Command allowlist).'
+                ? 'Standing approval saved, this agent’s calls skip the gate until revoked (Settings → Tool allowlist).'
+                : 'Always allowed, it will not ask again until revoked (Settings → Command allowlist).'
               : 'Approval granted.',
       });
       setReason('');
@@ -150,7 +150,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
         <span className="ml-auto text-[10px] text-slate-500">{formatRelativeTime(approval.created_at)}</span>
       </div>
       <div className="mt-1 font-mono text-[10px] text-slate-500">
-        {approval.agent_id ? `agent ${approval.agent_id.slice(0, 8)}` : 'agent —'}
+        {approval.agent_id ? `agent ${approval.agent_id.slice(0, 8)}` : 'agent,'}
         {approval.task_id ? ` · task ${approval.task_id.slice(0, 8)}` : ''}
         {isCommand && typeof req.tool === 'string' ? ` · ${req.tool}` : ''}
       </div>
@@ -158,7 +158,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
       {isCommand && (
         <>
           <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded bg-slate-950/70 p-1 font-mono text-[10px] text-amber-200/90">
-            {cmd || '—'}
+            {cmd || 'n/a'}
           </pre>
           {note && <p className="mt-1 text-[10px] italic leading-snug text-slate-400">{note}</p>}
         </>
@@ -166,7 +166,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
 
       {isContent && (
         <>
-          <div className="mt-1 break-all font-mono text-[10px] text-slate-400">{url || '—'}</div>
+          <div className="mt-1 break-all font-mono text-[10px] text-slate-400">{url || 'n/a'}</div>
           {preview && (
             <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-slate-950/70 p-1 font-mono text-[10px] text-slate-400">
               {preview}
@@ -204,7 +204,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
         </Button>
         {(isCommand || isTool) && (
           <Button size="xs" variant="secondary" loading={decide.isPending} onClick={() => decide.mutate('always')}>
-            ⚡ Always allow
+            Always allow
           </Button>
         )}
         <Button size="xs" variant="danger" onClick={() => (openForReason ? decide.mutate('deny') : setOpenForReason(true))}>

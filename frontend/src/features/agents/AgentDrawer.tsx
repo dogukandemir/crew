@@ -60,7 +60,7 @@ export function AgentDrawer({
             <Badge tone="info">{agent.data.role}</Badge>
             <Badge tone="accent">G{agent.data.grade}</Badge>
             <Badge tone="neutral">{agent.data.state}</Badge>
-            <Badge tone="muted">{agent.data.autonomy ?? 'autonomy —'}</Badge>
+            <Badge tone="muted">{agent.data.autonomy ?? 'autonomy,'}</Badge>
           </span>
         )
       }
@@ -80,7 +80,7 @@ export function AgentDrawer({
                 </span>
                 <Sparkline values={trend} width={120} height={28} />
                 <span className="text-[11px] text-slate-500">
-                  confidence {agent.data.score_confidence !== undefined ? formatPercent(agent.data.score_confidence) : '—'}
+                  confidence {agent.data.score_confidence !== undefined ? formatPercent(agent.data.score_confidence) : 'n/a'}
                 </span>
               </div>
               <KeyValue
@@ -91,18 +91,18 @@ export function AgentDrawer({
                     'knowledge',
                     agent.data.company_knowledge !== undefined
                       ? `${formatPercent(agent.data.company_knowledge)} · ${agent.data.tenure_days ?? 0}d tenure`
-                      : '—',
+                      : 'n/a',
                   ],
                   [
                     'success rate',
                     (agent.data.tasks_done ?? 0) > 0 && agent.data.success_rate !== undefined
                       ? formatPercent(agent.data.success_rate)
-                      : '—',
+                      : 'n/a',
                   ],
                   ['tasks', `${agent.data.tasks_done ?? 0} done / ${agent.data.tasks_failed ?? 0} failed`],
                   ['evidence', agent.data.evidence_count ?? 0],
                   ['penalties', agent.data.penalty_count ?? 0],
-                  ['model', `${agent.data.model_tier ?? '—'} · ${agent.data.model_id ?? '—'}`],
+                  ['model', `${agent.data.model_tier ?? 'n/a'} · ${agent.data.model_id ?? 'n/a'}`],
                   ['spend today', formatMicros(agent.data.spend_today_micros)],
                   ['token cap / step', formatTokens(agent.data.token_cap_per_step)],
                   ['last active', formatRelativeTime(agent.data.last_active_at)],
@@ -139,9 +139,9 @@ export function AgentDrawer({
                 <KeyValue
                   className="mt-2"
                   pairs={[
-                    ['values', (agent.data.soul.values ?? []).join(' · ') || '—'],
-                    ['voice', agent.data.soul.voice ?? '—'],
-                    ['background', agent.data.soul.background ?? '—'],
+                    ['values', (agent.data.soul.values ?? []).join(' · ') || 'n/a'],
+                    ['voice', agent.data.soul.voice ?? 'n/a'],
+                    ['background', agent.data.soul.background ?? 'n/a'],
                   ]}
                 />
                 <p className="mt-1 text-[10px] text-slate-500">
@@ -187,7 +187,7 @@ export function AgentDrawer({
               {timeline.length === 0 ? (
                 <EmptyState
                   title="No activity yet"
-                  description="Thoughts, tool calls and messages appear here as the agent works. Nothing is polled — if it isn't an event, it didn't happen."
+                  description="Thoughts, tool calls and messages appear here as the agent works. Nothing is polled, if it isn't an event, it didn't happen."
                 />
               ) : (
                 <ul className="max-h-64 space-y-0.5 overflow-y-auto rounded-md border border-slate-700/60">
@@ -280,7 +280,7 @@ function SteerBox({ agentId }: { agentId: string }) {
     mutationFn: () => api.messageAgent(agentId, text.trim()),
     onSuccess: () => {
       setText('');
-      setToast({ kind: 'success', message: 'Steering message queued — they read it at their next step.' });
+      setToast({ kind: 'success', message: 'Steering message queued, they read it at their next step.' });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
   });
@@ -296,7 +296,7 @@ function SteerBox({ agentId }: { agentId: string }) {
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Steer this agent — delivered at its next step"
+        placeholder="Steer this agent, delivered at its next step"
         className="min-h-[38px] flex-1 text-xs"
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) send.mutate();
@@ -309,7 +309,7 @@ function SteerBox({ agentId }: { agentId: string }) {
   );
 }
 
-/** This agent's published deliverables — the individual-level read of the same
+/** This agent's published deliverables, the individual-level read of the same
  * records the project and company surfaces list. */
 function DeliverablesSection({ projectId, agentId }: { projectId: string; agentId: string }) {
   const q = useProjectArtifacts(projectId, { agent_id: agentId });
@@ -324,7 +324,7 @@ function DeliverablesSection({ projectId, agentId }: { projectId: string; agentI
         <SkeletonRows rows={3} />
       ) : items.length === 0 ? (
         <p className="text-[11px] text-slate-500">
-          Nothing published yet — the outputs this agent produces land here as files.
+          Nothing published yet, the outputs this agent produces land here as files.
         </p>
       ) : (
         <ul className="max-h-40 overflow-y-auto rounded-md border border-slate-700/60">

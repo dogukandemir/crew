@@ -1,4 +1,4 @@
-# 11 — API & Event Contract
+# 11: API & Event Contract
 
 Frozen contract between `backend` and `frontend`. Any change here is a breaking change:
 bump `X-Crew-Contract` (currently `1`) and update the frontend in the same commit.
@@ -29,7 +29,7 @@ response: {"accepted":true,"event_seq":4123,"unit":{...UnitRef}}
 
 ### 1a. Fields the UI binds to (asserted by `test_ui_contract_shapes`)
 
-These left the payloads once while the mock kept serving them — the office, the org
+These left the payloads once while the mock kept serving them, the office, the org
 chart and every budget bar rendered empty against the real backend (the fresh-clone
 audit). Each row now has a guard: change it and the test goes red, not the product
 quiet.
@@ -39,10 +39,10 @@ quiet.
 | Every budget bar & meter | `/api/projects*`, `/api/companies*` | `budget_cap_micros`, `spend_micros` (raw ints, alongside the `*_usd` floats) |
 | Breadcrumb upper half | `/api/projects*` rows/detail | `company_id`, `company_name` (always present; `null` when standalone) |
 | Getting-started checklist | `/api/projects` rows | `runs` |
-| Office floor, Org chart, Agents roster | `/api/projects/{id}/org` | `root` — a tree of `{kind: project\|department\|squad\|agent, id, name, children[]}`, every node carrying `spend_micros` (usd on agents too) |
+| Office floor, Org chart, Agents roster | `/api/projects/{id}/org` | `root`, a tree of `{kind: project\|department\|squad\|agent, id, name, children[]}`, every node carrying `spend_micros` (usd on agents too) |
 | Org node drawers | `/api/projects/{id}/org` | agent nodes: `role`, `grade`, `grade_label`, `state`, `score`, `success_rate`, `open_tasks`; dept nodes: `mission`, `head_agent_id`, `budget_envelope_micros`, `open_tasks` |
 | Company Brains member index | `/api/companies/{id}/brains` | per-brain `owner_name` (a human name, not an id) |
-| Agent drawer — Soul card | `/api/agents/{id}` | `soul` + `soul_md` (the rendered one-page profile; empty object/string for pre-ADR-0016 hires) |
+| Agent drawer, Soul card | `/api/agents/{id}` | `soul` + `soul_md` (the rendered one-page profile; empty object/string for pre-ADR-0016 hires) |
 
 The flat keys (`project`, `orchestrator`, `departments`, `unassigned`) ride along
 additively for pre-tree readers; `nodes` is the flat index of `root`.
@@ -55,7 +55,7 @@ additively for pre-tree readers; `nodes` is the flat index of `root`.
 | GET | `/api/health` | liveness + version + contract version |
 | GET | `/api/system/status` | db, bus, scheduler, vault, providers health |
 | POST | `/api/system/kill` | kill all runs (confirm:true) |
-| POST | `/api/system/pick-directory` | show the OS folder picker on the host and return `{path, supported}` — the founding wizard's Browse button (ADR 0017); loopback-only (every mode), 409 while a dialog is already open |
+| POST | `/api/system/pick-directory` | show the OS folder picker on the host and return `{path, supported}`, the founding wizard's Browse button (ADR 0017); loopback-only (every mode), 409 while a dialog is already open |
 | POST | `/api/auth/login` | `{email,password}` → tokens (token mode) |
 | GET | `/api/auth/config` | public probe: `{mode: local\|token}` |
 | POST | `/api/auth/logout` | revoke session |
@@ -67,7 +67,7 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects` | list (id, name, status, stage, spend, budget, badge) |
-| POST | `/api/projects` | create `{name, goal, budget_usd?, company_id?, settings?}` — with `company_id` the project is **born under** that company: report chain wired, `company.project.joined` told (ADR 0015) |
+| POST | `/api/projects` | create `{name, goal, budget_usd?, company_id?, settings?}`, with `company_id` the project is **born under** that company: report chain wired, `company.project.joined` told (ADR 0015) |
 | GET | `/api/projects/{id}` | detail + stage + rollups |
 | PATCH | `/api/projects/{id}` | rename, edit goal, settings patch |
 | POST | `/api/projects/{id}/pause` \| `/resume` \| `/kill` | lifecycle controls |
@@ -117,7 +117,7 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 |--------|------|---------|
 | GET | `/api/projects/{id}/artifacts` | project deliverables; `?agent_id=`/`?department_id=` narrow the scope; every row resolves the producing **agent name** + department |
 | GET | `/api/companies/{id}/artifacts` | company rollup across member projects; `?project_id=`/`?agent_id=` narrow; rows name agent **and** project |
-| GET | `/api/artifacts/{id}/content` | bounded text read (256 KB) of one deliverable — only files under the data directory; anything else answers `available:false` with the reason |
+| GET | `/api/artifacts/{id}/content` | bounded text read (256 KB) of one deliverable, only files under the data directory; anything else answers `available:false` with the reason |
 | GET | `/api/artifacts/{id}/download` | the deliverable as a file (attachment, full bytes); a file that is gone or outside the data directory answers 410 with the reason |
 | GET | `/api/projects/{id}/artifacts/download` | every matching deliverable as one zip (`?agent_id=`/`?department_id=`); unservable files are listed in `_unavailable.txt` |
 | GET | `/api/companies/{id}/artifacts/download` | company-scope zip, filed per project (`?project_id=`/`?agent_id=`) |
@@ -138,16 +138,16 @@ Events: `board.item.created`, `board.item.moved`, `board.item.promoted` (carry `
 | GET | `/api/companies` | list companies |
 | POST | `/api/companies` | create `{name, mission, budget_usd}` |
 | GET | `/api/companies/{id}` | company detail |
-| POST | `/api/companies/{id}/projects` | attach a project `{project_id}` — the chain gains a top (`orchestrator → CEO`, `company.project.joined`) |
+| POST | `/api/companies/{id}/projects` | attach a project `{project_id}`, the chain gains a top (`orchestrator → CEO`, `company.project.joined`) |
 | POST | `/api/companies/{id}/chiefs` | hire a function chief `{function}` (one per function) |
 | POST | `/api/companies/{id}/review` | the CEO's review: reads every member's books, writes one grounded directive into each member's stream |
 | GET | `/api/companies/{id}/hq` | the whole company for one floor: executives, board, member pods with teams, governance activity |
 | GET | `/api/companies/{id}/portfolio` | the ranked portfolio view: verdicts, weights, shares, proposed caps |
-| POST | `/api/companies/{id}/allocate` | the CEO's portfolio call — **writes the member caps**; a `stop` verdict funds nothing new |
+| POST | `/api/companies/{id}/allocate` | the CEO's portfolio call, **writes the member caps**; a `stop` verdict funds nothing new |
 | POST | `/api/companies/{id}/board-session` | convene the board of directors `{topic, options?}` (council machinery; `board.convened`) |
 | POST | `/api/companies/{id}/board` | seat another director `{role: chair\|board_member}` |
-| GET | `/api/companies/{id}/brains` | the umbrella memory page (ADR 0015): the company brain (+ entry count) and a per-member index of where memory lives — read-only; entries open on `GET /api/brains/{id}/entries` |
-| POST | `/api/found` | **found a company** `{name, mission, budget_usd, project_name, project_goal, project_budget_usd, workspace_path, mode, start_run}` → the company, its first project born under it, and (optionally) its first run, in one call; seeds the company brain with the mission (ADR 0015). `workspace_path` (absolute) picks the company's workspace root — empty → the default `~/crew/workspace/{company}/{project}` tree (ADR 0017) |
+| GET | `/api/companies/{id}/brains` | the umbrella memory page (ADR 0015): the company brain (+ entry count) and a per-member index of where memory lives, read-only; entries open on `GET /api/brains/{id}/entries` |
+| POST | `/api/found` | **found a company** `{name, mission, budget_usd, project_name, project_goal, project_budget_usd, workspace_path, mode, start_run}` → the company, its first project born under it, and (optionally) its first run, in one call; seeds the company brain with the mission (ADR 0015). `workspace_path` (absolute) picks the company's workspace root, empty → the default `~/crew/workspace/{company}/{project}` tree (ADR 0017) |
 
 Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 `company.allocation.decided` (`company_id`, `allocations`, `headroom_micros`, `method`).
@@ -155,7 +155,7 @@ Events: `board.seated`, `board.convened` (`session_id`, `topic`, `members`),
 ### The command desk (ADR 0012)
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/projects/{id}/commands` | the Captain writes `{text}` — parsed (TR/EN lexicon; model fallback only when unsure and configured), executed against the real services, answered with citations |
+| POST | `/api/projects/{id}/commands` | the Captain writes `{text}`, parsed (TR/EN lexicon; model fallback only when unsure and configured), executed against the real services, answered with citations |
 | GET | `/api/projects/{id}/commands` | the desk transcript, straight from the record (`?limit=`) |
 
 Events: `command.message` (`text`, `mode`, `intent`, `mentions`), `command.reply` (`text`,
@@ -169,9 +169,9 @@ says they landed are read back into task prompts (`orchestrator._captain_notes`)
 ### Onboarding (ADR 0013)
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/onboarding/state` | first-run state: `needed`, `provider`/`model` of the standard tier, `offline_llm`, `vault`, and `providers[]` — the picker roster (DeepSeek/OpenAI/Anthropic/OpenRouter + local Ollama, each with `kind` and a `configured` flag) |
-| POST | `/api/onboarding/mode` | switch execution mode `{mode: demo\|live}` (admin) — the explicit Live gate |
-| POST | `/api/onboarding/key` | `{provider, key}` — verified against the provider's models endpoint (401/403 refuses the save; network trouble saves unverified; local Ollama is verified by reaching `{key}/api/tags` and refuses when nothing answers), stored in the vault as `provider:<name>`, **tiers re-pointed via the provider's presets** and persisted to `data/provider.json`, effective in-process, never returned |
+| GET | `/api/onboarding/state` | first-run state: `needed`, `provider`/`model` of the standard tier, `offline_llm`, `vault`, and `providers[]`, the picker roster (DeepSeek/OpenAI/Anthropic/OpenRouter + local Ollama, each with `kind` and a `configured` flag) |
+| POST | `/api/onboarding/mode` | switch execution mode `{mode: demo\|live}` (admin), the explicit Live gate |
+| POST | `/api/onboarding/key` | `{provider, key}`, verified against the provider's models endpoint (401/403 refuses the save; network trouble saves unverified; local Ollama is verified by reaching `{key}/api/tags` and refuses when nothing answers), stored in the vault as `provider:<name>`, **tiers re-pointed via the provider's presets** and persisted to `data/provider.json`, effective in-process, never returned |
 
 Audited (`secret.created`); no domain events. Boot restores vault keys into the process
 (`onboarding.load_vault_provider_keys`), and `run.recovered` (`run_id`,
@@ -207,7 +207,7 @@ Audited (`secret.created`); no domain events. Boot restores vault keys into the 
 | PUT | `/api/projects/{id}/reward-weights` | update weights (audited) |
 | POST | `/api/projects/{id}/reward-preview` | what-if on recent events |
 
-Events: `reward.settled` (`agent_id`, `task_id`, `reward`); growth is its own event —
+Events: `reward.settled` (`agent_id`, `task_id`, `reward`); growth is its own event,
 `agent.grew` (`agent_id`, `skills_grown[]`, `company_knowledge {before, after}`,
 `effort_weight`), one per verified task, so tenure actually learned is on the record
 (ADR 0014).
@@ -226,7 +226,7 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects/{id}/approvals` | pending/all |
-| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}` — `always: true` on a command review writes the always-allow entry; on a TOOL approval (request carries `tool`) it writes a standing capability allow for that agent + capability — hard gates (`net.post`/`fs.delete`/`git.push`) never receive one (both audited, revocable) |
+| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}`, `always: true` on a command review writes the always-allow entry; on a TOOL approval (request carries `tool`) it writes a standing capability allow for that agent + capability, hard gates (`net.post`/`fs.delete`/`git.push`) never receive one (both audited, revocable) |
 | GET | `/api/projects/{id}/command-allows` | the owner's always-allow list (ADR 0017) |
 | DELETE | `/api/command-allows/{id}` | revoke an allow entry (audited) |
 | GET | `/api/projects/{id}/capability-allows` | standing tool approvals (`capability` + `agent_id`; audited, revocable) |

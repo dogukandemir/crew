@@ -1,4 +1,4 @@
-# 08 — Security & Governance
+# 08: Security & Governance
 
 Agents that can browse, run code, spend money and hire each other are a privileged system.
 This document defines the trust boundaries and the mechanisms that enforce them. Every rule
@@ -22,20 +22,20 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
 
 - **Modes** (`CREW_AUTH_MODE`):
   - `local` (default): single user, requests from loopback need no token. The mode requires a
-    loopback listener — a non-loopback bind refuses to start unless the container opt-in
+    loopback listener, a non-loopback bind refuses to start unless the container opt-in
     `CREW_CONTAINER_LOCAL_AUTH` is set.
   - `token`: bearer JWT (HS256, `CREW_JWT_SECRET` ≥ 32 bytes); access tokens live 720 min by
-    default (`CREW_ACCESS_TOKEN_TTL_MIN`) — there is no refresh endpoint. Bootstrap:
-    `crew auth create-user` hashes with **scrypt** (stdlib) by default — **argon2id** only when
+    default (`CREW_ACCESS_TOKEN_TTL_MIN`), there is no refresh endpoint. Bootstrap:
+    `crew auth create-user` hashes with **scrypt** (stdlib) by default, **argon2id** only when
     `argon2-cffi` is installed; no self-registration.
 - Every route is behind an explicit dependency (`require_user`, `require_role`); the default
-  is deny — a new router without the dependency fails the security test suite
+  is deny, a new router without the dependency fails the security test suite
   (`tests/security/test_routes_guarded.py` enumerates `app.routes`).
 - WS handshake takes the same token (`Authorization`, `?token=`, or the `crew.auth.<token>`
   subprotocol). This release is **one shared workspace**: a socket is authenticated but not
   bound to a per-user project set (there is none yet); the token is re-checked every 5 s.
 - Rate limits (in-process, single-worker): login 20/min per account + 120/min per IP; run
-  creation 12/min per project; desk commands 60/min per project — to prevent accidental
+  creation 12/min per project; desk commands 60/min per project, to prevent accidental
   self-DoS.
 
 ## 3. Secret management (CredentialVault)
@@ -48,7 +48,7 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
   overwrite of the same name is **refused**.
 - **Lease model**: a tool that needs a secret asks the vault for a short-lived lease scoped to
   `(secret, agent, capability, ttl)`. The vault injects the value into the *outbound HTTP
-  call* (header/param) — the value never enters an agent's context, an artifact, an event, or
+  call* (header/param), the value never enters an agent's context, an artifact, an event, or
   a log.
 - All sinks (events, logs, artifacts, agent prompts) pass through a **redactor** that scans for
   known secret patterns and known values; a leak attempt emits `security.secret.redaction` and
@@ -78,25 +78,25 @@ Rules combine:
 Approval flow: `policy.approval.requested` event → UI banner → user grants/denies → grant is a
 time-boxed, single-use capability token attached to that task (not a permanent grant). Review
 approvals (`kind: command_review|content_review`, §6.7) ride the same flow, and a command grant
-may choose **Always allow** instead of one-shot — a standing, audited, revocable list entry.
+may choose **Always allow** instead of one-shot, a standing, audited, revocable list entry.
 
 Tool gates (a `REQUIRE_APPROVAL` outcome for a tool name, e.g. a supervised agent's
-`python_eval`) offer **⚡ Always allow** too: the grant writes a *standing capability allow*
+`python_eval`) offer **Always allow** too: the grant writes a *standing capability allow*
 for that agent + capability (`capability_allows`, schema revision 4), and the gate skips
-asking for that agent until the entry is revoked in Settings. Hard gates — `net.post`,
-`fs.delete`, `git.push` (`ALWAYS_APPROVAL`) — deliberately never receive a standing allow;
+asking for that agent until the entry is revoked in Settings. Hard gates, `net.post`,
+`fs.delete`, `git.push` (`ALWAYS_APPROVAL`), deliberately never receive a standing allow;
 they ask every time. Adds/revokes emit `security.capability_allow.added|removed` and land in
 the audit chain.
 
 ## 5. Sandboxing
 
-| Capability | Enforcement (ADR 0017: the container or a refusal — never the host) |
+| Capability | Enforcement (ADR 0017: the container or a refusal, never the host) |
 |-----------|-------------|
-| `fs.workspace` | realpath containment — nothing outside the (chosen or default) project workspace; no `..`, no symlinks out |
+| `fs.workspace` | realpath containment, nothing outside the (chosen or default) project workspace; no `..`, no symlinks out |
 | `shell.sandbox` | docker container: `--network none`, `--read-only` root, `--cap-drop ALL`, `--no-new-privileges`, only the project workspace volume mounted at `/work`, tmpfs `/tmp`, `--memory 1g --cpus 1 --pids-limit 256`, wall-clock timeout, output cap, exit code captured |
-| `code.python` | the same container: the script is written into the workspace and run with `python -I -S` inside it — there is no host-interpreter path anymore |
+| `code.python` | the same container: the script is written into the workspace and run with `python -I -S` inside it, there is no host-interpreter path anymore |
 | `net.fetch` / `net.search` | in-process, egress-checked (allowlist + private-IP block) **and security-reviewed before the agent sees the result** (§6.7) |
-| no docker | **hard error** (`sandbox_unavailable`) — commands never fall back to the host, in dev or prod |
+| no docker | **hard error** (`sandbox_unavailable`), commands never fall back to the host, in dev or prod |
 
 Containers are created per call and destroyed after (`--rm`). The workspace root is chosen at
 founding (default `~/crew/workspace/{company}/{project}`, ADR 0017) and materialized once on
@@ -116,9 +116,9 @@ host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017)
    role-play markers, tool-call syntax, encoded payloads, invisible-unicode, credential-bait,
    download-and-run, fake authority) runs on every `net.search`/`net.fetch` result; with a
    provider configured, the fast-tier reviewer also reads the content (6 KB) and may add risk
-   (`deterministic+model`). The model adds judgement — it never lifts the deterministic floor.
+   (`deterministic+model`). The model adds judgement, it never lifts the deterministic floor.
 4. **No privilege from content**: a tool result can never grant a capability, escalate a
-   grade, change a policy or write to a higher brain scope — those paths check the *actor*
+   grade, change a policy or write to a higher brain scope, those paths check the *actor*
    (agent id + grade), never anything from the payload.
 5. **Independent verification**: the verifier reads artifacts and criteria, not the producer's
    narrative, so "I succeeded" injected or hallucinated carries no weight.
@@ -126,11 +126,11 @@ host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017)
    (§7), so exfiltration requires an approval the user sees.
 7. **Security review gate (ADR 0017)**: fetched content and executed commands pass
    `control/security_review.py` first. Risky content is quarantined (sha-named, sha-verified)
-   and filed as an approval whose request carries the URL, reasons and a preview — the agent
+   and filed as an approval whose request carries the URL, reasons and a preview, the agent
    gets `approval_required`, and only a granted release serves the body (`released: approved`).
    Risky commands (`shell_run`, `python_eval`) never run before a decision: the allowed ways
    are a clean review, a granted approval on file for that exact command, or the project's
-   **always-allow list** — created only by an explicit "Always allow" grant, revocable in
+   **always-allow list**, created only by an explicit "Always allow" grant, revocable in
    Settings, and every add/revoke is audited (`security.allow.added|removed`). A standing
    capability allow (tool gates) lifts only the ask for that agent + capability; `net.post`,
    `fs.delete` and `git.push` still ask every time.
@@ -149,7 +149,7 @@ host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017)
 - Blocked attempts emit `security.egress.blocked` with the full URL so you see what the org
   tried to reach.
 - `net.search` obeys the allowlist too (HTML search endpoint included, ADR 0017). Shell
-  containers have no network at all — so every outbound path in the product is exactly:
+  containers have no network at all, so every outbound path in the product is exactly:
   provider calls, and reviewed fetches.
 
 ## 8. Budget guardrails (the "cannot spend that" guarantee)
@@ -172,7 +172,7 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
   in-flight crews are stopped at the next step boundary.
 - Ledger is append-only (`budget_ledger`), reconciled against `llm.*` events; a nightly job
   asserts ledger == sum of events (an integrity test, not a hope).
-- Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill` — sets
+- Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill`, sets
   cancel flags + opens the breaker, returns the list of stopped jobs. The UI has one button.
 
 ## 9. Audit trail
@@ -192,8 +192,8 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
 - Per-project directories: `data/projects/<project_id>/{workspace,artifacts,logs,tmp}`; the
   filesystem tools are jailed per project and refuse cross-project paths.
 - No shared global mutable state between projects except the model router and the bus.
-- Backups: stop the server, then copy the whole data directory — including `vault.key`,
-  without which the encrypted secrets cannot be restored — plus the project workspaces, and
+- Backups: stop the server, then copy the whole data directory, including `vault.key`,
+  without which the encrypted secrets cannot be restored, plus the project workspaces, and
   restore in place (step-by-step in INSTALLATION.md). `crew audit verify` checks a restored
   chain.
 - Data deletion: a project is soft-archived via `DELETE /api/projects/{id}`; history is

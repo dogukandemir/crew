@@ -1,10 +1,10 @@
-# ADR 0008 — The executive tier lives inside a project (C-roles)
+# ADR 0008: The executive tier lives inside a project (C-roles)
 
 **Status:** accepted · **Related:** docs/02 §1–3, docs/17
 
 ## Context
 
-The owner asked why the company has no C-level — CEO, CTO, CMO, CPO — and whether it
+The owner asked why the company has no C-level, CEO, CTO, CMO, CPO, and whether it
 was a mock gap or a system gap. The answer was: a system gap. The concept existed
 nowhere, though the frontend's avatar classifier already matched `chief|director|vp` in
 anticipation, and the grade system already had a "chief" tier. The system's top level
@@ -15,11 +15,11 @@ department heads → squad leads → workers.
 
 1. **The project remains the company**, and the orchestrator remains its single named
    executive owner (the docs/02 §1 invariant is untouched). No company entity above
-   projects in this step — that stays future work and will generalize these roles upward.
-2. Four roles join the vocabulary: `cto`, `cmo`, `cpo`, `coo` — grade **CHIEF**, reasoning
+   projects in this step, that stays future work and will generalize these roles upward.
+2. Four roles join the vocabulary: `cto`, `cmo`, `cpo`, `coo`, grade **CHIEF**, reasoning
    tier, with function-owning capabilities (hire/fire, council convene, decision request,
    budget request, net read).
-3. A C-role owns a **function** — a fixed group of department categories:
+3. A C-role owns a **function**, a fixed group of department categories:
    technology {engineering, data, security} · market {research, business} ·
    product {design, content, media} · operations {org, meta}.
 4. A chief is hired **by the orchestrator** (`staff_gaps`) when a function reaches **two
@@ -35,7 +35,7 @@ department heads → squad leads → workers.
 
 - Org trees gain depth only when scale justifies it: a small project with one department
   per function reads exactly as before; a project with engineering + data grows a CTO.
-- A refused chief hire (budget breaker) leaves the function headless — the departments
+- A refused chief hire (budget breaker) leaves the function headless, the departments
   keep reporting to the orchestrator, a legal chain, just a flatter one.
 - **Reward shares for chiefs are deliberately deferred**: the settlement chain still pays
   producer, lead, head and verifier. Add the share when a chief's impact is measurable,

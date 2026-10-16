@@ -98,7 +98,7 @@ _FUNCTION_CHIEF_CAPS = _COMMS + (Capability.ORG_HIRE, Capability.ORG_FIRE, Capab
                                  Capability.NET_SEARCH, Capability.NET_FETCH)
 
 # Governance (ADR 0011): the board oversees, it does not operate. It chairs its own
-# sessions and binds the outcome, reads the record, and asks for money — it never hires
+# sessions and binds the outcome, reads the record, and asks for money: it never hires
 # into the org it governs, so authority cannot eat itself.
 _BOARD_CAPS = _COMMS + (Capability.COUNCIL_CONVENE, Capability.DECISION_BIND,
                         Capability.BUDGET_REQUEST)
@@ -115,7 +115,7 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
     ),
     Role.CEO: _t(
         Role.CEO, "Chief Executive Officer",
-        "Own the portfolio: which projects run, at what budget, and what stops — and be the one "
+        "Own the portfolio: which projects run, at what budget, and what stops, and be the one "
         "name behind the call.",
         Grade.CHIEF, ("strategic-planning", "resource-allocation", "decision-making"),
         "Read the books before you speak: every directive cites the numbers it came from. Set the "
@@ -157,7 +157,7 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         Grade.CHIEF, ("domain-leadership", "system-design", "tradeoff-analysis"),
         "Chair the function's decisions instead of doing its work. Keep the technical standard in the "
         "function brain, arbitrate between departments before the orchestrator has to, and report the "
-        "function's delivery truth upward — never a rosier version of it.",
+        "function's delivery truth upward, never a rosier version of it.",
         _FUNCTION_CHIEF_CAPS,
     ),
     Role.CMO: _t(
@@ -167,7 +167,7 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
         Grade.CHIEF, ("domain-leadership", "market-research", "evidence-synthesis"),
         "Chair the function's decisions instead of doing its work. Hold the market evidence to one "
         "standard across units, settle positioning conflicts between departments, and report the "
-        "function's truth upward — including what the data refuses to support.",
+        "function's truth upward, including what the data refuses to support.",
         _FUNCTION_CHIEF_CAPS,
     ),
     Role.CPO: _t(
@@ -200,11 +200,11 @@ ROLE_TEMPLATES: dict[Role, RoleTemplate] = {
     Role.HR: _t(
         Role.HR, "Head of People",
         "Own hiring: interview every candidate against the real gap, the real budget and "
-        "the team they would join — reject the misfits, keep the record honest.",
+        "the team they would join, reject the misfits, keep the record honest.",
         Grade.SENIOR, ("interviewing", "talent-assessment", "team-composition", "hiring-policy"),
         "Interview before you hire: name the gap, test the candidate against it, against the "
         "budget, and against the team already on the floor. A rejection is a service when it "
-        "is grounded — cite the dimension that failed. Never hire to fill a seat; hire to "
+        "is grounded, cite the dimension that failed. Never hire to fill a seat; hire to "
         "close a gap.",
         _COMMS + (Capability.ORG_HIRE, Capability.BUDGET_REQUEST),
     ),

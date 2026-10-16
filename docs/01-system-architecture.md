@@ -1,10 +1,10 @@
-# 01 — System Architecture
+# 01: System Architecture
 
 ## 1. Layered view
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  FRONTEND — React/TS tabbed control room (frontend/)                         │
+│  FRONTEND, React/TS tabbed control room (frontend/)                         │
 │  Tabs = projects · Org chart · Task DAG · Agent timeline · Council debate     │
 │  Live via one WebSocket per tab + REST for commands                          │
 └───────────────▲───────────────────────────────────────────┬──────────────────┘
@@ -59,9 +59,9 @@ execution/  runner · models · tools · gateway · prompt · http · process ·
             sandbox_worker
 ```
 
-Responsibilities: `api/` — HTTP surface, WS hub, auth, desk; `control/` — the control plane
-(runs, org, hiring, desk, board, company, jails); `core/` — policy/vault/budget, scores, event
-store, memory, schema; `domain/` — vocabulary, grade/role tables, skill catalog; `execution/` —
+Responsibilities: `api/`, HTTP surface, WS hub, auth, desk; `control/`, the control plane
+(runs, org, hiring, desk, board, company, jails); `core/`, policy/vault/budget, scores, event
+store, memory, schema; `domain/`, vocabulary, grade/role tables, skill catalog; `execution/`,
 CrewAI runner, model router, tools, prompts, HTTP, sandbox.
 
 ## 3. Stack decisions
@@ -91,7 +91,7 @@ a semaphore (`CREW_MAX_CONCURRENT_CREWS`). Events are emitted from those threads
 
 ### 4.2 Process layout (prod, later)
 `api` (stateless, N replicas) + `scheduler` (leader-elected, M replicas) + `crew-worker`
-(pool, cancellable) + Redis Streams bus + Postgres. Same code, different entrypoints —
+(pool, cancellable) + Redis Streams bus + Postgres. Same code, different entrypoints,
 enabled by the bus/repository interfaces, not by a rewrite.
 
 ### 4.3 Concurrency & cancellation
@@ -105,15 +105,15 @@ enabled by the bus/repository interfaces, not by a rewrite.
 ### 4.4 Determinism & replay
 Events are the source of truth for the UI and for replay. Business tables are the current
 projection. A `Rebuilder` can replay the event log to reconstruct derived state (scores,
-rollups) — used in tests and after a bug fix.
+rollups), used in tests and after a bug fix.
 
 ## 5. How CrewAI is embedded (ADR 0002 summary)
 
 - **Crews** execute bounded work: one task, one agent, one sequential CrewAI crew per task
-  (`execution/runner.py`); squad context arrives via the prompt — there is no hierarchical
+  (`execution/runner.py`); squad context arrives via the prompt, there is no hierarchical
   manager crew (as-built).
 - **Flows** drive the *organization-level* control flow (intake → plan → hire → dispatch →
-  verify → reward → learn), because it must be deterministic, resumable and inspectable —
+  verify → reward → learn), because it must be deterministic, resumable and inspectable,
   which is exactly what `@start/@listen/@router` gives us.
 - CrewAI never decides the org chart, budget or policy. Those live in our control plane.
 - We wrap CrewAI behind `execution/` interfaces (`CrewRunner`, `CouncilRunner`) so a future

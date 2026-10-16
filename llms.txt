@@ -1,6 +1,6 @@
 # Crew
 
-> A playable control room for a real CrewAI agent company. Give a company a goal; its agents plan, hire, use sandboxed tools, produce verified files and ask for approvals — watch it all in an animated office. Local-first, experimental, one trusted workspace.
+> A playable control room for a real CrewAI agent company. Give a company a goal; its agents plan, hire, use sandboxed tools, produce verified files and ask for approvals. Watch it all in an animated office. Local-first, experimental, one trusted workspace.
 
 ## Quick start
 
@@ -10,7 +10,7 @@ Requires Docker with Compose. No provider key is needed to evaluate: Demo uses d
 docker compose up --build
 ```
 
-- UI: `http://localhost:5173` — API: `http://127.0.0.1:8787` (both bind to loopback only).
+- UI: `http://localhost:5173`, API: `http://127.0.0.1:8787` (both bind to loopback only).
 - Live mode: connect a provider key from the UI (`Configure provider`), then explicitly enable Live.
 
 ## Facts
@@ -23,9 +23,9 @@ docker compose up --build
 
 ## Docs
 
-- [README](README.md) — pitch, quick start, and what is real vs simulated.
-- [docs/README.md](docs/README.md) — the specification index (18 documents + 17 ADRs).
-- [docs/INSTALLATION.md](docs/INSTALLATION.md) — Docker, native development, upgrades, recovery.
-- [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md) — tested providers and platforms, with evidence and limitations.
-- [SECURITY.md](SECURITY.md) — trust boundaries and the sandbox model.
-- [examples/temperature-converter](examples/temperature-converter/PROVENANCE.md) — a verified live run: real files, hashes, and cumulative cost.
+- [README](README.md): pitch, quick start, and what is real vs simulated.
+- [docs/README.md](docs/README.md): the specification index (18 documents + 17 ADRs).
+- [docs/INSTALLATION.md](docs/INSTALLATION.md): Docker, native development, upgrades, recovery.
+- [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md): tested providers and platforms, with evidence and limitations.
+- [SECURITY.md](SECURITY.md): trust boundaries and the sandbox model.
+- [examples/temperature-converter](examples/temperature-converter/PROVENANCE.md): a verified live run: real files, hashes, and cumulative cost.

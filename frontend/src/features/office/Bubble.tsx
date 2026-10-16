@@ -2,7 +2,7 @@
  * A speech bubble, drawn upright above a character's head.
  *
  * Because the scene is a flat projection rather than a tilted 3D plane, "upright"
- * is free — the bubble is simply not rotated, and it stays legible at any zoom.
+ * is free, the bubble is simply not rotated, and it stays legible at any zoom.
  *
  * The colour is the point: a chat, a piece of water-cooler gossip, a report to a
  * manager, a directive coming back down, an escalation and a hand-off each look

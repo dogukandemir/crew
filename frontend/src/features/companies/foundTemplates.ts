@@ -1,4 +1,4 @@
-/** The founding wizard's presets (ADR 0015): suggested names and goals only — every
+/** The founding wizard's presets (ADR 0015): suggested names and goals only, every
  * field stays editable, and nothing is hidden: the preview shows exactly what the
  * call will create. */
 export interface FoundTemplate {

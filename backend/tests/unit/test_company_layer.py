@@ -1,4 +1,4 @@
-"""ADR 0009: the company layer — a HQ project with a CEO, member projects that report up
+"""ADR 0009: the company layer, a HQ project with a CEO, member projects that report up
 through it, and a review that writes grounded directives into the members' streams."""
 
 from __future__ import annotations
@@ -92,7 +92,7 @@ async def test_directives_flow_into_the_task_prompt(bound_loop, project):
 
 @pytest.mark.asyncio
 async def test_found_company_lands_the_first_project_under_it(bound_loop):
-    """ADR 0015: the wizard's one call — company, first project born beneath it, and the
+    """ADR 0015: the wizard's one call, company, first project born beneath it, and the
     mission already sitting in the umbrella brain."""
     from crew.core.models import Brain, BrainEntry
 
@@ -121,7 +121,7 @@ async def test_found_company_lands_the_first_project_under_it(bound_loop):
 
 @pytest.mark.asyncio
 async def test_member_agents_retrieve_the_company_brain(bound_loop, project):
-    """ADR 0015: one directive in the umbrella, visible to every member's agents —
+    """ADR 0015: one directive in the umbrella, visible to every member's agents,
     the retrieval scope is the brain list, crossing the row boundary."""
     from crew.core.brains import brain_service
     from crew.core.models import Brain

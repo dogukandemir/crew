@@ -151,7 +151,7 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
           <div className="flex flex-1 items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200">
             <StatusDot state="warning" />
             <span className="min-w-0 flex-1 truncate">
-              Disconnected{conn.detail ? ` (${conn.detail})` : ''} — resuming from seq {log.maxSeq}.
+              Disconnected{conn.detail ? ` (${conn.detail})` : ''}, resuming from seq {log.maxSeq}.
             </span>
             <Button size="xs" variant="secondary" onClick={() => socket?.resume()}>
               Resume
@@ -161,7 +161,7 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
         {lastGap && (
           <div className="flex flex-1 items-center gap-2 rounded-md border border-rose-800/60 bg-rose-950/40 px-2 py-1 text-[11px] text-rose-200">
             <span className="min-w-0 flex-1 truncate">
-              Gap: {lastGap.from}–{lastGap.to} skipped ({lastGap.reason}) —{' '}
+              Gap: {lastGap.from}–{lastGap.to} skipped ({lastGap.reason}),{' '}
               {lastGap.to - lastGap.from + 1} events not shown.
             </span>
             <Button size="xs" variant="secondary" onClick={() => useEventLog.getState().dismissGaps(projectId)}>
@@ -207,7 +207,7 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
             empty={
               <EmptyState
                 title="No events match"
-                description="The firehose is fed by the WebSocket. Start a run, or widen the filters — events arrive here the moment they happen."
+                description="The firehose is fed by the WebSocket. Start a run, or widen the filters, events arrive here the moment they happen."
               />
             }
             render={(e) => (
@@ -318,6 +318,6 @@ function downloadJson(value: unknown, filename: string): void {
     a.click();
     URL.revokeObjectURL(url);
   } catch {
-    /* private mode / no DOM — the export is a convenience, not a guarantee */
+    /* private mode / no DOM, the export is a convenience, not a guarantee */
   }
 }

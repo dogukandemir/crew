@@ -1,6 +1,6 @@
 /**
  * The command desk's pure parts (ADR 0012): mention typing, mode reading, and the
- * roster the desk can address. No React, no network — the drawer and its tests share
+ * roster the desk can address. No React, no network, the drawer and its tests share
  * these rules, so the input behaves the same everywhere.
  */
 import type { OrgNode, OrgTree } from '../../api/types';

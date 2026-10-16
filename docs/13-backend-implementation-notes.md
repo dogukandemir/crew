@@ -1,4 +1,4 @@
-# 13 — Backend implementation notes (what exists, and what is deliberately missing)
+# 13: Backend implementation notes (what exists, and what is deliberately missing)
 
 Written at the end of the first implementation session (M0–M8, see docs/12 for status). This is
 the map a future session needs before touching code.
@@ -17,7 +17,7 @@ backend/src/crew/
     settings.py          Settings (pydantic-settings, CREW_* env); `local` auth requires a
                          loopback listener
     db.py                async engine, session_scope (the unit of work), create_all bootstrap
-    models.py            every table of docs/10 (JSON settings column on projects — see docs/10 note)
+    models.py            every table of docs/10 (JSON settings column on projects, see docs/10 note)
     events.py            EventStore (gapless seq per project) + in-process bus + emit()/emit_sync()
                          + payload validation for the documented event types
     security.py          PolicyEngine · CredentialVault (Fernet) · SecretRedactor · BudgetGuard
@@ -75,7 +75,7 @@ without spending money. That is how the test suite and any offline demo work.
 Coverage proves a line ran; it never proves the test would notice the line being WRONG.
 Mutation testing closes that gap: the tool is **pytest-gremlins** (pytest-native, parallel,
 JSON/HTML report, Windows-safe). The default scope lives in `[tool.pytest-gremlins]`
-(pyproject): the security spine — the modules where a wrong answer costs the most.
+(pyproject): the security spine, the modules where a wrong answer costs the most.
 
 ```bash
 cd backend && uv run python -m pytest <only the test files covering the target> \
@@ -91,13 +91,13 @@ Verdicts from the first full pass and after the kill rounds:
 | `control/security_review.py` | 74 | 46 (62%) | **74 (100%)** | |
 | `control/workspaces.py` | 29 | 17 (59%) | **29 (100%)** | |
 | `core/security.py` | 124 | 61 (49%) | **121 (98%)** | 3 survivors byte-equivalent (below) |
-| `execution/tools.py` | 240 | 47 (20%) | **122 (51%)** | survivors cluster in handler tails: social 33, shell/python_eval 29, brain/artifact 21 — add handler tests as you touch them |
+| `execution/tools.py` | 240 | 47 (20%) | **122 (51%)** | survivors cluster in handler tails: social 33, shell/python_eval 29, brain/artifact 21, add handler tests as you touch them |
 
 Rules that cost real time on this host:
 
 - **Pass only the covering test files.** Per-mutant cost IS the selected suite; the first
   run passed the entire suite and one mutant idled for 33 minutes.
-- **`--gremlin-clear-cache` after ANY test edit** — the cache keys on source, not tests;
+- **`--gremlin-clear-cache` after ANY test edit**, the cache keys on source, not tests;
   without it you re-read stale verdicts.
 - **Def-line mutants get mis-selected tests.** Coverage attributes the `def`/signature line
   to whichever test imported the module first, so e.g. a flipped default argument
@@ -106,36 +106,36 @@ Rules that cost real time on this host:
   with `--gremlin-explain=<gremlin_id>` (prints the covering set vs the selected set).
 - **The session DB is shared**: a tamper test must RESTORE the row it broke or every later
   `verify_audit_chain` fails (this poisoned `tests/security` once), and budget tests must
-  build their ledger math with real `reserve/settle` calls — seeding `spend_micros` directly
+  build their ledger math with real `reserve/settle` calls, seeding `spend_micros` directly
   makes `reconcile` honestly fail.
-- **A survivor can be equivalent** — 3 remain in `core/security.py` and are documented, not
+- **A survivor can be equivalent**, 3 remain in `core/security.py` and are documented, not
   chased: `scope_kind == "x" and scope_id` → `or` only changes paths whose `s.get()` finds
   nothing, and `budget_cap_micros > ceiling` → `>=` rewrites the same value it compared.
-- Counting mutants per module: `collect_gremlins` mis-collects — use
+- Counting mutants per module: `collect_gremlins` mis-collects, use
   `transform_source` + `get_default_registry` (the numbers above).
 
 ### Bugs found by mutation testing
 
 | Bug | Cause | Guard test |
 |-----|-------|-----------|
-| Every real-provider run died before its first tool call (`NameError: description`) | `build_crewai_tools._make` defined class attributes `description`/`args_schema` that shadowed the closure parameters they read — LOAD_NAME (class scope) never sees the closure | `test_crewai_wrappers_roundtrip` |
+| Every real-provider run died before its first tool call (`NameError: description`) | `build_crewai_tools._make` defined class attributes `description`/`args_schema` that shadowed the closure parameters they read, LOAD_NAME (class scope) never sees the closure | `test_crewai_wrappers_roundtrip` |
 | Budget availability math, settle/release bookkeeping, dept/agent clamps: 63 mutants survived | the arithmetic, the strict `>` on reserve, the scope dispatch (`department_id if kind == … else None`) and the settle attribution had no exact-value tests | `test_budget_available_math_boundaries_and_breaker`, `test_budget_department_and_agent_clamps` |
 | A granted content-review for ONE url released a DIFFERENT url | `kind != "content_review" or url != url` → `and` in release_for_content/command binds the wrong approval | `test_releases_are_bound_to_the_reviewed_url_and_norm` |
 | Audit chain could hash order-dependently / lose the actor | `sort_keys=True` off → canonical form varies with key order; `agent_id or ""` → `and` drops the requester from the audit | `test_canonical_form_ignores_key_order`, `test_approval_request_audits_the_agent_as_actor` |
-| A plain secret reveal could mint a lease | `use: bool = False` has a default — only `use=True` may write a `SecretLease`; nothing asserted the negative | `test_vault_reveal_unknown_and_lease_only_on_use` |
+| A plain secret reveal could mint a lease | `use: bool = False` has a default, only `use=True` may write a `SecretLease`; nothing asserted the negative | `test_vault_reveal_unknown_and_lease_only_on_use` |
 
 ## Fixed from the end-user review pass (2026-10)
 
-A live walkthrough (fresh install, full journey) drove this batch — commits `1ff0105`,
+A live walkthrough (fresh install, full journey) drove this batch, commits `1ff0105`,
 `ddc7057`, `355fa78`:
 
 | Finding | Cause | Fix / guard |
 |---------|-------|-------------|
 | Events showed "2h ago" on rows seconds old; history shifted by the host offset | SQLite returns naive datetimes; browsers parse naive ISO as LOCAL | every wire timestamp goes through `events.utc_iso`; `format.ts` parses naive strings as UTC (tests both sides) |
-| The Captain's desk orders never ran ("It runs with the next wave") | `ready_tasks`/`assign_tasks` filtered `Task.run_id == run.id`, so standalone tasks (run_id NULL) were invisible to every wave | both queries include run-less tasks; a wave adopts them into its run on pickup (`_run_task`); the reply says "queued — press Start run" when no run is open |
+| The Captain's desk orders never ran ("It runs with the next wave") | `ready_tasks`/`assign_tasks` filtered `Task.run_id == run.id`, so standalone tasks (run_id NULL) were invisible to every wave | both queries include run-less tasks; a wave adopts them into its run on pickup (`_run_task`); the reply says "queued, press Start run" when no run is open |
 | "Start run" with an unchanged goal silently re-planned and re-charged everything | no prior-work awareness | Overview asks first when the goal already produced completed tasks (or a run is open) |
 | Tasks table showed raw agent-id prefixes; Verification column explained an API path | no roster join; a caption shipped as column content | assignee/department/squad resolve names via the org tree; verdict badge shown when present |
-| Success showed 0% for never-worked agents; G1–G4 undefined | zero done ≠ zero success; jargon without legend | "—" + tooltip; grade chips carry class names; score tooltip |
+| Success showed 0% for never-worked agents; G1–G4 undefined | zero done ≠ zero success; jargon without legend | "n/a" + tooltip; grade chips carry class names; score tooltip |
 | `weights=NaN` in the reward ledger | `Number({...})` on the weights dict | render only finite numeric components |
 | 11 user-visible `(docs/NN)` / API-path strings across 9 panels | copy hygiene | replaced with user language |
 | Board cards clipped; the whole board scrolled vertically | column lists had no height constraint (`min-h-0 flex-1 overflow-y-auto` now) | verified live: each column scrolls its own cards |
@@ -161,14 +161,14 @@ by the real backend.
 | Bug | Cause | Guard test |
 |-----|-------|-----------|
 | Office, Org chart and Agents roster showed "nobody hired" under a completed run | `/org` served `{project, orchestrator, departments[]}` while every reader walks `org.data?.root`; the mock served `{root}` | `test_ui_contract_shapes`, `test_org_tree.py` |
-| Every budget bar read "— / —" / "$0.00 / $0.00" | `serialize_project()` shipped only `*_usd`; the UI binds `budget_cap_micros`/`spend_micros` | `test_ui_contract_shapes` |
-| First live re-run of the fix crashed `org_tree` | `Squad` has no spend column (mock squads had one) — the empty-project contract test never walked a squad | `test_org_tree_is_a_rooted_tree_with_squads` |
+| Every budget bar read "n/a / n/a" / "$0.00 / $0.00" | `serialize_project()` shipped only `*_usd`; the UI binds `budget_cap_micros`/`spend_micros` | `test_ui_contract_shapes` |
+| First live re-run of the fix crashed `org_tree` | `Squad` has no spend column (mock squads had one), the empty-project contract test never walked a squad | `test_org_tree_is_a_rooted_tree_with_squads` |
 | A brand-new project displayed "on track" | verdict fell through to `on_track` with zero finished work | `test_a_member_with_no_finished_work_is_never_on_track` |
 | Company Brains member index showed "person · personal", no names | rollup skipped owner-name resolution | contract test's `owner_name` assertion |
 | UI on Vite 5174+ could not reach a dev backend | CORS pinned to `localhost:5173` | dev `allow_origin_regex` in `api/main.py` (any localhost port) |
 
 Contract guard: `docs/11 §1a` lists every field the UI binds per surface, and
-`test_ui_contract_shapes` asserts them against the real app — the drift class now
+`test_ui_contract_shapes` asserts them against the real app, the drift class now
 fails a test instead of the product. Also this round: the founding wizard is the only
 company creation path, command-desk examples are English, and vitest 3 → 5 cleared
 `npm audit` (dev-only advisories).
@@ -181,7 +181,7 @@ directory-picker tests.
 
 | Bug | Cause | Guard test |
 |-----|-------|-----------|
-| `test_pick_directory_returns_the_os_choice` and `test_pick_directory_cancel_and_unsupported` failed on ubuntu-latest | the tests patched `_pick_directory_native` but not `_picker_available`, so on a runner without `zenity` the route answered `supported: false` — correctly — and the assertion failed. A host assumption in the test, not a route defect | the same two tests now pin `_picker_available` (True for the dialog path, then False for the unsupported path) |
+| `test_pick_directory_returns_the_os_choice` and `test_pick_directory_cancel_and_unsupported` failed on ubuntu-latest | the tests patched `_pick_directory_native` but not `_picker_available`, so on a runner without `zenity` the route answered `supported: false`, correctly, and the assertion failed. A host assumption in the test, not a route defect | the same two tests now pin `_picker_available` (True for the dialog path, then False for the unsupported path) |
 
 The runner condition is now exercised by default: an autouse fixture in
 `backend/tests/conftest.py` pins `_picker_available` to `False` for the whole session
@@ -192,39 +192,39 @@ still work (a Linux-only assertion cannot come back unnoticed).
 
 ## The deliverables surface (three scopes) and operating cadence (2026-10)
 
-**Deliverables.** One artifact record, three readable scopes — individual agent, department,
-company — with the producing agent's name on every row (and the project name at company
+**Deliverables.** One artifact record, three readable scopes, individual agent, department,
+company, with the producing agent's name on every row (and the project name at company
 scope). Backend: `GET /api/projects/{id}/artifacts` (`?agent_id`/`?department_id`),
 `GET /api/companies/{id}/artifacts` (`?project_id`/`?agent_id`), and
-`GET /api/artifacts/{id}/content` — a bounded (256 KB) text read that refuses any file
+`GET /api/artifacts/{id}/content`, a bounded (256 KB) text read that refuses any file
 outside the data directory, saying the reason out loud. Every deliverable ALSO downloads:
 `/api/artifacts/{id}/download` (the full file, attachment) and zip packs at project and
 company scope (`/artifacts/download`, per-project folders, `_unavailable.txt` for files
 that could not ship). UI: a **Deliverables** tab on every workspace (project and company
 forms of the same panel; filters + click-to-read + per-row and "Download all" buttons), and
 a per-agent section in the agent drawer. The offline runner writes a REAL deliverable file
-per simulated task — **byte-exact** (`write_bytes`: text mode would rewrite `\n` to `\r\n`
-on Windows and the recorded sha256/bytes would describe a file that does not exist) — a
+per simulated task, **byte-exact** (`write_bytes`: text mode would rewrite `\n` to `\r\n`
+on Windows and the recorded sha256/bytes would describe a file that does not exist), a
 demo whose deliverables surface is empty would lie.
 
 **Operating cadence.** The answer to "the run ended, now the company just sits there":
 the project's `cadence_enabled` / `cadence_max_runs` settings (1–10, default 3). When a run
 COMPLETES, the engine starts one follow-on pass (`Continue: <goal> (follow-on pass n/m)`),
 emits `run.cadence.started`, and stops at the cap with `run.cadence.held`. A person's run
-resets the streak; failures and pauses never continue. Off by default — the breakpoints are
+resets the streak; failures and pauses never continue. Off by default, the breakpoints are
 visible in the record either way.
 
-## Deliberate gaps (not bugs — next session's work)
+## Deliberate gaps (not bugs: next session's work)
 
 1. **Postgres migrations**: the forward-only migrator (`core/migrations.py`,
    `crew_schema_version`, pre-upgrade backups under `data/backups`) covers the supported
    SQLite distribution; a Postgres path is future work.
 2. **Embeddings/vector search**: retrieval is lexical + recency + importance + trust. The scoring
    function is one place (`brains.score_entry`) so a vector index drops in behind it.
-3. **Docker sandbox**: shell/python run in the container or not at all (ADR 0017) — the dev
+3. **Docker sandbox**: shell/python run in the container or not at all (ADR 0017), the dev
    `subprocess` fallback was removed and docker-less environments refuse loudly. Gate logic is
    unit-tested with a stubbed runner; the container path itself is exercised on the dev host
-   (docker present) — no CI job pins it yet.
+   (docker present), no CI job pins it yet.
 4. **`token` auth mode** is implemented and unit-level, but no integration test drives the
    login → bearer → WS handshake flow yet. `local` mode is the tested default.
 5. **Replay** exists server-side (`GET /api/projects/{id}/events?from_seq&to_seq`, dossier
@@ -234,9 +234,9 @@ visible in the record either way.
 7. **Concurrency**: crews run in a thread pool with a global semaphore; there is no per-project
    fairness scheduler or job resumption across process restarts beyond the stage machine.
 8. **Tool breadth**: `net.post`, `git.push`, `data.sql` are catalogued and policy-gated but not
-   implemented — an agent requesting them gets a clear "not granted/approval required" answer.
+   implemented, an agent requesting them gets a clear "not granted/approval required" answer.
 
-## Review round 2026-10-14 — what changed and why (the memorable bits)
+## Review round 2026-10-14: what changed and why (the memorable bits)
 
 - **The desk and `PATCH /projects/{id}` now share their budget guards.** `_budget` checks the
   hard ceiling, the parent company cap and spent+reserved before writing (the old hole let a
@@ -248,16 +248,16 @@ visible in the record either way.
   reassign/hire refuse foreign agent/department/squad ids.
 - **`COMMAND_PATTERNS` learned python/inline destruction** (`os.remove|unlink|rmdir`,
   `shutil.rmtree`, `.unlink(`, `truncate`, `find … -delete`, `open(…,'w')`, the redirect-truncate
-  idiom, plain `rm`). Equivalent expression, equivalent act — the gate's oldest lesson.
+  idiom, plain `rm`). Equivalent expression, equivalent act, the gate's oldest lesson.
 - **Vault**: cross-scope name collisions are refused (409), `sha256` hashes the ciphertext, every
   lease is audited (`secret.leased`), and `load_all_into_redactor` re-teaches the in-memory
   redactor at boot (a restart no longer disarms masking).
 - **Rate limits are real** (`api/limits.py`): runs 12/min per project, desk 60/min per project,
-  login 20/min per account + 120/min per IP. In-process only — a multi-worker deployment would
+  login 20/min per account + 120/min per IP. In-process only, a multi-worker deployment would
   need a shared store (known limitation).
 - **Dev DX**: `CREW_ENV=dev` allows ANY loopback origin, so Vite port bumps stop reading as
   "backend unreachable". The WS handshake accepts `?token=` and `Authorization` too.
 - **Additive contract fields** (`agent_id`, `cost_micros`; org nodes gained `tasks_done`/
-  `tasks_failed`) — the frontend's leaderboard join keyed on a mock-only field; the extended
+  `tasks_failed`), the frontend's leaderboard join keyed on a mock-only field; the extended
   `test_ui_contract_shapes` now asserts these rows so the drift class stays caught.
 - **The suite always runs as a pickerless host** (autouse fixture in `tests/conftest.py`).

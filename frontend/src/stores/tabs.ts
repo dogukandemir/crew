@@ -30,7 +30,7 @@ export const WORKSPACE_TABS = [
 
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
-/** A member project's views: no HQ — the company lives one level up, reached by the
+/** A member project's views: no HQ, the company lives one level up, reached by the
  * breadcrumb; governance stays on the company's floor. */
 export const PROJECT_TABS: readonly WorkspaceTab[] = [
   'office',
@@ -62,7 +62,7 @@ export function workspaceTabsFor(kind: string | null | undefined): readonly Work
   return kind === 'company' ? COMPANY_TABS : PROJECT_TABS;
 }
 
-/** Where a tab lands when its remembered view is not in scope (ADR 0015) — e.g. a
+/** Where a tab lands when its remembered view is not in scope (ADR 0015), e.g. a
  * member project that still has 'hq' persisted from before the restructure. */
 export function defaultWorkspaceTab(kind: string | null | undefined): WorkspaceTab {
   return kind === 'company' ? 'hq' : 'office';

@@ -3,9 +3,9 @@
  *
  * A council is the one form of work that is genuinely a MEETING: a panel of
  * agents gathered to decide something together (docs/02 §4). The floor reads it
- * straight off the event log — `council.convened` opens a sitting, members are
+ * straight off the event log, `council.convened` opens a sitting, members are
  * announced by their own `council.position` events, and a `decision.recorded`
- * afterwards closes it — because the log is where that truth already lives. No
+ * afterwards closes it, because the log is where that truth already lives. No
  * second store, nothing to keep in sync.
  *
  * Membership from `council.position` and not from `select_panel`'s return value
@@ -17,7 +17,7 @@ import type { EventRow } from '../api/types';
 export interface LiveCouncil {
   id: string;
   question: string;
-  /** The panel, sorted — seat order around the table comes from this array. */
+  /** The panel, sorted, seat order around the table comes from this array. */
   members: string[];
   since: number;
 }
@@ -26,7 +26,7 @@ export interface LiveCouncil {
  * How long a sitting can stay silent before the floor lets it go.
  *
  * A council that stopped speaking minutes ago is not a meeting any more, whatever
- * the log says — and it is the second net: it closes a sitting whose decision
+ * the log says, and it is the second net: it closes a sitting whose decision
  * event never arrived, which is exactly what a dev mock with re-stamped events
  * will do.
  */
@@ -50,7 +50,7 @@ export function liveCouncil(events: readonly EventRow[], now: number): LiveCounc
   if (!id) return null;
   const began = tsOf(started);
 
-  // The convenor sits too — the orchestrator at the head of the table.
+  // The convenor sits too, the orchestrator at the head of the table.
   const members = new Set<string>();
   if (started.agent_id) members.add(started.agent_id);
 

@@ -47,10 +47,10 @@ export function UnitNode({ data, selected }: NodeProps<UnitFlowNode>) {
       </div>
       <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
         <span title="reputation score">
-          score {typeof u.score === 'number' ? u.score.toFixed(2) : '—'}
+          score {typeof u.score === 'number' ? u.score.toFixed(2) : 'n/a'}
         </span>
         <span className="tabular-nums" title="spend">
-          {cost === undefined ? '—' : formatMicros(cost)}
+          {cost === undefined ? 'n/a' : formatMicros(cost)}
         </span>
       </div>
       {openTasks > 0 && (

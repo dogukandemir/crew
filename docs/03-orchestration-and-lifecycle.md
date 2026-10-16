@@ -1,4 +1,4 @@
-# 03 — Orchestration & Lifecycle
+# 03: Orchestration & Lifecycle
 
 This is the state machine of a project: from a sentence you type to a verified result, a
 retained lesson, and either a standing department or a disbanded squad.
@@ -58,7 +58,7 @@ clarifying questions. Two modes:
    inputs_refs[], output_contract, assignee (agent|squad), status
    ```
 3. **Dependencies**: must be a DAG; a cycle found by the planner (`_has_cycle`, Kahn's
-   algorithm, `control/org.py`) is broken deterministically — offending edges are dropped, and
+   algorithm, `control/org.py`) is broken deterministically, offending edges are dropped, and
    a graph that cannot be repaired is refused as `dag_cycle`. There is no depth > 8
    re-decomposition.
 4. **Acceptance criteria are mandatory.** A task without acceptance criteria is invalid; the
@@ -82,7 +82,7 @@ queue. Order: reuse > add worker to existing squad > new squad > new department.
   path length, cost). It runs at most `CREW_MAX_CONCURRENT_CREWS` crews globally and a
   per-project limit.
 - A **crew** is built per **task**: one CrewAI agent, one task, `Process.sequential`
-  (`execution/runner.py`) — squad context reaches the agent through the prompt, not a manager
+  (`execution/runner.py`), squad context reaches the agent through the prompt, not a manager
   crew; there is no per-squad hierarchical crew.
 - Each task runs with: its slice of squad context, the relevant brain retrievals (docs/06),
   its tool grants, a wall-clock and token budget, and an explicit output contract.
@@ -101,13 +101,13 @@ queue. Order: reuse > add worker to existing squad > new squad > new department.
 
 Ordered by increasing cost, stop at first decisive verdict:
 
-1. **Deterministic checks** — does the artifact exist, does it parse/compile, does the test
+1. **Deterministic checks**, does the artifact exist, does it parse/compile, does the test
    command exit 0, does the schema validate, is the file non-empty, does the URL return 200?
-2. **Contract check** — output matches the task's `output_contract` (Pydantic-validated).
-3. **Independent evaluator** — an `evaluator` agent (never the producer) scores against the
+2. **Contract check**, output matches the task's `output_contract` (Pydantic-validated).
+3. **Independent evaluator**, an `evaluator` agent (never the producer) scores against the
    acceptance criteria with a rubric and must cite evidence from the artifact.
-4. **Peer/critic review** — for creative or judgement-heavy deliverables with no test.
-5. **Human** — when `verification.require_human` or the evaluator's confidence is below the
+4. **Peer/critic review**, for creative or judgement-heavy deliverables with no test.
+5. **Human**, when `verification.require_human` or the evaluator's confidence is below the
    threshold.
 
 Verdicts: `pass`, `pass_with_notes`, `fail`, `inconclusive`. `inconclusive` does not pay a
@@ -116,14 +116,14 @@ reward and does not count as failure; it goes to the escalation ladder.
 ## 7. Reward settlement
 
 On every terminal task, `RewardEngine` writes reward events for the producer, the lead, the
-head (small managerial share) and the verifier (accuracy bonus/penalty — a verifier who
+head (small managerial share) and the verifier (accuracy bonus/penalty, a verifier who
 passes something later proven bad is itself penalized). Full model in docs/05.
 
 ## 8. Learning
 
 After the run: the Librarian agent summarizes what worked, extracts reusable procedures,
 updates the department playbook, promotes insights upward, and prunes memory that proved
-misleading. Nothing here is allowed to overwrite historical events — insights are *new*
+misleading. Nothing here is allowed to overwrite historical events, insights are *new*
 memory entries with provenance back to the run.
 
 ## 9. Termination, pause, abort

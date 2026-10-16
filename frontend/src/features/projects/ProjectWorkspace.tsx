@@ -32,7 +32,7 @@ import { cn } from '../../lib/cn';
 import { PanelError } from '../../components/PanelError';
 
 /**
- * One workspace (docs/09 §2, ADR 0015): the internal tabs follow the tab's SCOPE —
+ * One workspace (docs/09 §2, ADR 0015): the internal tabs follow the tab's SCOPE,
  * a company shows HQ/Projects/Brains/Events/Settings, a member project shows its
  * office and working views (no HQ; the company is one breadcrumb up). Internal tabs
  * live in the tab store so switching outer tabs restores the exact view you left.

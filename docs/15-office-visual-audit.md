@@ -14,19 +14,19 @@ being wrong.
 
 ---
 
-## Round 1 — the sprite scale (found by measuring the running DOM)
+## Round 1: the sprite scale (found by measuring the running DOM)
 
 ### S1 · People were drawn three times too small ✔ fixed
 
 **Evidence.** With the office open, every character's clip rect in the DOM was
-`24×40` — i.e. the atlas cell at a factor of 1.0 units per sprite pixel — while the
+`24×40`, i.e. the atlas cell at a factor of 1.0 units per sprite pixel, while the
 desks in the same view were `146×204`, a factor of 3.04. A figure was therefore
 40 world units tall: **0.56 m**, next to a desk two metres wide. The screenshot
 showed it: doll-sized people at full-size desks.
 
 **Cause.** Two rules for one thing. `Sprite` used `SPRITE_UNIT × view × scale`;
 `SpriteCharacter` took a `height` from its caller and computed `(height / 40) × view`.
-`FEET_Y` — the caller's value — was a leftover from the hand-drawn vector rig's 24×40
+`FEET_Y`, the caller's value, was a leftover from the hand-drawn vector rig's 24×40
 box, and no longer meant anything in the atlas's metres.
 
 **Fix.** One rule. `SpriteCharacter` draws at `SPRITE_UNIT × view`, exactly like a
@@ -38,7 +38,7 @@ prop, and the `height` prop is gone.
 One sprite pixel could not be both. Any renderer honouring the floor scale drew
 everything 1.5× too tall; honouring the height scale drew everything 1.33× too wide.
 The floor renderer's `SPRITE_UNIT` avoided both by deriving a third number from the
-tile size, and the view's default of `0.68` — a hand-chosen fudge, not a preference —
+tile size, and the view's default of `0.68`, a hand-chosen fudge, not a preference,
 then papered over the difference.
 
 **The relation.** For one uniform pixels→units factor to serve both axes, the tile
@@ -48,7 +48,7 @@ costs `2 × unitsPerMetre` of world width, while 1 m of height is `M` px and cos
 fixes `TW = 48`, `TH = 24`.
 
 **Fix.** The generator's tile is 48×24, the manifest declares `pixelsPerMetre: 24` for
-both axes, and `SPRITE_UNIT = UNITS_PER_METRE / ATLAS.world.pixelsPerMetre` — derived
+both axes, and `SPRITE_UNIT = UNITS_PER_METRE / ATLAS.world.pixelsPerMetre`, derived
 from the manifest instead of recomputed. The view scale is now a preference again:
 `compact ×0.75 / to scale ×1.00 (default) / large ×1.5`, with a new storage key,
 because the old one stored a number that meant something else.
@@ -60,14 +60,14 @@ because the old one stored a number that meant something else.
 honest scale, every desk overhung its neighbours' partitions. "The office is crowded"
 was never the floor plan: it was the furniture.
 
-**Fix.** Desk 1.4 × 0.7 m, chair 0.6 × 0.6 m, plant 0.7 × 0.7 m, lab bench 2 × 0.7 m —
+**Fix.** Desk 1.4 × 0.7 m, chair 0.6 × 0.6 m, plant 0.7 × 0.7 m, lab bench 2 × 0.7 m,
 real sizes, so a bay now holds a desk, a chair and legroom without negotiation.
 
 ### S4 · `tileCentre` assumed a 1×1 footprint ✔ fixed
 
 **Evidence.** `tileCentre(oy) = oy + TH / 2` is the centre of a footprint whose depth
 is exactly one tile. The chair is now 0.6 tiles, so its seat was drawn
-`(1 − 0.6) × TH / 2 = 4.8 px` — 20 cm — south of where the simulation seats the body.
+`(1 − 0.6) × TH / 2 = 4.8 px`, 20 cm, south of where the simulation seats the body.
 
 **Fix.** `footprintCentre(oy, a, b)`, used by every prop that is drawn around its own
 centre rather than its corner: chair, round table, stool, plant, centrifuge.
@@ -76,7 +76,7 @@ centre rather than its corner: chair, round table, stool, plant, centrifuge.
 
 **Evidence.** `floorplan.deskOf` placed the body at `desk.y + DESK_H − 30`; `props.tsx`
 placed the chair at `DESK_H − (DESK_SLAB_D / 2 + UNITS_PER_METRE / 2 − 6)`. They agreed
-to within 3 units — by luck, from two hand-picked numbers whose origins are gone.
+to within 3 units, by luck, from two hand-picked numbers whose origins are gone.
 `DESK_SLAB_D = 58` was in neither the art nor the plan.
 
 **Fix.** One function, `deskSeat(room, desk)`, in the floor plan: the bay's far edge
@@ -87,7 +87,7 @@ bodies there and the renderer draws the chair there.
 
 **Evidence.** `Chair` passed `scale={0.68}` while the view factor was also 0.68, so
 chairs were drawn at 46% of the art. `Whiteboard` divided by `2 × UNITS_PER_METRE`
-— a width the art does not have (its cell is 1.19 m of board) — and `MeetingTable`
+a width the art does not have (its cell is 1.19 m of board), and `MeetingTable`
 and `RoundTable` divided by hand-typed art widths too. Every one of them was wrong by
 the view factor, and would have been wrong again the moment the view changed.
 
@@ -97,11 +97,11 @@ caller asking for "a board this wide" cannot be surprised by the art changing.
 ### S7 · The desk sprite was offset by a metre that was not its own ✔ fixed
 
 **Evidence.** `Workstation` placed the desk at `x + DESK_W/2 − UNITS_PER_METRE`, an
-offset derived from the art's *declared* half-footprint — while the art was drawn at
+offset derived from the art's *declared* half-footprint, while the art was drawn at
 0.68 of that. The desk sat 0.32 m north-west of its own bay, and the chair, which came
 from the bay, was no longer under it.
 
-**Fix.** A sprite is anchored at its footprint's far corner — the same corner as the
+**Fix.** A sprite is anchored at its footprint's far corner, the same corner as the
 bay. The desk is placed at the bay's origin, at scale 1, and the geometry follows
 instead of compensating.
 
@@ -118,7 +118,7 @@ ignore it.
 
 ---
 
-## Round 1b — the same round, looked at
+## Round 1b: the same round, looked at
 
 Numbers can be right and the screen still wrong. These were found by zooming to
 ~90% and reading the picture, which is the only instrument that works on composition.
@@ -126,7 +126,7 @@ Numbers can be right and the screen still wrong. These were found by zooming to
 ### S9 · A plant drawn through a workstation ✔ fixed
 
 **Evidence.** Every department's corner plant sat at `room.w − ROOM_PAD − 14`,
-`room.h − 26` — inside the desk grid. A green mass on top of the last bay's desk, in
+`room.h − 26`, inside the desk grid. A green mass on top of the last bay's desk, in
 every room that had one.
 
 **Cause.** Nothing owned the room's spare space. `roomSize()` reserves a header band
@@ -145,7 +145,7 @@ longer touched it.
 **Cause.** The caller describes the table as a bay (`w × d`); the art is 3 × 1 m
 scaled to `w`. The two depths differ, and the chairs were placed from the caller's.
 
-**Fix.** `spriteFootprint()` — the footprint is now in the manifest (S11), so a chair
+**Fix.** `spriteFootprint()`, the footprint is now in the manifest (S11), so a chair
 is placed against the art's own near and far edges.
 
 ### S11 · The manifest carried no footprint ✔ fixed
@@ -163,11 +163,11 @@ character declares none, because a character's footprint is the point it stands 
 ### S12 · Sizes and tones that were wrong at a glance ✔ fixed
 
 - Foosball table 2 × 1.2 m → 1.4 × 0.8 m. It filled the corner it stood in.
-- The reagent shelf was `mist` — the brightest object on the floor, a lightbox beside
+- The reagent shelf was `mist`, the brightest object on the floor, a lightbox beside
   the bench. Now steel and iron, with the bottles as the only colour on it.
 - The centrifuge's window was `coal`: a black disc on a light lid, i.e. a hole. Glass
   is `sky`.
-- A chair's back was `ash,1` — near-invisible on a slate floor. `steel,2`.
+- A chair's back was `ash,1`, near-invisible on a slate floor. `steel,2`.
 - A turned chair's back, a white lab worktop, and the review room's board: all read as
   the brightest or darkest thing in their room, and all are now in the middle range
   the rest of the floor lives in.
@@ -177,8 +177,8 @@ character declares none, because a character's footprint is the point it stands 
 Found by rendering all 28 props at 4× on one card and looking at them. Neither is
 visible in the office at any zoom: among forty sprites, a hood is a hood.
 
-- **The fume hood's sash was a solid cyan block.** The glass was drawn as `sky` — full
-  brightness — over the dark opening, so the hood read as a lit display case. Glass at
+- **The fume hood's sash was a solid cyan block.** The glass was drawn as `sky`, full
+  brightness, over the dark opening, so the hood read as a lit display case. Glass at
   this size is a dark cool pane with one pale edge.
 - **The turned chair was a shapeless mass.** Its top rail and edge were one pixel
   each and vanished against the panel, so a chair back read as a grey lump sitting on
@@ -195,10 +195,10 @@ microscope, the stool, the reagent shelf and the centrifuge.
 All twelve facing×pose cells at 6×, plus eight characters side by side. The numbers
 first: every cell is centred to within half a pixel of its own middle (art x 5–18 in a
 24 px cell), every figure's feet are on the last row of the cell or above it in a
-seated pose, and **both walk frames are 37 px tall and end on the same row** — the
+seated pose, and **both walk frames are 37 px tall and end on the same row**, the
 arithmetic behind "no bobbing, no floating", asserted rather than eyeballed.
 
-- **The side view's hair covers two thirds of the face** — it reads as a face with
+- **The side view's hair covers two thirds of the face**, it reads as a face with
   something over it. This is a real defect and it is not visible in the office:
   `SpriteCharacter` asks for `front` and `back` only, and says why in a comment. The
   cell stays in the atlas as a trap for the next caller. Recorded here rather than

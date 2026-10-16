@@ -54,7 +54,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
     run: runScope === 'latest' ? project.data?.latest_run_id ?? undefined : undefined });
   const rows = tasks.data?.items ?? [];
 
-  // the roster turns raw ids into names — a table of agent ids reads like machine output
+  // the roster turns raw ids into names, a table of agent ids reads like machine output
   const org = useOrg(projectId);
   const nameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -119,7 +119,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         width: '5.5rem',
         align: 'right',
         render: (t) => (
-          <span className="tabular-nums">{t.cost_micros === undefined ? '—' : formatMicros(t.cost_micros)}</span>
+          <span className="tabular-nums">{t.cost_micros === undefined ? 'n/a' : formatMicros(t.cost_micros)}</span>
         ),
         sortValue: (t) => t.cost_micros ?? 0,
       },
@@ -128,7 +128,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
         header: 'Attempts',
         width: '5.5rem',
         align: 'right',
-        render: (t) => <span className="tabular-nums">{t.attempts ?? '—'}</span>,
+        render: (t) => <span className="tabular-nums">{t.attempts ?? 'n/a'}</span>,
         sortValue: (t) => t.attempts ?? 0,
       },
       {

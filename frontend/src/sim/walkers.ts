@@ -47,7 +47,7 @@ export function routeLength(route: Point[]): number {
  * Give the walker a new route.
  *
  * If the new route does not begin where the walker currently is, the current
- * position is prepended — so a mid-walk change of plan never teleports the
+ * position is prepended, so a mid-walk change of plan never teleports the
  * character, they just set off from where they stand.
  */
 export function setRoute(w: Walker, route: Point[]): Walker {

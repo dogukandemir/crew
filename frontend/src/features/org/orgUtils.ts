@@ -146,6 +146,6 @@ export function gradeLabel(grade: number | undefined): string {
     case 0:
       return 'Trainee';
     default:
-      return '—';
+      return 'n/a';
   }
 }

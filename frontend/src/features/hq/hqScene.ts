@@ -1,11 +1,11 @@
 /**
  * The HQ scene model (ADR 0011): the whole company on one floor, as data.
  *
- * Pure — no React, no DOM — so the layout the renderer draws and the routes the
+ * Pure, no React, no DOM, so the layout the renderer draws and the routes the
  * walkers take are the same numbers a test can hold still. The floor is a fixed
  * plan because a headquarters is fixed: the board room up top, the C-suite row,
- * and one pod per member project. The people are the record's people — the
- * executives the company hired, the board it seated, one lead per project — and
+ * and one pod per member project. The people are the record's people, the
+ * executives the company hired, the board it seated, one lead per project, and
  * every note they carry is a line the record already wrote.
  */
 import { UNITS_PER_METRE } from '../office/iso';
@@ -115,7 +115,7 @@ function doorOf(room: { x: number; y: number; w: number; d: number }, side: 'n' 
 /**
  * A route that leaves and enters through the side that FACES the corridor. The doors
  * used to be one per room (always south), which sent an executive out of the south
- * door only to walk back north past their own office — two corridors exist so nobody
+ * door only to walk back north past their own office, two corridors exist so nobody
  * crosses a room they are not visiting.
  */
 function routeBetween(
@@ -177,7 +177,7 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
     people.push({
       id: e.id, name: e.name, role: e.role, title: e.title, kind: 'exec', room: room.id,
       home: execSeat(room), anchors: true,
-      note: `${e.title} — in their office`,
+      note: `${e.title}, in their office`,
     });
   });
 
@@ -189,7 +189,7 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
       kind: 'board', room: 'board',
       home: { x: BOARD_ROOM.x + 0.7 * M, y: BOARD_ROOM.y + 3.4 * M + i * 40 },
       anchors: false,
-      note: b.role === 'chair' ? 'Chair of the board — in the board room' : 'Off the floor until sessions',
+      note: b.role === 'chair' ? 'Chair of the board, in the board room' : 'Off the floor until sessions',
     });
   });
 
@@ -203,7 +203,7 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
                  sub: `${p.verdict.replace('_', ' ')} · ${teams}`, accent });
     people.push({
       id: `lead-${p.id}`, name: p.teams[0]?.head_name ?? `${p.name} lead`,
-      role: 'lead', title: `${p.name} — project lead`, kind: 'lead', room: room.id,
+      role: 'lead', title: `${p.name}, project lead`, kind: 'lead', room: room.id,
       home: { x: room.x + 1.1 * M, y: room.y + 1.25 * M + 74 },
       anchors: true,
       note: p.directive || `${p.completed} completed · ${p.failed} failed`,
@@ -227,11 +227,11 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
 
   if (inSession) {
     const topic = String((convened?.payload?.topic as string) ?? 'board session');
-    banner = `Board in session — ${topic}`;
+    banner = `Board in session, ${topic}`;
     const directors = people.filter((p) => p.kind === 'board');
     directors.forEach((b, i) => {
       const seat = BOARD_TABLE.seats[Math.min(i, BOARD_TABLE.seats.length - 1)];
-      // the directors are already in the room — they take their chairs, no corridor detour
+      // the directors are already in the room, they take their chairs, no corridor detour
       stages.push({ personId: b.id, at: seat, note: `${topic}`, path: [seat] });
     });
     const ceo = people.find((p) => p.role === 'ceo');
@@ -241,19 +241,19 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
       const boardRoom = rooms.find((r) => r.id === 'board');
       if (homeRoom && boardRoom) {
         stages.push({
-          personId: ceo.id, at: seat, note: `reporting to the board — ${topic}`,
+          personId: ceo.id, at: seat, note: `reporting to the board, ${topic}`,
           path: [...routeBetween(homeRoom, boardRoom), seat],
         });
       }
     }
   } else if (inAllocation) {
-    banner = 'The portfolio is allocated — the C-suite is in the board room';
+    banner = 'The portfolio is allocated, the C-suite is in the board room';
     const boardRoom = rooms.find((r) => r.id === 'board');
     for (const p of people.filter((x) => x.kind === 'exec' && x.role !== 'ceo')) {
       const homeRoom = rooms.find((r) => r.id === p.room);
       if (!boardRoom || !homeRoom) continue;
       const corner = { x: BOARD_ROOM.x + 1.1 * M, y: BOARD_ROOM.y + 0.9 * M + 44 * Number(p.id.length % 3) };
-      stages.push({ personId: p.id, at: corner, note: 'allocation decided — standing with the numbers',
+      stages.push({ personId: p.id, at: corner, note: 'allocation decided, standing with the numbers',
                     path: [...routeBetween(homeRoom, boardRoom), corner] });
     }
   }
@@ -269,7 +269,7 @@ export function buildHqWorld(hq: Hq, now = Date.now()): HqWorld {
     if (!lead || !homeRoom || !ceoRoom) continue;
     const door = doorOf(ceoRoom, 's');
     const spot = { x: door.x, y: door.y + 26 };
-    banner = banner ?? `${p.name} is ${p.verdict.replace('_', ' ')} — its lead is with the CEO`;
+    banner = banner ?? `${p.name} is ${p.verdict.replace('_', ' ')}, its lead is with the CEO`;
     stages.push({
       personId: lead.id, at: spot,
       note: String((dir.payload?.directive as string) ?? p.directive ?? 'called up'),

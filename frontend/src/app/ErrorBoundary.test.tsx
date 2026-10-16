@@ -7,7 +7,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 /**
  * The boundary is exercised, not assumed. A white screen is the failure this class exists
  * to prevent, so the test has to render a child that genuinely throws during render, in a
- * real DOM — react-dom/server propagates the error instead of rendering the fallback, so
+ * real DOM, react-dom/server propagates the error instead of rendering the fallback, so
  * this is the only way to prove the catch path.
  */
 function Boom(): ReactNode {

@@ -3,12 +3,12 @@
 The owner's rule shapes the ladder: an opening rejects **at most two** candidates, and
 the candidate after the rejections is **always** hire-worthy. Friction is occasional on
 purpose (project setting `hr_friction`, default 0.28): most openings land on the first
-candidate, some cost one rejection, rarely two — the record reads like a company, not a
+candidate, some cost one rejection, rarely two, the record reads like a company, not a
 pipeline loop.
 
 Every rejection is grounded: the failing dimension (skill coverage, budget, team
-overlap, vision) is computed from real numbers — the gap's skills, the remaining
-headroom, the department envelope, the people already on the floor — and cited in the
+overlap, vision) is computed from real numbers, the gap's skills, the remaining
+headroom, the department envelope, the people already on the floor, and cited in the
 event. Candidates are people too: each arrives with a soul (domain/soul.py) and the
 event stream keeps who they were.
 """
@@ -33,10 +33,10 @@ DEFAULT_FRICTION = 0.28
 # reject #1 vs #2 split, once friction is on: two rejections are the rare kind
 _TWO_REJECT_SHARE = 0.25
 
-# visions the HR rubric treats as a conflict with a delivery department — curated,
+# visions the HR rubric treats as a conflict with a delivery department: curated,
 # not text-matched: a conflict vision is WHY this candidate walks, and the event says so.
 CONFLICT_VISIONS = [
-    "Believes speed beats verification — ship it and fix it later.",
+    "Believes speed beats verification, ship it and fix it later.",
     "Thinks process is where ideas go to die; prefers to keep options open.",
     "Wants to explore ideas freely; deadlines are someone else's problem.",
     "Believes the best work happens without plans or acceptance criteria.",
@@ -73,7 +73,7 @@ def _seed(*parts: str) -> str:
 
 
 def roll_rejects(friction: float, rng: random.Random) -> int:
-    """0, 1 or 2 — and never more (the owner's cap)."""
+    """0, 1 or 2, and never more (the owner's cap)."""
     if friction <= 0 or rng.random() >= friction:
         return 0
     return 2 if rng.random() < _TWO_REJECT_SHARE else 1
@@ -107,7 +107,7 @@ def _weak_candidate(opening: Opening, rng: random.Random, existing_names: set[st
         expected = min(opening.headroom_micros, 180_000)
     elif flaw == "grade_overreach":
         skills = list(opening.skills)
-        # the candidate's ask: a quarter over what remains — a real negotiation fact
+        # the candidate's ask: a quarter over what remains, a real negotiation fact
         expected = opening.headroom_micros + max(opening.headroom_micros // 4, 50_000)
     elif flaw == "profile_clone":
         donor = rng.choice(team) if team else None
@@ -123,7 +123,7 @@ def _weak_candidate(opening: Opening, rng: random.Random, existing_names: set[st
 
 
 def assess(cand: Candidate, opening: Opening, *, team_skills: set[str]) -> dict[str, Any]:
-    """The rubric — every number computed from the opening, the budget and the floor."""
+    """The rubric, every number computed from the opening, the budget and the floor."""
     needed = set(opening.skills)
     covered = needed & set(cand.skills)
     coverage = (len(covered) / len(needed)) if needed else 1.0
@@ -138,12 +138,12 @@ def assess(cand: Candidate, opening: Opening, *, team_skills: set[str]) -> dict[
     reasons: list[str] = []
     if coverage < 0.5:
         missing = ", ".join(sorted(needed - covered)) or "the required skills"
-        reasons.append(f"covers {coverage:.0%} of the gap — {missing} goes uncovered")
+        reasons.append(f"covers {coverage:.0%} of the gap, {missing} goes uncovered")
     if not budget_fit:
         reasons.append(f"expects {cand.expected_spend_micros}µ$ against "
                        f"{opening.headroom_micros}µ$ remaining")
     if not reasons and fresh and new_coverage == 0:
-        reasons.append(f"duplicates the coverage already on the floor — the gap in "
+        reasons.append(f"duplicates the coverage already on the floor, the gap in "
                        f"{', '.join(sorted(fresh))} stays open")
     if vision < 0.34:
         reasons.append("vision conflicts with the department's delivery mission")
@@ -168,9 +168,9 @@ async def _model_note(opening: Opening, cand: Candidate, scores: dict, *, projec
     system = (
         "You are the Head of People interviewing a candidate for an AI company. Write "
         "2-3 sentences of interview note for the record. Ground EVERY claim in the "
-        "numbers given — never invent experience, names or facts. End with pass/reject."
+        "numbers given, never invent experience, names or facts. End with pass/reject."
     )
-    user = (f"OPENING: {opening.title} — gap skills {opening.skills}; "
+    user = (f"OPENING: {opening.title}, gap skills {opening.skills}; "
             f"budget bound {opening.headroom_micros}µ$.\n"
             f"CANDIDATE: {cand.name}; skills {cand.skills}; ask {cand.expected_spend_micros}µ$; "
             f"vision “{cand.soul.get('vision')}”.\n"
@@ -191,7 +191,7 @@ async def _hr_head_id(project_id: str) -> str | None:
 
 async def _floor_facts(project_id: str, department_id: str | None,
                        fallback_headroom: int) -> tuple[int, set[str], list[dict]]:
-    """(budget bound, team skills, team [{name, skills}]) — all real numbers."""
+    """(budget bound, team skills, team [{name, skills}]), all real numbers."""
     from crew.core.security import budget as budget_mod
 
     headroom = await budget_mod.available_micros(project_id)
@@ -234,7 +234,7 @@ async def hr_hire(project: Project, *, spec: RoleSpec, run_id: str, actor: str,
     desk_actor = f"agent:{hr_id}" if hr_id else actor
     await ev.emit("hiring.role.opened", project_id=project.id, run_id=run_id,
                   severity="notice", title=f"opening: {opening.title}",
-                  summary=f"gap skills {', '.join(opening.skills) or '—'}; "
+                  summary=f"gap skills {', '.join(opening.skills) or 'n/a'}; "
                           f"bound {opening.headroom_micros}µ$",
                   payload={"role": opening.role, "title": opening.title,
                            "skills": opening.skills, "grade": opening.grade,
@@ -271,7 +271,7 @@ async def hr_hire(project: Project, *, spec: RoleSpec, run_id: str, actor: str,
 
     return await org.hire_agent(
         project_id=project.id, spec=spec, department_id=department_id, squad_id=squad_id,
-        manager_id=manager_id, rationale=f"{rationale} — HR: {interview['summary']}"[:400],
+        manager_id=manager_id, rationale=f"{rationale}, HR: {interview['summary']}"[:400],
         actor=desk_actor, soul=final.soul, name=final.name)
 
 
@@ -315,7 +315,7 @@ async def ensure_hr(project: Project, *, run_id: str, orchestrator_id: str | Non
     """One Head of People per project, seated before the first growth wave.
 
     Returns the created hire (for the caller's `created` report) or None when HR is
-    already seated. The bootstrap hire itself is direct — the first HR head cannot
+    already seated. The bootstrap hire itself is direct, the first HR head cannot
     interview themselves.
     """
     from crew.control import org
@@ -340,7 +340,7 @@ async def ensure_hr(project: Project, *, run_id: str, orchestrator_id: str | Non
     hr = await org.hire_agent(
         project_id=project.id,
         spec=RoleSpec.from_template(
-            Role.HR, mission="Head of People: own every growth hire — interview the "
+            Role.HR, mission="Head of People: own every growth hire, interview the "
                              "candidates, reject the misfits, keep the record honest."),
         department_id=dept_id, manager_id=orchestrator_id,
         rationale="first growth wave: hiring needs a person, not a stamp",

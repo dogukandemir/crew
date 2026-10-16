@@ -28,7 +28,7 @@ import { latestFiles } from './versions';
  */
 
 function formatSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'n/a';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -199,7 +199,7 @@ export function DeliverablesPanel({
           title={(q.data?.items.length ?? 0) > 0 ? 'No matching files' : 'No deliverables yet'}
           description={
             (q.data?.items.length ?? 0) > 0 ? 'Try another search or clear the filters.' : isCompany
-              ? 'Outputs published by the member projects land here — every row names its agent.'
+              ? 'Outputs published by the member projects land here, every row names its agent.'
               : agent || dept
                 ? 'Nothing matches this filter yet.'
                 : 'Run the project: agents publish their outputs here as real files you can read.'
@@ -246,7 +246,7 @@ function DeliverableItem({
         title={row.task_title ? `From the task: ${row.task_title}` : row.path}
       >
         {/* One interactive element per row: the open button (nested buttons inside a
-            role=button row break screen readers — review 2026-10-14). */}
+            role=button row break screen readers, review 2026-10-14). */}
         <button
           type="button"
           onClick={onOpen}
@@ -354,7 +354,7 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
             <SkeletonRows rows={6} />
           ) : content.isError ? (
             <div className="rounded border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200/90">
-              Could not read the file — the request failed.
+              Could not read the file, the request failed.
             </div>
           ) : content.data?.available ? (
             <>
@@ -369,7 +369,7 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
             </>
           ) : (
             <div className="rounded border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200/90">
-              File not available — {content.data?.reason ?? 'unknown reason'}.
+              File not available, {content.data?.reason ?? 'unknown reason'}.
             </div>
           )}
         </div>

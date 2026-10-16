@@ -14,7 +14,7 @@ from crew.core.events import bind_loop
 
 pytestmark = pytest.mark.asyncio
 
-# A real file that is NOT under the data directory — used by the deliverable
+# A real file that is NOT under the data directory: used by the deliverable
 # content test to prove the server refuses to serve outside its data root.
 # (Computed at import time: pathlib resolve() is blocking and linters ban it
 # inside async tests.)
@@ -292,7 +292,7 @@ async def test_command_desk_roundtrip(client):
 
 
 async def test_onboarding_key_roundtrip(client, monkeypatch):
-    """ADR 0013: the key path — state, a rejected key, a stored key, the vault."""
+    """ADR 0013: the key path, state, a rejected key, a stored key, the vault."""
     import os
 
     from crew.control import onboarding
@@ -369,7 +369,7 @@ async def test_ui_contract_shapes(client):
     """The fields the UI actually reads, asserted against the REAL app.
 
     Micros and the org root once vanished from these payloads while the mock kept
-    serving them — the office, the org chart and every budget bar rendered empty
+    serving them, the office, the org chart and every budget bar rendered empty
     against the real backend and nobody noticed. If a field here ever leaves a
     payload again, this test goes red instead of the product quietly lying."""
     p = await _create_project(client, "Contract Check", budget=3.0)
@@ -410,11 +410,11 @@ async def test_ui_contract_shapes(client):
 
 async def test_pick_directory_returns_the_os_choice(client, monkeypatch):
     """The founding wizard's Browse button (ADR 0017): the host dialog's choice comes
-    back as an absolute path — the browser never touches the filesystem itself."""
+    back as an absolute path, the browser never touches the filesystem itself."""
     from crew.api import routes as routes_mod
 
     # Host availability (powershell / osascript / zenity) is a property of the machine, not
-    # of this contract — pin it, or the test asserts whatever the CI image happens to ship
+    # of this contract, pin it, or the test asserts whatever the CI image happens to ship
     # (the ubuntu runner has no zenity and the route honestly answers supported=false).
     monkeypatch.setattr(routes_mod, "_picker_available", lambda: True)
     monkeypatch.setattr(routes_mod, "_pick_directory_native", lambda: "C:/picked/root")
@@ -453,7 +453,7 @@ async def _await_run(client, project_id: str, goal: str = "deliver the slice") -
 
 async def test_deliverables_at_three_levels(client):
     """A deliverable is readable at every level of the org: the whole company, one
-    department, one agent — and at department/company level every row names the
+    department, one agent, and at department/company level every row names the
     producing agent. Same record, three scopes."""
     r = await client.post("/api/found", json={
         "name": "Deliverable Co", "mission": "ship the slice", "budget_usd": 4.0,
@@ -520,7 +520,7 @@ async def test_deliverables_at_three_levels(client):
 
 async def test_convening_a_council_ends_in_a_decision(client):
     """The board button, end to end: convene ALONE (no client-driven rounds) must
-    land a binding decision — the session used to sit 'open' forever because
+    land a binding decision, the session used to sit 'open' forever because
     nothing advanced it."""
     p = await _create_project(client, "Auto Council")
     r = await client.post(f"/api/projects/{p['id']}/councils", json={
@@ -609,7 +609,7 @@ async def test_deliverable_downloads_single_and_packs(client):
 
 async def test_ui_contract_shapes_extended(client):
     """The §1a rows added in the 2026-10 review: org counters, the leaderboard row the
-    roster joins on, and the agent drawer's soul — asserted against the REAL app."""
+    roster joins on, and the agent drawer's soul, asserted against the REAL app."""
     p = await _create_project(client, "Contract Ext", budget=2.0)
 
     org = (await client.get(f"/api/projects/{p['id']}/org")).json()

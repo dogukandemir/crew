@@ -9,8 +9,8 @@ export interface SwitchTarget {
 
 /**
  * The project switcher's model (pure, testable): which other projects this tab can
- * jump to. A member project offers its company's siblings — that is the hop people
- * keep looking for — and a company (HQ) tab offers its members. An unattached project
+ * jump to. A member project offers its company's siblings, that is the hop people
+ * keep looking for, and a company (HQ) tab offers its members. An unattached project
  * falls back to every other project. The current entry stays in the list, marked:
  * a menu that hides where you are makes you re-open your own tab to check.
  */

@@ -7,7 +7,7 @@ import { DEPARTMENTS, HIRES, headcountAt, orgAt } from './timeline';
  *
  * Everything here is a transition rather than a still life: the org at t+45 compared
  * with the org at t+10, with the first build's placement handed into the second one,
- * exactly as the app does it. That is the only way to catch the failure that matters —
+ * exactly as the app does it. That is the only way to catch the failure that matters,
  * a floor that re-packs itself, so that hiring one agent slides every room after it and
  * "engineering is bottom left" stops being true.
  */

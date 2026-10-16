@@ -31,7 +31,7 @@ describe('groupTabs', () => {
   it('renders the company tab first even when a member opened before it', () => {
     const members = new Map<string, string | null>([
       ['atlas', 'nw'],
-      ['nw', null], // the company itself — groupKeyMaker recognises it via membership
+      ['nw', null], // the company itself, groupKeyMaker recognises it via membership
     ]);
     const key = groupKeyMaker(members);
     const out = groupTabs([tab('atlas'), tab('nw')], key);

@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 
 /**
  * Minimal windowed list (docs/09 §2.8 "virtualized, filterable firehose").
- * Renders only the visible slice plus an overscan margin — enough for a
+ * Renders only the visible slice plus an overscan margin, enough for a
  * 5 000-row event buffer without pulling in a virtualization library.
  */
 export function VirtualList<T>({

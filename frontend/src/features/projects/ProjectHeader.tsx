@@ -27,7 +27,7 @@ function StageStepper({ stage }: { stage: Stage }) {
         <li className="flex items-center gap-1">
           <span
             className="rounded border border-slate-600/60 bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300"
-            title="No run in progress — start one from the Overview tab."
+            title="No run in progress, start one from the Overview tab."
           >
             {stage}
           </span>
@@ -84,7 +84,7 @@ function GoalEditor({ project }: { project: Project }) {
     return (
       <p className="flex min-w-0 items-start gap-2 text-xs text-slate-300">
         <span className={cn('min-w-0', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')} title={project.goal}>
-          {project.goal || '— no goal set —'}
+          {project.goal || 'no goal set'}
         </span>
         {project.goal.length > 110 && <button type="button" className="shrink-0 text-xs text-slate-300 underline"
           onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Less' : 'Read goal'}</button>}
@@ -171,7 +171,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
   if (project.isError || !project.data) {
     return (
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800/70 px-3 py-2 text-xs text-slate-400">
-        <span>Project {names[projectId] ?? projectId.slice(0, 8)} — detail unavailable.</span>
+        <span>Project {names[projectId] ?? projectId.slice(0, 8)}, detail unavailable.</span>
         <Button size="xs" variant="secondary" onClick={() => void project.refetch()}>
           Retry
         </Button>
@@ -193,7 +193,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
               type="button"
               onClick={() => openTab(p.company_id as string, 'main', 'hq')}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-800/70 hover:text-emerald-300"
-              title="Up one level — open the company floor"
+              title="Up one level, open the company floor"
             >
               ⌂ {p.company_name ?? 'Company'}
             </button>
@@ -254,7 +254,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
             <Button
               size="xs"
               variant="secondary"
-              title="The Captain's desk — give orders, float ideas, ask questions"
+              title="The Captain's desk, give orders, float ideas, ask questions"
               onClick={() => {
                 if (activeTabId) openDrawer(activeTabId, { kind: 'command', id: 'command' });
               }}

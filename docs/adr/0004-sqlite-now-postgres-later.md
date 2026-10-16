@@ -1,4 +1,4 @@
-# ADR 0004 — SQLite now, Postgres later
+# ADR 0004: SQLite now, Postgres later
 
 - **Status:** Accepted
 - **Date:** 2026-10-06

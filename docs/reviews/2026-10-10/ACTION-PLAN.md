@@ -26,7 +26,7 @@ This is a proposed implementation plan, not a record of completed fixes. It is o
 
 Work can overlap, but presentation and promotion must not get ahead of the enforcement and live-work gates. Shared-host authentication can be deferred only if that deployment mode is explicitly unsupported and technically rejected.
 
-## 2. Gate A — immediate containment and truthful publication
+## 2. Gate A: immediate containment and truthful publication
 
 **Goal:** a repository that can be shared as an experimental local project without known basic containment failures or misleading setup claims.
 
@@ -67,7 +67,7 @@ Work can overlap, but presentation and promotion must not get ahead of the enfor
 
 **Acceptance:** dependency decisions and notices are documented; CI alerts are actionable; the clean release build contains only intended files. Do not advertise this gate as a security certification.
 
-## 3. Gate B — trustworthy live execution
+## 3. Gate B: trustworthy live execution
 
 **Goal:** a small project produces verified artifacts with enforceable controls.
 
@@ -108,7 +108,7 @@ Work can overlap, but presentation and promotion must not get ahead of the enfor
 
 **Acceptance:** viewers cannot mutate projects or approve work; disabled users lose access; expired/revoked grants fail; command changes invalidate approval; redirect/private-IP cases are denied before connection; test secrets never appear in events, logs, or exports before or after restart.
 
-## 4. Gate C — reproducible installation and first value
+## 4. Gate C: reproducible installation and first value
 
 **Goal:** someone outside the project can succeed from the documentation.
 
@@ -139,7 +139,7 @@ For every supported row, record OS/architecture, install method, provider/model,
 
 **Acceptance:** keyboard-only users complete the wizard without focus escaping the modal. Test narrow screens and zoom. In a small observed usability study, users correctly identify whether work is simulated, what it can cost, how to stop it, and where to find the result.
 
-## 5. Gate D — public launch and contributor experience
+## 5. Gate D: public launch and contributor experience
 
 **Goal:** a credible, reproducible public story supported by a maintainable repository.
 

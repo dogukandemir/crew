@@ -1,4 +1,4 @@
-# Crew — a playable control room for real AI agents
+# Crew: a playable control room for real AI agents
 
 Give a company a goal. Watch its agents organize, use tools, produce files, and ask for approvals in an animated office.
 
@@ -9,7 +9,7 @@ Give a company a goal. Watch its agents organize, use tools, produce files, and 
 
 ### At a glance
 
-- **Execution engine:** CrewAI — planning, hiring, tasks and tool calls are real records; the office is a view of the same events.
+- **Execution engine:** CrewAI: planning, hiring, tasks and tool calls are real records; the office is a view of the same events.
 - **Providers:** DeepSeek (shipped default), OpenAI, Anthropic, OpenRouter, or local Ollama. Demo needs no key and spends nothing.
 - **Runtime:** Python 3.13 backend, React 19 / Node 26 frontend, Docker for agent command execution, SQLite for state.
 - **Distribution:** one `docker compose up --build`; both ports bind to loopback only.

@@ -5,7 +5,7 @@ import { switchTargets } from './projectSwitch';
 const project = (over: Partial<Project>): Project =>
   ({
     id: 'p1',
-    name: 'Atlas — customer data platform',
+    name: 'Atlas: customer data platform',
     goal: '',
     status: 'active',
     stage: 'EXECUTING',
@@ -26,9 +26,9 @@ const company = (over: Partial<Company> = {}): Company => ({
   ceo: { id: 'c1', name: 'Katherine Brooks' },
   roster: [],
   projects: [
-    { id: 'p1', name: 'Atlas — customer data platform', status: 'active', spend_ratio: 0.38 },
-    { id: 'p2', name: 'Nimbus — mobile app', status: 'active', spend_ratio: 0.84 },
-    { id: 'p3', name: 'Forge — design system', status: 'paused', spend_ratio: 0.97 },
+    { id: 'p1', name: 'Atlas: customer data platform', status: 'active', spend_ratio: 0.38 },
+    { id: 'p2', name: 'Nimbus: mobile app', status: 'active', spend_ratio: 0.84 },
+    { id: 'p3', name: 'Forge: design system', status: 'paused', spend_ratio: 0.97 },
   ],
   last_review: null,
   ...over,
@@ -42,7 +42,7 @@ describe('switchTargets', () => {
     expect(out[1].status).toBe('active');
   });
 
-  it('offers the members for a company (HQ) tab — none of them is current', () => {
+  it('offers the members for a company (HQ) tab, none of them is current', () => {
     const out = switchTargets(project({ id: 'co1', kind: 'company', company_id: null }), [company()], undefined);
     expect(out.map((t) => t.id)).toEqual(['p1', 'p2', 'p3']);
     expect(out.some((t) => t.current)).toBe(false);

@@ -1,5 +1,5 @@
 /**
- * Query hooks — the read side of the client (docs/11 §2).
+ * Query hooks, the read side of the client (docs/11 §2).
  * One hook per endpoint group; React Query owns loading/error/stale state.
  */
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
@@ -68,7 +68,7 @@ export function useBoard(projectId: string | null | undefined, departmentId?: st
 
 export function useCompanyHq(companyId: string | null | undefined) {
   // The HQ floor polls like the office does: the board convenes, money moves and
-  // leads walk to the CEO's office because the record changed — not on reload.
+  // leads walk to the CEO's office because the record changed, not on reload.
   return useQuery({
     queryKey: ['company-hq', companyId],
     queryFn: () => api.getCompanyHq(companyId as string),
@@ -116,7 +116,7 @@ export function useOrg(id: string | null | undefined) {
     queryFn: () => api.getOrg(id as string),
     enabled: !!id,
     // The organization is not a photograph. Agents are hired while the tab is open and
-    // departments open around them, and the office draws itself FROM this query — so
+    // departments open around them, and the office draws itself FROM this query, so
     // without a poll the floor plan is whatever it was the moment the tab loaded: the
     // new room exists in the database and nowhere on screen.
     //
@@ -278,7 +278,7 @@ export function useCommands(projectId: string | null | undefined, enabled = true
   });
 }
 
-/** Deliverables of one project — filterable by agent or department; every row
+/** Deliverables of one project, filterable by agent or department; every row
  * carries the producing agent's name. */
 export function useProjectArtifacts(
   id: string | null | undefined,
@@ -292,7 +292,7 @@ export function useProjectArtifacts(
   });
 }
 
-/** Deliverables across a company's member projects — every row names its agent
+/** Deliverables across a company's member projects, every row names its agent
  * and its project. */
 export function useCompanyArtifacts(
   id: string | null | undefined,

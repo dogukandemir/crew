@@ -1,7 +1,7 @@
 /**
  * How big the sprites are drawn.
  *
- * `SPRITE_UNIT` already puts a sprite at the size the world says it is — the atlas
+ * `SPRITE_UNIT` already puts a sprite at the size the world says it is, the atlas
  * measures a metre with one number for floor and height alike, so a desk is 1.4 m
  * against a 1.45 m bay without anybody adjusting anything. This is therefore not a
  * correction; it is a preference, and it says so:

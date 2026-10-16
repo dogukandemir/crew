@@ -1,7 +1,7 @@
-"""Company gossip — real signals, retold (docs/17 batch 2).
+"""Company gossip, real signals, retold (docs/17 batch 2).
 
 Gossip here is not invention: every item carries `basis` (the rows it is retold from),
-so the office can only repeat what the books already say — the budget really is that
+so the office can only repeat what the books already say, the budget really is that
 thin, that task really did die three times. When the same topic is heard from enough
 different mouths, `gossip.surfaced` fires and the concern is recorded in the project
 brain: that is how a rumour turns into something the company has to look at.
@@ -33,7 +33,7 @@ async def seeds(project_id: str) -> list[dict]:
         if ratio >= 0.55:
             out.append({
                 "topic": "budget", "weight": 2,
-                "text": f"The budget is {ratio:.0%} gone and the run isn't finished — I'd watch what I request.",
+                "text": f"The budget is {ratio:.0%} gone and the run isn't finished, I'd watch what I request.",
                 "basis": [f"project:{p.id}", f"spend:{p.spend_micros}", f"reserved:{p.reserved_micros}"],
             })
         failed = (await s.scalars(select(Task).where(Task.project_id == project_id,
@@ -49,7 +49,7 @@ async def seeds(project_id: str) -> list[dict]:
         if blocked:
             out.append({
                 "topic": "blocked_work", "weight": 1,
-                "text": f"{blocked} task(s) are parked because nobody covers their skills — whoever plans hiring should hear that.",
+                "text": f"{blocked} task(s) are parked because nobody covers their skills, whoever plans hiring should hear that.",
                 "basis": [f"blocked_count:{blocked}"],
             })
         struggling = (await s.scalars(select(Agent).where(
@@ -57,7 +57,7 @@ async def seeds(project_id: str) -> list[dict]:
         for a in struggling[:2]:
             out.append({
                 "topic": "struggling_agent", "weight": 1,
-                "text": f"{a.name} is on {a.state} — keep it between us, but that's telling.",
+                "text": f"{a.name} is on {a.state}, keep it between us, but that's telling.",
                 "basis": [f"agent:{a.id}", f"state:{a.state}"],
             })
     if len(out) > 4:

@@ -107,7 +107,7 @@ describe('scene projection', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
-  it('survives a JSON round trip — it is meant to cross the wire', () => {
+  it('survives a JSON round trip, it is meant to cross the wire', () => {
     const scene = project({ a1: act('typing'), a3: act('blocked') });
     expect(JSON.parse(JSON.stringify(scene))).toEqual(scene);
   });

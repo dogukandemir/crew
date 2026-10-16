@@ -11,7 +11,7 @@ from crew import CONTRACT_VERSION, __version__
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="crew", description="Crew — autonomous agent organization platform")
+    p = argparse.ArgumentParser(prog="crew", description="Crew: autonomous agent organization platform")
     p.add_argument("--version", action="version", version=f"crew {__version__} (contract {CONTRACT_VERSION})")
     sub = p.add_subparsers(dest="cmd")
 

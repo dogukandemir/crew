@@ -4,7 +4,7 @@
  * This is the single seam between "the domain" and "something that draws it".
  * Today it composes pure functions from `src/sim` in the browser. When the
  * office runs in the cloud, the *same* composition moves to a scene worker and
- * this hook becomes a subscription to a `SceneState` stream instead — nothing in
+ * this hook becomes a subscription to a `SceneState` stream instead, nothing in
  * the renderer changes. See docs/13.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';

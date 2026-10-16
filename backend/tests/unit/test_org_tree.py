@@ -1,4 +1,4 @@
-"""org_tree serves the rooted tree the renderer walks — squads included.
+"""org_tree serves the rooted tree the renderer walks, squads included.
 
 The fresh-clone audit found the endpoint serving a flat shape the UI never read; the
 first re-run then crashed on Squads (no spend column). This test walks the tree with
@@ -65,7 +65,7 @@ async def test_org_tree_is_a_rooted_tree_with_squads(bound_loop, project):
 @pytest.mark.asyncio
 async def test_a_project_with_nothing_on_it_still_serves_the_tree(bound_loop, project):
     """No departments, no squads, no tasks: the tree is just the project and its
-    orchestrator — every node present, nothing invented."""
+    orchestrator, every node present, nothing invented."""
     d = await org.org_tree(project["id"])
     assert d["root"]["kind"] == "project"
     kids = d["root"]["children"]

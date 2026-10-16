@@ -3,7 +3,7 @@
  *
  * Every wall, desk, chair and monitor is a **volume**: a lit top face plus two
  * shaded side faces built by `iso.ts`. Verticals stay vertical, so people stand
- * up — the failure mode of the previous version, where a tilted 3D plane squashed
+ * up, the failure mode of the previous version, where a tilted 3D plane squashed
  * the vertical axis and made everyone look like they were lying on the floor.
  *
  * Order is painter's order: the earth slab, then the floor and walkways, then the
@@ -72,8 +72,8 @@ const PAD = 46;
 /**
  * The lab bench's worktop height, in world units.
  *
- * Stated here as well as in the atlas generator — `props/lab.ts` draws the worktop at 0.92 m
- * — because a thing standing ON the bench needs it, and the atlas does not carry a
+ * Stated here as well as in the atlas generator, `props/lab.ts` draws the worktop at 0.92 m
+ *, because a thing standing ON the bench needs it, and the atlas does not carry a
  * height per entry. It is in the audit's open list: the honest fix is a `height`
  * field in the manifest, so the two cannot drift.
  */
@@ -82,7 +82,7 @@ const LAB_BENCH_TOP = mh(0.92);
 /**
  * How tall a person is, in world units, at the atlas's own scale.
  *
- * Derived the way every sprite is: 40 px of figure at `SPRITE_UNIT` — 1.67 m. It
+ * Derived the way every sprite is: 40 px of figure at `SPRITE_UNIT`, 1.67 m. It
  * used to be `mh(1.5) × 100 / 92`, a number inherited from the hand-drawn vector
  * rig the atlas replaced, which the character sprite then divided by 40 and
  * multiplied by a view factor, drawing people 0.56 m tall beside full-size desks.
@@ -127,7 +127,7 @@ const clampText = (t: string, max = ROW_CHARS) => (t.length > max ? `${t.slice(0
  * The board's own layout: one stack of lines, one plate measured around them.
  *
  * The status lines used to be drawn AT the plate's bottom edge with no width of
- * their own — "3 seats · 2 working · 1 stuck" ran wider than the board it belonged
+ * their own, "3 seats · 2 working · 1 stuck" ran wider than the board it belonged
  * to, so it hung out over both sides and through the edge, and a department's
  * mission collided with it from above. A line is a row now: the plate's width is
  * the widest row's, its height is the stack's, and no row can leave the plate
@@ -216,7 +216,7 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
       )}
 
       {/* The seats / shipped lines live INSIDE the board now, laid out with the name
-          by `signLayout` — drawn at the plate's edge they overhung it. */}
+          by `signLayout`, drawn at the plate's edge they overhung it. */}
     </g>
   );
 }
@@ -275,7 +275,7 @@ function RoomShell({ room, focused, newRoom }: { room: Room; focused: boolean; n
  *
  * The ties are far apart and the lines thin on purpose. At a tie every 30 units
  * across a 22-unit-wide path this was a ladder over the whole corridor network, and
- * a floor covered in ladder reads as clutter long before it reads as a conveyor —
+ * a floor covered in ladder reads as clutter long before it reads as a conveyor,
  * the concept is a floor that moves work around, not one that shouts about it.
  */
 function Conveyor({ from, to, half = 11, tie = 96 }: { from: { x: number; y: number }; to: { x: number; y: number }; half?: number; tie?: number }) {
@@ -322,7 +322,7 @@ interface Drawable {
    * World x + y of the thing's base.
    *
    * The projection is linear in both, so this orders things exactly as the screen
-   * does — larger is nearer — which means a prop and a person can be compared
+   * does, larger is nearer, which means a prop and a person can be compared
    * without either of them knowing the other exists.
    */
   depth: number;
@@ -334,7 +334,7 @@ interface Drawable {
  *
  * Returning a LIST rather than nesting JSX is the whole point: these are drawn in
  * one order together with the people, sorted by position. A room used to be a group
- * — everything inside it painted as a unit — and that is what made somebody walking
+ *, everything inside it painted as a unit, and that is what made somebody walking
  * behind a department paint over its furniture. At group granularity there is no
  * answer to "is this person in front of that desk or behind it"; per thing there is.
  */
@@ -364,9 +364,9 @@ function roomItems(
       const deskX = room.x + desk.x;
       const deskY = room.y + desk.y;
       const act = activities[desk.agentId];
-      // Lit only when its owner is sitting at THIS desk, working — see `deskInUse`
+      // Lit only when its owner is sitting at THIS desk, working, see `deskInUse`
       // for why activity alone was the wrong question. `moving` matters because the
-      // target says "seated" the moment somebody is ON THEIR WAY to a seat — after
+      // target says "seated" the moment somebody is ON THEIR WAY to a seat, after
       // the floor re-grids, that walk can be long, and a screen burning over an
       // empty chair for the length of it is the same lie in miniature.
       const busy = deskInUse(
@@ -382,7 +382,7 @@ function roomItems(
         <g key={`desk-${desk.agentId}`} data-desk={desk.agentId} data-busy={busy ? '1' : '0'}>
           {/* The bay this desk sits in: ONE partition, at the desk's left, which is
               what makes one place end and the next begin. Two per desk read as a
-              room full of panels — bays are a run, not a cage. */}
+              room full of panels, bays are a run, not a cage. */}
           <Partition at={{ x: deskX - 14, y: deskY + mh(0.4) }} />
           <Workstation
             x={deskX}
@@ -394,7 +394,7 @@ function roomItems(
         </g>,
       );
     }
-    // Dressing, in the room's header strip — the band `roomSize()` reserves above
+    // Dressing, in the room's header strip, the band `roomSize()` reserves above
     // the first row of desks for exactly this. In the room's corner it stood inside
     // the desk grid: a plant drawn through the workstation of whoever had the last
     // bay, which is what a green mass on top of a desk is.
@@ -407,7 +407,7 @@ function roomItems(
     // Every placement here is derived from a footprint in the manifest, and that is
     // not tidiness: the room is 2.1 m of usable depth, the fume hood is 1 m and the
     // bench 0.7 m. At the y they used to have, the hood's own footprint ran 0.67 m
-    // into the bench — which is what a bench disappearing under a tall cabinet is.
+    // into the bench, which is what a bench disappearing under a tall cabinet is.
     const hood = spriteFootprint('prop.fumehood');
     const benchFoot = spriteFootprint('prop.labbench');
     const hoodD = hood?.b ?? UNITS_PER_METRE;
@@ -423,7 +423,7 @@ function roomItems(
     at(`${room.id}-hood`, room.x + 18, hoodY, <AtlasSprite key={`${room.id}-hood`} name="prop.fumehood" x={room.x + 18} y={hoodY} />);
     at(`${room.id}-shelf`, room.x + room.w - 40, room.y + 30, <AtlasSprite key={`${room.id}-shelf`} name="prop.bottleshelf" x={room.x + room.w - 40} y={room.y + 30} />);
     // TILED, not stretched. `scaleForWidth` scales both axes, so asking the 2 m bench
-    // to span this room drew a 1.7 m tall pale slab — the brightest object on the
+    // to span this room drew a 1.7 m tall pale slab, the brightest object on the
     // floor, in a dark office. Copies of the art stay a bench at every room width, and
     // one tile per stool means the stools still line a bench rather than the floor.
     const benchRun = spriteTiles('prop.labbench', benchW);
@@ -434,7 +434,7 @@ function roomItems(
     }
     // Gear stands ON the bench, which is what the anchor's `z` is for: the worktop's
     // height, at a point on the worktop. Drawn on the floor it was a microscope
-    // hovering at the cupboard doors — and placed off the run it floats in the air.
+    // hovering at the cupboard doors, and placed off the run it floats in the air.
     const benchRight = benchLeft + benchRun.span;
     at(`${room.id}-scope`, benchLeft + 44, benchY + mh(0.25), <AtlasSprite key={`${room.id}-scope`} name="prop.microscope" x={benchLeft + 44} y={benchY + mh(0.25)} z={LAB_BENCH_TOP} />);
     at(`${room.id}-centrifuge`, benchRight - 26, benchY + mh(0.3), <AtlasSprite key={`${room.id}-centrifuge`} name="prop.centrifuge" x={benchRight - 26} y={benchY + mh(0.3)} z={LAB_BENCH_TOP} />);
@@ -451,7 +451,7 @@ function roomItems(
 
   if (room.kind === 'meeting') {
     // The table and its eight chairs come from ONE derivation the simulation also
-    // seats people with — `meetingLayout` — so a chair and its sitter cannot drift
+    // seats people with, `meetingLayout`, so a chair and its sitter cannot drift
     // apart. The table is drawn at its art's own size: the room was sized FOR it.
     const layout = meetingLayout(room);
     at(
@@ -577,17 +577,17 @@ function Sprite({
       onKeyDown={event => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onSelect(); }
       }}
-      aria-label={`${agent.name} — ${agent.role ?? 'agent'} — ${activity.note}`}
+      aria-label={`${agent.name}, ${agent.role ?? 'agent'}, ${activity.note}`}
     >
-      <title>{`${agent.name}${agent.grade !== undefined ? ` · G${agent.grade}` : ''} — ${
+      <title>{`${agent.name}${agent.grade !== undefined ? ` · G${agent.grade}` : ''}, ${
         agent.role ?? 'agent'
       }\n${activity.note}${reason ? `\n${reason}` : ''}\nclick for thinking & output`}</title>
 
       <ellipse className="sprite-shadow" cx={0} cy={0} rx={CHAR_W * 0.34} ry={CHAR_W * 0.17} />
       {selected && <ellipse className="sprite-ring" cx={0} cy={0} rx={CHAR_W * 0.46} ry={CHAR_W * 0.23} />}
 
-      {/* SpriteCharacter draws with the figure's feet on its OWN origin — the anchor
-          is the pixel that touches the floor — so this group must not carry the
+      {/* SpriteCharacter draws with the figure's feet on its OWN origin, the anchor
+          is the pixel that touches the floor, so this group must not carry the
           vector rig's offsets. It carried both, from when the figure was drawn from
           its top-left corner inside a 24×40 view: half the sprite's width across and
           FEET_Y up, which left every person walking half a metre above the floor.
@@ -609,7 +609,7 @@ function Sprite({
         {agent.name}
       </text>
 
-      {/* One bubble, revealed by content — see SpeechBubble for why it is a component. */}
+      {/* One bubble, revealed by content, see SpeechBubble for why it is a component. */}
       {(speech || activity.bubble) && (
         <SpeechBubble
           speech={speech}
@@ -750,7 +750,7 @@ export function OfficeScene({
    * Room furniture and people together: a desk and the person walking behind it have
    * to be compared with each other, and the only thing that can compare them is a
    * list that contains both. The people's depths come from the last walk-loop frame,
-   * and the loop keeps the DOM in order between renders — React never sees a walker
+   * and the loop keeps the DOM in order between renders, React never sees a walker
    * move, because positions are written straight to the elements.
    */
   const drawables = useMemo(() => {
@@ -799,7 +799,7 @@ export function OfficeScene({
 
   // Hysteresis, not a threshold. Tags and bubbles are hidden when the floor is far
   // away, and with a single cut-off they blink on and off while the reader sits right
-  // on it — the second flicker this scene had. The state is sticky until the zoom is
+  // on it, the second flicker this scene had. The state is sticky until the zoom is
   // clearly on the other side, so nothing blinks at the boundary.
   const farRef = useRef(camera.scale < 0.4);
   if (camera.scale < 0.38) farRef.current = true;
@@ -826,7 +826,7 @@ export function OfficeScene({
       </defs>
 
       <g transform={`translate(${camera.x.toFixed(2)} ${camera.y.toFixed(2)}) scale(${camera.scale.toFixed(3)})`}>
-        {/* The ground, as a slab with an edge — the building sits in space. */}
+        {/* The ground, as a slab with an edge, the building sits in space. */}
         <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).front} fill="#080b11" />
         <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).right} fill="#0b0f16" />
         <polygon points={floorRect(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB)} fill="#0a0d14" />
@@ -917,7 +917,7 @@ export function OfficeScene({
         ))}
 
         {/* Somebody working in another department: the route they took, ON THE FLOOR.
-            This was a quadratic curve arcing over the furniture — which is a cable
+            This was a quadratic curve arcing over the furniture, which is a cable
             between two rooms, not a walk. It is now the same polyline the walker
             actually follows, corridor corner by corridor corner, projected tile by
             tile and laid a hair above the floor. */}

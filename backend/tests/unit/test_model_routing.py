@@ -1,4 +1,4 @@
-"""DeepSeek V4 routing (docs/04 §2): current model ids, peak prices, and reasoning_effort —
+"""DeepSeek V4 routing (docs/04 §2): current model ids, peak prices, and reasoning_effort,
 after V4, thinking is a request parameter, not a separate model."""
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def test_defaults_are_v4_not_the_retired_names():
 
 
 def test_prices_follow_the_provider_page():
-    # peak, cache-miss rates — the budget guard errs conservative
+    # peak, cache-miss rates, the budget guard errs conservative
     assert router.price("deepseek/deepseek-flash") == (0.30, 1.20)
     assert router.price("deepseek/deepseek-v4-pro") == (1.32, 3.96)
     with pytest.raises(ValueError, match="No price configured"):

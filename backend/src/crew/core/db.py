@@ -139,7 +139,7 @@ async def init_db(create_all: bool | None = None) -> None:
 
 
 def _add_missing_columns(sync_conn) -> None:
-    """SQLite dev DBs predate columns the models grew (ADR 0004: dev schema is disposable —
+    """SQLite dev DBs predate columns the models grew (ADR 0004: dev schema is disposable,
     but a running dev database should not have to be). ADD COLUMN is the one ALTER SQLite
     does cheaply, and the columns below are exactly the nullable-defaulted safe kind.
     """

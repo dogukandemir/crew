@@ -61,7 +61,7 @@ async def test_ask_colleague_is_delivered_and_answered(bound_loop, project):
     assert "Ada" in open_qs[0]["from"]
 
     await inbox.deliver(project["id"], sender=bo_twin, handle="Ada",
-                        text="Checked — the totals are right.", task_id="t-2", kind="reply",
+                        text="Checked, the totals are right.", task_id="t-2", kind="reply",
                         reply_to=open_qs[0]["id"])
     assert await inbox.open_questions(project["id"], bo_id) == [], "the question is answered"
     answers = await inbox.replies_for(project["id"], ada_twin.id)
@@ -138,7 +138,7 @@ async def test_a_requested_decision_convenes_a_real_council(bound_loop, project)
 @pytest.mark.asyncio
 async def test_escalate_tool_persists_where_it_went(tool_context, bound_loop, project):
     """Escalating is a fact about the task: reason + escalated_to are written, not just
-    emitted — the API has served that field all along (docs/17 batch 3)."""
+    emitted, the API has served that field all along (docs/17 batch 3)."""
     async with session_scope() as s:
         lead = await _agent(s, project["id"], "Lead", role="lead")
         worker = await _agent(s, project["id"], "Escalator", manager_id=lead.id,

@@ -65,7 +65,7 @@ describe('the HQ scene model', () => {
     expect(BOARD_TABLE.seats).toContainEqual(chairStage?.at);
   });
 
-  it('a session that has been decided is over — nobody is staged', () => {
+  it('a session that has been decided is over, nobody is staged', () => {
     const w = buildHqWorld(
       fixture([
         { type: 'board.convened', at: iso(900), project_id: 'co1', payload: { topic: 'old' } },

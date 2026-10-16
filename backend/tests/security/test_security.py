@@ -1,4 +1,4 @@
-"""Security tests — the docs/08 §11 suite (the parts that don't need network or docker)."""
+"""Security tests, the docs/08 §11 suite (the parts that don't need network or docker)."""
 
 from __future__ import annotations
 
@@ -208,7 +208,7 @@ def test_no_actor_deny_list_and_empty_host_are_denied(fake_agent, fake_project):
 
 def test_autonomous_agent_passes_the_supervised_gate(fake_agent, fake_project):
     """Closes: `autonomy == SUPERVISED and cap in SUPERVISED_FORBIDDEN` swapped to `or`
-    — an autonomous agent with a forbidden-to-supervised tool is NOT gated."""
+  an autonomous agent with a forbidden-to-supervised tool is NOT gated."""
     a = fake_agent(role="lead", grade=Grade.MID, tools=[Capability.SHELL_SANDBOX.value],
                    autonomy="autonomous")
     assert policy.check(agent=a, capability=Capability.SHELL_SANDBOX,
@@ -465,7 +465,7 @@ def test_uuid_hint_is_a_fresh_hex_stub():
 
 
 def test_canonical_form_ignores_key_order():
-    """Closes: _canonical's sort_keys swapped off — the hash chain must canonicalise
+    """Closes: _canonical's sort_keys swapped off, the hash chain must canonicalise
     order-independent bodies, or the same entry rewritten in a different key order
     hashes differently."""
     a = security_mod._canonical({"b": 1, "a": [2, {"d": 4, "c": 3}]})
@@ -474,7 +474,7 @@ def test_canonical_form_ignores_key_order():
 
 
 def test_iso_is_a_real_canonical_utc_stamp():
-    """Closes: _iso returning None — the chain body would say ts: null forever."""
+    """Closes: _iso returning None, the chain body would say ts: null forever."""
     from datetime import UTC, datetime
 
     aware = security_mod._iso(datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC))
@@ -506,7 +506,7 @@ def test_a_cap_above_the_hard_ceiling_is_clamped():
 
 
 def test_approval_request_audits_the_agent_as_actor():
-    """Closes: the `agent_id or ""` fallback — swapped to `and` the audit loses who
+    """Closes: the `agent_id or ""` fallback, swapped to `and` the audit loses who
     filed the approval (the trail must name the requester)."""
     from crew.core.models import AuditLog
     from crew.core.security import request_approval

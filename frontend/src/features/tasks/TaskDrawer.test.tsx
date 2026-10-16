@@ -24,7 +24,7 @@ const TASK = {
   tokens_out: 200,
   acceptance_criteria: ['Lists at least signup and punch flow.'],
   depends_on: [],
-  // The real backend ships weighted skill refs (docs/03 §1) — an object here once
+  // The real backend ships weighted skill refs (docs/03 §1), an object here once
   // crashed the whole screen ("Objects are not valid as a React child").
   required_skills: [{ skill: 'critical-review', weight: 0.5 }, { skill: 'technical-writing' }],
 };
@@ -66,7 +66,7 @@ it('still renders legacy plain-string skills', async () => {
   expect(await screen.findByText('analytics')).toBeTruthy();
 });
 
-it('renders reward rows even when a payload omits the id — no key warning', async () => {
+it('renders reward rows even when a payload omits the id, no key warning', async () => {
   // The live console showed "Each child in a list should have a unique key prop"
   // because reward rows shipped {agent_id, role, reward} without their id.
   const spy = vi.spyOn(console, 'error').mockImplementation(() => {});

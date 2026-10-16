@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 26
       # setup-uv stopped publishing floating major tags after v5 (only exact x.y.z since
-      # v6) — `@v10` does not resolve on a runner. Pin the exact release.
+      # v6), `@v10` does not resolve on a runner. Pin the exact release.
       - uses: astral-sh/setup-uv@v10.3.0
         with:
           version: '0.13.0'
@@ -38,25 +38,25 @@ jobs:
         working-directory: backend
         run: uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements-audit.txt
       # Reviewed, version-bounded exception (docs/DEPENDENCIES.md §Outstanding Chroma
-      # advisories). CrewAI imports Chroma eagerly — `crewai.agent.core` →
-      # `rag.embeddings.providers.openai.openai_provider` → `chromadb.utils…` — so the
+      # advisories). CrewAI imports Chroma eagerly, `crewai.agent.core` →
+      # `rag.embeddings.providers.openai.openai_provider` → `chromadb.utils…`, so the
       # package cannot be removed, and all four advisories are still unpatched upstream.
       # They are excepted BY ID, on the record: anything else still fails this gate, and
       # the guard below expires the exception the moment the pinned Chroma moves.
       # A second reviewed, version-bounded exception covers CVE-2026-59951 in mcp
       # (docs/DEPENDENCIES.md §Outstanding mcp advisory): CrewAI pins `mcp~=1.28.1`
       # (still true on 1.15.28, checked 16 October 2026), the fixed line starts at
-      # 1.30.0, and no app code imports or serves mcp — the advisory needs an MCP
+      # 1.30.0, and no app code imports or serves mcp, the advisory needs an MCP
       # streamable-HTTP server reachable by untrusted callers, which Crew never starts.
       - name: Known-advisory exception is still current
         if: always()
         working-directory: backend
         run: |
           grep -q '^chromadb==1.5.9' requirements-audit.txt || {
-            echo "::error::chromadb is no longer pinned at 1.5.9 — re-review the four Chroma advisories in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
+            echo "::error::chromadb is no longer pinned at 1.5.9, re-review the four Chroma advisories in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
           grep -q '^mcp==1.28.1' requirements-audit.txt || {
-            echo "::error::mcp is no longer pinned at 1.28.1 — re-review CVE-2026-59951 in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
-      - name: Backend audit — raw record (evidence; never fails the gate)
+            echo "::error::mcp is no longer pinned at 1.28.1, re-review CVE-2026-59951 in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
+      - name: Backend audit, raw record (evidence; never fails the gate)
         if: always()
         continue-on-error: true
         working-directory: backend

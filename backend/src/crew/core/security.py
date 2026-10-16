@@ -65,7 +65,7 @@ PRIVATE_HOST_RE = re.compile(
     re.IGNORECASE,
 )
 
-# conservative injection heuristics — a signal, never the only defence (docs/08 §6)
+# conservative injection heuristics: a signal, never the only defence (docs/08 §6)
 INJECTION_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"ignore (all )?(previous|prior|above) (instructions|prompts)", "override-instructions"),
     (r"disregard (your|the) (system|previous) (prompt|instructions)", "override-instructions"),
@@ -230,7 +230,7 @@ class CredentialVault:
                     raise ValueError(
                         f"a secret named {name!r} already exists in scope "
                         f"{existing.scope_kind}/{existing.scope_id or '-'}; it is never silently "
-                        f"re-scoped or overwritten — pick another name or rotate it in place")
+                        f"re-scoped or overwritten, pick another name or rotate it in place")
                 existing.ciphertext, existing.sha256, existing.aad = ct, digest, aad.decode()
                 existing.rotated_at = datetime.now(UTC)
                 sid = existing.id
@@ -264,7 +264,7 @@ class CredentialVault:
                 lease_id = None
         if lease_id is not None:
             # docs/08 §9: every secret lease is on the record, not only in the mutable
-            # events table — the audit chain is the evidence trail for releases.
+            # events table, the audit chain is the evidence trail for releases.
             await audit(actor_kind="agent", actor_id=agent_id or "", action="secret.leased",
                         resource_kind="secret", resource_id=lease_id,
                         reason=capability or "inject")
@@ -782,7 +782,7 @@ async def approval_granted(project_id: str, *, agent_id: str | None, capability:
                            task_id: str | None, invocation: dict | None = None) -> bool:
     """Is there a GRANTED approval that covers this call?
 
-    `policy.check` will keep answering "requires human approval" — that is correct; what
+    `policy.check` will keep answering "requires human approval", that is correct; what
     was missing is the other half: nothing ever CONSUMED a grant, so approving a request
     was recorded and then ignored, and the retried call was denied forever. A grant
     covers one agent and one capability, scoped to the task it was requested for, or to

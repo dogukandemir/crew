@@ -8,7 +8,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
  * it turns "the app is gone" into "this screen broke, here is what it said".
  *
  * It catches render, constructor and lifecycle errors in the tree below it. It does NOT
- * catch work that happens later — promises, event handlers, the office's animation loop —
+ * catch work that happens later, promises, event handlers, the office's animation loop,
  * which each need their own handling; the API client already classifies its own failures.
  */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; info: ErrorInfo | null }> {

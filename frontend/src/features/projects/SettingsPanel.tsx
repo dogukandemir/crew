@@ -189,7 +189,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           />
           <Toggle
             label="Require human verification"
-            hint="a verdict of pass is not enough — a human must sign off"
+            hint="a verdict of pass is not enough, a human must sign off"
             checked={settings.require_human_verification}
             onChange={(v) => setSettings((s) => ({ ...s, require_human_verification: v }))}
           />
@@ -197,7 +197,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
 
         <Section
           title="Operating cadence"
-          description="Let the company keep working after a run finishes — the answer to a floor that goes idle."
+          description="Let the company keep working after a run finishes, the answer to a floor that goes idle."
         >
           <Toggle
             label="Continue automatically"
@@ -295,7 +295,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
 
         <Section
           title="Command allowlist"
-          description="Standing approvals: risky commands you chose to “Always allow” run without asking. Revoking closes the door again — every change is audited."
+          description="Standing approvals: risky commands you chose to “Always allow” run without asking. Revoking closes the door again, every change is audited."
         >
           <CommandAllowlist projectId={projectId} />
         </Section>
@@ -307,7 +307,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           <CapabilityAllowlist projectId={projectId} />
         </Section>
 
-        <Section title="Model tier mapping" description="Which provider and model each capability tier resolves to — providers are connected at onboarding.">
+        <Section title="Model tier mapping" description="Which provider and model each capability tier resolves to, providers are connected at onboarding.">
           <div className="grid gap-2 sm:grid-cols-2">
             {TIERS.map((tier) => (
               <Field key={tier} label={tier}>
@@ -386,7 +386,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
   );
 }
 
-/** Standing TOOL approvals ("⚡ Always allow" on a tool gate): capability + agent,
+/** Standing TOOL approvals ("Always allow" on a tool gate): capability + agent,
  * revocable, audited. Hard gates (delete/push/post) never appear here. */
 function CapabilityAllowlist({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
@@ -404,7 +404,7 @@ function CapabilityAllowlist({ projectId }: { projectId: string }) {
   const revoke = useMutation({
     mutationFn: (id: string) => api.revokeCapabilityAllow(id, 'revoked from settings'),
     onSuccess: () => {
-      setToast({ kind: 'success', message: 'Standing tool approval revoked — it will ask again.' });
+      setToast({ kind: 'success', message: 'Standing tool approval revoked, it will ask again.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'capability-allows'] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
@@ -417,7 +417,7 @@ function CapabilityAllowlist({ projectId }: { projectId: string }) {
     return (
       <p className="text-xs text-slate-500">
         Nothing on the list. When a gated tool is approved with “Always allow”, the capability
-        lands here — audited and revocable.
+        lands here, audited and revocable.
       </p>
     );
   }
@@ -432,7 +432,7 @@ function CapabilityAllowlist({ projectId }: { projectId: string }) {
           <span className="min-w-0 flex-1 truncate text-[11px] text-slate-400">
             {a.agent_id ? (nameById.get(a.agent_id) ?? a.agent_id) : 'any agent'}
           </span>
-          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? '—'}</span>
+          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? 'n/a'}</span>
           <Button size="xs" variant="danger" loading={revoke.isPending} onClick={() => revoke.mutate(a.id)}>
             Revoke
           </Button>
@@ -454,7 +454,7 @@ function CommandAllowlist({ projectId }: { projectId: string }) {
   const revoke = useMutation({
     mutationFn: (id: string) => api.revokeCommandAllow(id, 'revoked from settings'),
     onSuccess: () => {
-      setToast({ kind: 'success', message: 'Allow entry revoked — the command will ask again.' });
+      setToast({ kind: 'success', message: 'Allow entry revoked, the command will ask again.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'command-allows'] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
@@ -466,7 +466,7 @@ function CommandAllowlist({ projectId }: { projectId: string }) {
   if (items.length === 0) {
     return (
       <p className="text-xs text-slate-500">
-        Nothing on the list. When a risky command is approved with “Always allow”, it lands here —
+        Nothing on the list. When a risky command is approved with “Always allow”, it lands here,
         audited and revocable.
       </p>
     );
@@ -481,7 +481,7 @@ function CommandAllowlist({ projectId }: { projectId: string }) {
           <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-slate-300" title={a.command}>
             {a.command}
           </code>
-          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? '—'}</span>
+          <span className="shrink-0 text-[10px] text-slate-500">{a.created_by ?? 'n/a'}</span>
           <Button size="xs" variant="danger" loading={revoke.isPending} onClick={() => revoke.mutate(a.id)}>
             Revoke
           </Button>

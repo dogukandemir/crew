@@ -10,7 +10,7 @@ import { animateFrames } from '../../app/animation';
  * Identity is by name-hash into the atlas's 64 looks. The vector `lookFor` can
  * express far more combinations than a fixed atlas can carry; the trade is that the
  * atlas cannot be arbitrary, so a look is a *member of a cast* rather than a
- * formula. It is still deterministic per agent — the same person every session.
+ * formula. It is still deterministic per agent, the same person every session.
  *
  * The rAF loop writes the cell's x/y/width/height attributes directly, the same way
  * the SVG rig wrote limb rotations: React does not re-render for animation, and a
@@ -30,7 +30,7 @@ export interface SpriteMotion {
   speed: number;
   /**
    * Where the walker is, in floor units. Written by the walk loop, read by the
-   * scene to order things by position — the one thing about a person that React
+   * scene to order things by position, the one thing about a person that React
    * never sees, because moving is written straight to the elements.
    */
   x: number;
@@ -47,11 +47,11 @@ export interface SpriteMotionRef {
 const STRIDE = 0.22;
 
 /**
- * Which atlas cell a figure shows — the floor's one rule about faces.
+ * Which atlas cell a figure shows, the floor's one rule about faces.
  *
  * Only somebody WORKING at their own desk faces it: you see their back, which is
- * what sitting at a monitor looks like. Everybody else sits facing the room —
- * idle, thinking, blocked, waiting, talking, in a meeting — and anyone on their
+ * what sitting at a monitor looks like. Everybody else sits facing the room,
+ * idle, thinking, blocked, waiting, talking, in a meeting, and anyone on their
  * feet faces the camera, walkers included. A back turned all day is exactly what
  * "some characters look permanently turned away" was.
  *
@@ -112,7 +112,7 @@ export function SpriteCharacter({
       // review table keeps that activity after it arrives. Only real movement
       // plays the walk cycle, exactly as the rig did.
       //
-      // Which way the figure faces, and in what pose, is one rule — see figureCell.
+      // Which way the figure faces, and in what pose, is one rule, see figureCell.
       const { face, pose } = figureCell(activity, mov.seated ?? atDesk, !reducedMotion && mov.moving, phase);
       const e = cell(face, pose) ?? cell('front', 'stand');
       const k = SPRITE_UNIT * spriteScaleFactor();
@@ -122,7 +122,7 @@ export function SpriteCharacter({
         // The cell is drawn in the caller's local space with the feet on the
         // origin, at EXACTLY the sprite factor every prop uses. There is no second
         // rule for people: this used to take a `height` from its caller and divide
-        // it by 40, so a figure was drawn 40 units tall — 0.56 m — while the desk
+        // it by 40, so a figure was drawn 40 units tall, 0.56 m, while the desk
         // beside it was drawn from the other factor entirely. One rule, one atlas,
         // one metre. See Sprite.tsx.
         const x0 = -e.ax * k;
@@ -142,7 +142,7 @@ export function SpriteCharacter({
       const facing = mov.facing < 0 ? -1 : 1;
       if (mirror.current && mirrored !== facing) {
         mirrored = facing;
-        // Mirror about the figure's own centre — the local origin. Mirroring the
+        // Mirror about the figure's own centre, the local origin. Mirroring the
         // caller's group would flip the name tag and the bubble with it.
         mirror.current.setAttribute('transform', `scale(${mov.facing < 0 ? -1 : 1} 1)`);
       }

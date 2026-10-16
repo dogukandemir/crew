@@ -10,8 +10,8 @@ import { useUi } from '../../stores/ui';
 import { VERDICT_TONE } from './verdict';
 
 /**
- * The company's portfolio (ADR 0015): every member project as a card — verdict,
- * books, teams — and the door to its office. New projects are born HERE, under the
+ * The company's portfolio (ADR 0015): every member project as a card, verdict,
+ * books, teams, and the door to its office. New projects are born HERE, under the
  * company, so the report chain (orchestrator → CEO) exists from their first breath.
  * Everything shown cites the member's own stream; nothing is invented.
  */
@@ -47,7 +47,7 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
 
       {d.projects.length === 0 && (
         <div className="rounded border border-dashed border-slate-700/70 p-6 text-center text-xs text-slate-500">
-          No projects yet — every project born here reports up to {d.company.name}&apos;s CEO.
+          No projects yet, every project born here reports up to {d.company.name}&apos;s CEO.
         </div>
       )}
 
@@ -89,7 +89,7 @@ export function CompanyProjects({ companyId }: { companyId: string }) {
                 <span
                   key={t.id}
                   className="rounded border border-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400"
-                  title={`${t.name}${t.head_name ? ` — led by ${t.head_name}` : ''}`}
+                  title={`${t.name}${t.head_name ? `, led by ${t.head_name}` : ''}`}
                 >
                   {t.name}
                   {t.head_name ? ` · ${t.head_name}` : ''} · {t.agents}

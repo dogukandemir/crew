@@ -1,4 +1,4 @@
-# 05 — Reward & Performance
+# 05: Reward & Performance
 
 The reward system is what turns "a bunch of agents" into an organization with incentives. It
 must be **verifiable** (not self-reported), **local** (per task, per skill), and
@@ -18,7 +18,7 @@ verifier.
 | Orchestrator | 0.10 | allocated the budget/plan (shared across the run) |
 
 Shares are normalized per task so the sum ≈ 1.0. Managerial shares are **damped by the
-verdict** — a lead gets nothing extra for a task that failed, and takes a small penalty if
+verdict**, a lead gets nothing extra for a task that failed, and takes a small penalty if
 its squad's failure rate exceeds the running average (accountability for your people).
 
 ## 2. The reward value
@@ -105,7 +105,7 @@ prompt: a Trainee physically cannot call `net.post` regardless of what its promp
 The UI exposes: project leaderboard (agents by score with grade, cost, success rate),
 department rollups, "most improved", "at risk" (probation list), and a **reward ledger** per
 agent (every event, with the task, verdict, components, and the prompt/context hash used).
-Every score is traceable to the events that produced it — no opaque numbers.
+Every score is traceable to the events that produced it, no opaque numbers.
 
 ## 8. Settlement mechanics
 

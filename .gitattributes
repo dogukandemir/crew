@@ -1,4 +1,4 @@
-# Every text file is LF — in the repository and in checkouts alike — so a Windows
+# Every text file is LF: in the repository and in checkouts alike, so a Windows
 # developer stops seeing "LF will be replaced by CRLF" churn and diffs stay honest.
 * text=auto eol=lf
 

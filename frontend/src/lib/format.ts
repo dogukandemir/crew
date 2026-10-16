@@ -1,5 +1,5 @@
 /**
- * Formatters (docs/09 §3 "never lie": unknown renders as "—").
+ * Formatters (docs/09 §3 "never lie": unknown renders as "n/a").
  *
  * Money is micro-USD integers everywhere on the wire (docs/10, docs/11 §1):
  * 1_240_000 micros === $1.24.
@@ -7,7 +7,7 @@
 
 export const MICROS_PER_USD = 1_000_000;
 
-const UNKNOWN = '—';
+const UNKNOWN = 'n/a';
 
 export function microsToUsd(micros: number | null | undefined): number {
   if (micros === null || micros === undefined || !Number.isFinite(micros)) return 0;
@@ -122,7 +122,7 @@ export function formatRelativeTime(
 /**
  * Parse an API timestamp to epoch ms. The backend sends a UTC offset on every
  * wire timestamp (core/events.utc_iso), but be defensive about old rows and
- * hand-made fixtures: a naive string (no `Z`/offset) is UTC by contract —
+ * hand-made fixtures: a naive string (no `Z`/offset) is UTC by contract,
  * `Date.parse` alone would read it as LOCAL time and shift history by the
  * machine's UTC offset (the "fresh event, 2h ago" bug).
  */

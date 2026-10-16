@@ -48,7 +48,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
       // The socket carries the live tail; the REST log backfills the history a
       // newly opened project missed, so the ticker and firehose are never
-      // misleadingly empty. Failures are silent here — a dead backend is
+      // misleadingly empty. Failures are silent here, a dead backend is
       // already reported by the reachability banner and every panel's own state.
       void api
         .listEvents(id, { limit: 500 })
@@ -69,7 +69,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     // The socket carries the live tail; where there is no socket, this slow poll of
     // the latest page IS the live tail. One page every ten seconds, ingested through
     // the same reducer (which dedupes), so it is a no-op where the socket already
-    // delivers — and where it does not, a log frozen at page-open is precisely what
+    // delivers, and where it does not, a log frozen at page-open is precisely what
     // makes live features look broken: activity hangs off it, and so does a council
     // summoning a meeting room forty seconds in.
     const polls = wanted.map((id) =>

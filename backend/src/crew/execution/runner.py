@@ -171,7 +171,7 @@ class CrewAICrewRunner:
             )
 
         crew_agent = Agent(
-            role=f"{agent.name} — {agent.role}",
+            role=f"{agent.name}, {agent.role}",
             goal=build_crewai_goal(agent.mission, req.task.title),
             backstory=build_backstory(role=agent.role, department=agent.department_name,
                                       grade=agent.grade, soul=agent.soul or None),
@@ -272,7 +272,7 @@ class FakeCrewRunner:
                      actor=f"agent:{req.agent.id}")
         # The offline runner still produces a REAL deliverable file: the deliverables
         # surface (company / department / agent scopes) must not be empty in offline
-        # mode — and a demo that points at a file which does not exist would lie.
+        # mode, and a demo that points at a file which does not exist would lie.
         if not self.fail and req.artifacts is not None:
             try:
                 self._publish_deliverable(req, text)

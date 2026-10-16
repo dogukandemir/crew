@@ -73,7 +73,7 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
       <EmptyState
         icon="◫"
         title="No org yet"
-        description="Nothing has been staffed. Start a run on Overview — the orchestrator analyses the goal, works out the capabilities it needs and hires the agents to provide them."
+        description="Nothing has been staffed. Start a run on Overview, the orchestrator analyses the goal, works out the capabilities it needs and hires the agents to provide them."
         action={
           <Button variant="primary" size="sm" onClick={() => setHireOpen(true)}>
             Hire an agent manually
@@ -213,7 +213,7 @@ function HireDialog({
         <Field label="Role (required)" hint="e.g. Market Researcher, Backend Engineer, QA Verifier">
           <Input value={role} onChange={(e) => setRole(e.target.value)} autoFocus />
         </Field>
-        <Field label="Grade" hint="0 trainee … 5 chief — a higher grade unlocks better models and bigger spend limits.">
+        <Field label="Grade" hint="0 trainee … 5 chief, a higher grade unlocks better models and bigger spend limits.">
           <Select value={grade} onChange={(e) => setGrade(e.target.value)}>
             {[0, 1, 2, 3, 4, 5].map((g) => (
               <option key={g} value={g}>
@@ -224,7 +224,7 @@ function HireDialog({
         </Field>
         <Field label="Department" hint="Leave empty and the orchestrator places it.">
           <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">— auto —</option>
+            <option value="">auto</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}

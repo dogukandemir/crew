@@ -5,7 +5,7 @@
  *  - dedupe by `seq` (a reconnect replays `since_seq`, so duplicates are normal),
  *  - monotonic ordering (seq ascending),
  *  - a bounded window (drop the oldest, count what was dropped),
- *  - gap notices ("N events skipped" — never lie),
+ *  - gap notices ("N events skipped", never lie),
  *  - client-side filtering for the Events panel.
  */
 import type {
@@ -32,7 +32,7 @@ export const SEVERITY_RANK: Record<Severity, number> = {
 export interface EventLogState {
   /** Ascending by `seq`. */
   items: EventRow[];
-  /** Highest `seq` observed — the resume cursor (docs/11 §3). */
+  /** Highest `seq` observed, the resume cursor (docs/11 §3). */
   maxSeq: number;
   gaps: WsGap[];
   /** Events evicted from the in-memory window. */

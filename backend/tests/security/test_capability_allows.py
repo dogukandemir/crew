@@ -1,4 +1,4 @@
-"""Standing tool approvals ("⚡ Always allow") — the owner's ask of 2026-10-14.
+"""Standing tool approvals ("Always allow"), the owner's ask of 2026-10-14.
 
 A human grant with `always: true` on a TOOL approval writes a capability allow for
 that agent + capability; the tool gate then stops asking until the entry is revoked.

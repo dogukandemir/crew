@@ -2,7 +2,7 @@
  * The atlas contract, as the floor renderer depends on it.
  *
  * The renderer names sprites by string, so a typo or a stale atlas is a silently
- * empty office — the worst kind of failure, because everything is "fine". These
+ * empty office, the worst kind of failure, because everything is "fine". These
  * tests fail loudly instead.
  */
 import { describe, expect, it } from 'vitest';
@@ -90,7 +90,7 @@ describe('the sprite atlas', () => {
   it('spreads names over the whole cast', () => {
     const names = Array.from({ length: 64 }, (_, i) => `agent-${i}`);
     const used = new Set(names.map(lookIndex));
-    // Not a uniform distribution test — just proof that a handful of names does
+    // Not a uniform distribution test, just proof that a handful of names does
     // not all land on the same person.
     expect(used.size).toBeGreaterThan(20);
   });
@@ -99,7 +99,7 @@ describe('the sprite atlas', () => {
     // THE number this whole layer rests on. A 1 m tile is `tilePixels` px wide and a
     // 1 m height is `heightPixelsPerMetre` px tall; for one uniform pixels→units
     // factor to place floor and height alike, the tile must be exactly twice the
-    // height-metre — a tile costs two world metres of screen width, a height-metre
+    // height-metre, a tile costs two world metres of screen width, a height-metre
     // costs one.
     //
     // These disagreed (32 against 24) for as long as the atlas existed. The renderer
@@ -111,7 +111,7 @@ describe('the sprite atlas', () => {
   });
 
   it('draws a sprite with ONE factor, so its own floor stays 2:1', () => {
-    // Two factors — one per axis — is the bug that made every desk look sheared:
+    // Two factors, one per axis, is the bug that made every desk look sheared:
     // each axis matched this world's metres, and the sprite's own 2:1 floor did not.
     expect(SPRITE_UNIT).toBeGreaterThan(0);
     const e = entry('prop.desk')!;
@@ -133,7 +133,7 @@ describe('the sprite atlas', () => {
 
   it('has a sprite family for every category the floor is built from', () => {
     // StarNet's build tools name the parts of a station: room, hallway, surface,
-    // prop, belt. This is the census that says which of them the atlas can draw —
+    // prop, belt. This is the census that says which of them the atlas can draw,
     // the question that found the lab benches still being boxes.
     const census = categoryCensus();
     expect(census.character).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ describe('the sprite atlas', () => {
     // A caller who knows where the MIDDLE of something is must step back by half a
     // footprint; for a 0.6 m chair that is 0.3 m along each axis. Derived from the
     // cell, whose footprint diamond is rounded to whole pixels, so this is within a
-    // few centimetres rather than exact — which is the point: derived, not typed.
+    // few centimetres rather than exact, which is the point: derived, not typed.
     const c = spriteCentreOffset('prop.chair');
     const halfChair = UNITS_PER_METRE * 0.3;
     expect(Math.abs(c.x - halfChair) / halfChair).toBeLessThan(0.05);
@@ -174,7 +174,7 @@ describe('the sprite atlas', () => {
   });
 
   it('tiles a prop that has to be longer than its own art, instead of stretching it', () => {
-    // The lab bench is 2 m of art. Stretched to 4 m it is 1.7 m TALL — the pale slab
+    // The lab bench is 2 m of art. Stretched to 4 m it is 1.7 m TALL, the pale slab
     // the laboratory turned into; tiled it stays a bench at any room width.
     const tile = spriteWidth('prop.labbench')!;
     const run = spriteTiles('prop.labbench', tile * 2.3);
@@ -217,7 +217,7 @@ describe('the art against the floor plan', () => {
     expect(chair.a).toBeCloseTo(0.6, 6);
     expect(chair.b).toBeCloseTo(0.6, 6);
 
-    // A desk's centre is half its footprint from its anchor — exactly, not nearly.
+    // A desk's centre is half its footprint from its anchor, exactly, not nearly.
     expect(spriteCentreOffset('prop.desk').x).toBeCloseTo((DESK_TOP_W_M * UNITS_PER_METRE) / 2, 9);
     expect(spriteCentreOffset('prop.desk').y).toBeCloseTo((DESK_TOP_D_M * UNITS_PER_METRE) / 2, 9);
   });

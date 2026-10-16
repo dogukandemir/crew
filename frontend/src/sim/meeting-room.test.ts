@@ -29,7 +29,7 @@ const org = (): OrgNode =>
     ],
   }) as OrgNode;
 
-describe('meetingLayout — the table and its eight chairs', () => {
+describe('meetingLayout, the table and its eight chairs', () => {
   const M = 104 / 1.45;
   const room = {
     x: 100,
@@ -65,7 +65,7 @@ describe('meetingLayout — the table and its eight chairs', () => {
   });
 });
 
-describe('buildOffice — a room that exists only while it is needed', () => {
+describe('buildOffice, a room that exists only while it is needed', () => {
   it('has no meeting room until a council needs one', () => {
     expect(buildOffice(org(), {}).rooms.some((r) => r.kind === 'meeting')).toBe(false);
   });
@@ -84,8 +84,8 @@ describe('buildOffice — a room that exists only while it is needed', () => {
   it('stays once built, and the sitting after it lands in the same room', () => {
     const first = buildOffice(org(), { meeting: { question: 'one' } });
     const room = first.rooms.find((r) => r.kind === 'meeting')!;
-    // The council closes: the room stays where it is — its slot is in the placement
-    // from then on — with the nameplate saying so.
+    // The council closes: the room stays where it is, its slot is in the placement
+    // from then on, with the nameplate saying so.
     const closed = buildOffice(org(), { prev: placementOf(first) });
     const kept = closed.rooms.find((r) => r.kind === 'meeting');
     expect(kept).toBeDefined();
@@ -99,7 +99,7 @@ describe('buildOffice — a room that exists only while it is needed', () => {
   });
 });
 
-describe('computeTargets — the panel meets at the table', () => {
+describe('computeTargets, the panel meets at the table', () => {
   const office = buildOffice(org(), { meeting: { question: 'ship or fold?' } });
   const meeting = { id: 'c1', question: 'ship or fold?', members: ['a1', 'a2'] };
   const targets = computeTargets({

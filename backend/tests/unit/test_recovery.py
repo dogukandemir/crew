@@ -1,4 +1,4 @@
-"""Boot-time recovery: a restart cannot keep a run in flight — the engine settles what
+"""Boot-time recovery: a restart cannot keep a run in flight, the engine settles what
 was interrupted on the record and hands the runs back to be re-driven."""
 
 from __future__ import annotations

@@ -143,16 +143,16 @@ export function TaskDrawer({
               ['id', <code className="font-mono text-[11px]">{t.id}</code>],
               ['state', t.state],
               ['assignee', t.assignee_agent_id
-                ? (nameById.get(t.assignee_agent_id) ?? t.assignee_agent_id) : '—'],
+                ? (nameById.get(t.assignee_agent_id) ?? t.assignee_agent_id) : 'n/a'],
               ['department', t.department_id
-                ? (nameById.get(t.department_id) ?? t.department_id) : '—'],
+                ? (nameById.get(t.department_id) ?? t.department_id) : 'n/a'],
               ['squad', t.assignee_squad_id
-                ? (nameById.get(t.assignee_squad_id) ?? t.assignee_squad_id) : '—'],
+                ? (nameById.get(t.assignee_squad_id) ?? t.assignee_squad_id) : 'n/a'],
               ['cost', formatMicros(t.cost_micros)],
               ['tokens', `${formatTokens(t.tokens_in)} in / ${formatTokens(t.tokens_out)} out`],
-              ['deliverable', t.deliverable ?? '—'],
-              ['escalated to', t.escalated_to ?? '—'],
-              ['escalation reason', t.escalation_reason ?? '—'],
+              ['deliverable', t.deliverable ?? 'n/a'],
+              ['escalated to', t.escalated_to ?? 'n/a'],
+              ['escalation reason', t.escalation_reason ?? 'n/a'],
             ]}
           />
 
@@ -185,7 +185,7 @@ export function TaskDrawer({
                 <span className="text-xs text-slate-500">none</span>
               ) : (
                 t.required_skills!.map((s, i) => (
-                  <Badge key={i} tone="info" title={typeof s === 'string' ? s : `weight ${s.weight ?? '—'}`}>
+                  <Badge key={i} tone="info" title={typeof s === 'string' ? s : `weight ${s.weight ?? 'n/a'}`}>
                     {skillLabel(s)}
                   </Badge>
                 ))

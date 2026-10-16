@@ -15,7 +15,7 @@ const VERDICT_TONE: Record<CompanyVerdictName, 'success' | 'warning' | 'muted' |
 };
 
 /**
- * The company strip (ADR 0009): headquarters above the projects. Optional by design —
+ * The company strip (ADR 0009): headquarters above the projects. Optional by design,
  * a backend without the company layer fails this query and the section disappears
  * rather than breaking Home.
  */
@@ -63,8 +63,8 @@ export function CompaniesSection() {
       {items.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
           None yet. A company is a headquarters that holds the portfolio: it hires a CEO, projects live
-          under it, and a review writes one binding directive — grounded in each project&apos;s own
-          numbers — into every member&apos;s stream. Use <em>Found a company</em> — the wizard creates
+          under it, and a review writes one binding directive, grounded in each project&apos;s own
+          numbers, into every member&apos;s stream. Use <em>Found a company</em>, the wizard creates
           the company, its first project and the first run in one go.
         </p>
       ) : (
@@ -90,7 +90,7 @@ export function CompaniesSection() {
                         {v.verdict.replace('_', ' ')}
                       </Badge>
                       <span className="text-slate-400">
-                        <span className="text-slate-300">{v.name}</span> — {v.directive}
+                        <span className="text-slate-300">{v.name}</span>, {v.directive}
                       </span>
                     </li>
                   ))}

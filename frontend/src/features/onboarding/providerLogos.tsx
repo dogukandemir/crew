@@ -1,5 +1,5 @@
 /* Inline brand marks for the onboarding picker (simple-icons CC0 + svgl.app for
- * OpenAI, which simple-icons dropped). Monochrome paths tinted for the dark UI —
+ * OpenAI, which simple-icons dropped). Monochrome paths tinted for the dark UI,
  * no network fetch, so the card renders offline. Brands remain their owners'.) */
 
 export function OpenAILogo({ className }: { className?: string }) {

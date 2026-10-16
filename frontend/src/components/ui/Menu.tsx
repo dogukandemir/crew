@@ -13,7 +13,7 @@ export interface MenuItem {
 
 /**
  * A small popover menu: no portal, closes on outside click and Escape. Built for the
- * project switcher — the one navigation affordance the workspace was missing.
+ * project switcher, the one navigation affordance the workspace was missing.
  */
 export function Menu({
   label,

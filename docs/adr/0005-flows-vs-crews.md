@@ -1,4 +1,4 @@
-# ADR 0005 — Flows for org control flow, Crews for swarm work
+# ADR 0005: Flows for org control flow, Crews for swarm work
 
 - **Status:** **Superseded by ADR 0007** (the Crews half stands; the Flows half was replaced by
   an explicit resumable state machine once durability, cancellation and budget pre-flight landed).
@@ -24,6 +24,6 @@ Split by scope:
 
 ## Superseded (2026-10-06)
 The Flows half did not survive first contact with durability, cancellation, budget pre-flight and
-async concurrency requirements — see **ADR 0007**. What the code actually does: an explicit,
+async concurrency requirements, see **ADR 0007**. What the code actually does: an explicit,
 resumable async state machine per run (`control/orchestrator.py`), with CrewAI **Crews** executing
 each wave of work inside a stage. The Crews half of this ADR stands unchanged.

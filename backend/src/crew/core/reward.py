@@ -43,7 +43,7 @@ DEMOTE_SCORE = -0.25
 SUCCESS_FLOOR = 0.70
 
 # Growth (ADR 0014): verified work compounds. Knowledge numbers are the day-one
-# baseline and the per-unit-of-effort accrual; the cap is deliberately < 1.0 —
+# baseline and the per-unit-of-effort accrual; the cap is deliberately < 1.0,
 # familiarity is never certainty, and the prompt says to re-verify thin records.
 KNOWLEDGE_ON_HIRE = 0.05
 KNOWLEDGE_PER_EFFORT = 0.02
@@ -223,7 +223,7 @@ class RewardEngine:
         return payload
 
     async def maybe_transition(self, *, project_id: str, agent_id: str) -> dict | None:
-        """Promotion / probation / demotion — the org consequence of the score (docs/05 §4)."""
+        """Promotion / probation / demotion, the org consequence of the score (docs/05 §4)."""
         async with session_scope() as s:
             a = await s.get(Agent, agent_id)
             if a is None or a.state == AgentState.ARCHIVED:
@@ -315,7 +315,7 @@ class RewardEngine:
                    effort_weight: float = 1.6, task_id: str | None = None,
                    alpha: float = 0.15) -> dict | None:
         """Verified success grows the agent (ADR 0014): evidence-based skill proficiency
-        (docs/04 §3) plus company knowledge that accrues with the work — never with
+        (docs/04 §3) plus company knowledge that accrues with the work, never with
         prompt words or wall-clock alone. One `agent.grew` event, so the growth is on
         the record instead of inferred from two snapshots.
         """

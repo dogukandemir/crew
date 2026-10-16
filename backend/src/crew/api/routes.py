@@ -1,4 +1,4 @@
-"""REST API — the contract in docs/11. Commands in, events out."""
+"""REST API, the contract in docs/11. Commands in, events out."""
 
 from __future__ import annotations
 
@@ -148,7 +148,7 @@ class FoundBody(APIModel):
     project_name: str = Field(min_length=1, max_length=200)
     project_goal: str = Field(default="", max_length=10000)
     project_budget_usd: float | None = Field(default=None, gt=0, le=settings.hard_budget_usd)
-    # Optional workspace root chosen at founding (ADR 0017) — absolute path; empty
+    # Optional workspace root chosen at founding (ADR 0017), absolute path; empty
     # means the default `{workspace_root}/{company}/{project}` tree.
     workspace_path: str = ""
     mode: Literal["autonomous", "interactive"] = "autonomous"
@@ -280,7 +280,7 @@ class CouncilCreate(APIModel):
     constraints: list[str] = Field(default_factory=list)
     task_id: str | None = None
     panel: list[str] = Field(default_factory=list)
-    # 0 = the server debates and decides on its own (the normal path — a convened
+    # 0 = the server debates and decides on its own (the normal path, a convened
     # council must end in a decision); >0 = run round one now, client drives.
     rounds: int = 0
 
@@ -312,7 +312,7 @@ class ApprovalDecision(APIModel):
     reason: str = ""
     ttl_minutes: int = 120
     # Command approvals only (ADR 0017): "always allow" writes the normalized command
-    # to the project's allowlist so it never asks again — recorded and revocable.
+    # to the project's allowlist so it never asks again, recorded and revocable.
     always: bool = False
 
 
@@ -370,7 +370,7 @@ def task_dict(t: Task) -> dict:
 
 
 def _tenure_days(created: datetime | None) -> int:
-    """Days since hire — SQLite hands back naive datetimes, and the math must not care
+    """Days since hire, SQLite hands back naive datetimes, and the math must not care
     (ADR 0014)."""
     if created is None:
         return 0
@@ -380,7 +380,7 @@ def _tenure_days(created: datetime | None) -> int:
 
 
 def _soul_md(a: Agent) -> str:
-    """The drawer's soul.md (ADR 0016) — rendered from the stored soul, never authored."""
+    """The drawer's soul.md (ADR 0016), rendered from the stored soul, never authored."""
     if not a.soul:
         return ""
     from crew.domain import soul as soul_mod
@@ -647,7 +647,7 @@ async def post_company(body: CompanyCreate, user: dict = Depends(require_user)) 
 @replayable
 async def post_found(body: FoundBody, user: dict = Depends(require_user)) -> dict:
     """Company + its first project in one transaction-shaped call, then the first run
-    is started and driven in the background — the wizard lands on a company already
+    is started and driven in the background, the wizard lands on a company already
     working, not a shell to fill in (ADR 0015)."""
     try:
         found = await company.found_company(name=body.name, mission=body.mission,
@@ -1406,7 +1406,7 @@ def _artifact_row(a: Artifact, agents: dict, depts: dict, tasks: dict, projects:
 async def project_artifacts(project_id: str, agent_id: str | None = None,
                             department_id: str | None = None,
                             limit: int = Query(default=200, ge=1, le=1000)) -> dict:
-    """Deliverables of one project — filterable by agent or department; every row
+    """Deliverables of one project, filterable by agent or department; every row
     carries the producing agent's name (and department), for people-level,
     department-level and company-level reading alike."""
     async with session_scope() as s:
@@ -1427,7 +1427,7 @@ async def project_artifacts(project_id: str, agent_id: str | None = None,
 async def company_artifacts(company_id: str, project_id: str | None = None,
                             agent_id: str | None = None,
                             limit: int = Query(default=200, ge=1, le=1000)) -> dict:
-    """Deliverables across a company's member projects — every row names the
+    """Deliverables across a company's member projects, every row names the
     producing agent and its project."""
     async with session_scope() as s:
         comp = await s.get(Project, company_id)
@@ -1455,7 +1455,7 @@ async def company_artifacts(company_id: str, project_id: str | None = None,
 @api.get("/artifacts/{artifact_id}/content")
 async def artifact_content(artifact_id: str) -> dict:
     """Bounded text read of one deliverable. Only files under the server's data
-    directory are served — anything else reports unavailable with the reason."""
+    directory are served, anything else reports unavailable with the reason."""
     async with session_scope() as s:
         a = await s.get(Artifact, artifact_id)
     if a is None:
@@ -1509,7 +1509,7 @@ def _artifact_file(a: Artifact) -> Path | None:
 def _zip_deliverables(rows: list[Artifact], project_slugs: dict[str, str],
                       work_dir: Path, always_prefix: bool = False) -> tuple[Path, int, list[str]]:
     """Synchronous zip build (call via to_thread). Files that cannot be served are
-    listed in `_unavailable.txt` inside the zip — an honest package says what it
+    listed in `_unavailable.txt` inside the zip, an honest package says what it
     could not include."""
     zp = work_dir / "deliverables.zip"
     included, skipped, seen = 0, [], set()
@@ -1558,7 +1558,7 @@ def _slug(text: str) -> str:
 
 @api.get("/artifacts/{artifact_id}/download")
 async def artifact_download(artifact_id: str) -> FileResponse:
-    """The deliverable as a file download — the full content, not the 256 KB preview."""
+    """The deliverable as a file download, the full content, not the 256 KB preview."""
     async with session_scope() as s:
         a = await s.get(Artifact, artifact_id)
     if a is None:
@@ -1718,7 +1718,7 @@ async def convene(project_id: str, body: CouncilCreate, user: dict = Depends(req
     if body.rounds > 0:
         await council.run_round(project_id=project_id, session_id=out["session_id"])
     else:
-        # Convene-and-forget used to leave the session 'open' forever — nothing
+        # Convene-and-forget used to leave the session 'open' forever, nothing
         # advanced it and no client knew to. The server now seats the board,
         # debates up to two rounds and records the binding decision on its own.
         asyncio.create_task(_drive_council(project_id=project_id, session_id=out["session_id"]))
@@ -1726,7 +1726,7 @@ async def convene(project_id: str, body: CouncilCreate, user: dict = Depends(req
 
 
 async def _drive_council(*, project_id: str, session_id: str) -> None:
-    """Debate (up to two rounds) then decide — a convened council must end in a
+    """Debate (up to two rounds) then decide, a convened council must end in a
     decision on the record, not in a session nobody ever closes."""
     try:
         for _ in range(4):
@@ -1907,7 +1907,7 @@ async def brain_search(project_id: str, body: dict) -> dict:
         foreign = [i for i in ids if i not in allowed]
         if foreign:
             # Review 2026-10-14: caller-supplied ids used to bypass the project filter
-            # entirely — memory is never readable across projects.
+            # entirely, memory is never readable across projects.
             raise _problem(403, "brain not in this project's scope", str(foreign[0]))
     try:
         top_k = max(1, min(100, int(body.get("top_k", 8))))
@@ -2070,7 +2070,7 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
     allow_id: str | None = None
     req = row.request or {}
     if body.always and req.get("kind") == "command_review" and req.get("norm"):
-        # "Always allow" (ADR 0017): a standing human permission — audited, listed,
+        # "Always allow" (ADR 0017): a standing human permission, audited, listed,
         # revocable. Only a human grant can ever write here; agents cannot.
         allow_id = await security_review.allow_command(
             row.project_id, norm=str(req.get("norm")), sample_cmd=str(req.get("cmd") or ""),
@@ -2078,7 +2078,7 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
     elif body.always and req.get("tool"):
         # Standing TOOL approval: future calls of this capability by THIS agent skip
         # the gate until revoked. Hard gates (net_post / fs_delete / git_push)
-        # deliberately keep asking — a standing allow cannot cover them.
+        # deliberately keep asking, a standing allow cannot cover them.
         try:
             hard_gate = Capability(row.capability) in ALWAYS_APPROVAL
         except ValueError:

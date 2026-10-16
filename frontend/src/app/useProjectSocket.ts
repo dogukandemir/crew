@@ -6,7 +6,7 @@ import { useConnection } from '../stores/connection';
  * The live socket for a project, if one is open.
  *
  * In its own module because `@vitejs/plugin-react` only treats a file as a
- * Fast Refresh boundary when *every* export is a component — a hook exported
+ * Fast Refresh boundary when *every* export is a component, a hook exported
  * next to `SocketProvider` downgrades every edit of that file to a full page
  * reload.
  *

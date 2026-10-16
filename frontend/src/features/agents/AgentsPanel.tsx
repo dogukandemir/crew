@@ -71,7 +71,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
       return {
         id: a.id,
         name: a.name,
-        role: a.role ?? entry?.role ?? '—',
+        role: a.role ?? entry?.role ?? 'n/a',
         grade: a.grade ?? entry?.grade,
         state: a.state,
         score: a.score ?? entry?.score,
@@ -124,7 +124,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         width: '4rem',
         align: 'center',
         render: (r) =>
-          r.grade === undefined ? '—' : (
+          r.grade === undefined ? 'n/a' : (
             <Badge tone="accent" title={gradeLabel(r.grade)}>
               {`G${r.grade}`}
             </Badge>
@@ -134,7 +134,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
       {
         key: 'score',
         header: (
-          <span title="Reputation 0–1, earned from verified work only — it gates model tier, spend limits and seniority.">
+          <span title="Reputation 0–1, earned from verified work only, it gates model tier, spend limits and seniority.">
             Score
           </span>
         ),
@@ -145,7 +145,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
               className="tabular-nums text-slate-100"
               title="Reputation 0–1, earned from verified work only"
             >
-              {r.score === undefined ? '—' : r.score.toFixed(3)}
+              {r.score === undefined ? 'n/a' : r.score.toFixed(3)}
             </span>
             <Sparkline values={r.trend} width={64} height={18} />
           </span>
@@ -156,20 +156,20 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         key: 'state',
         header: 'State',
         width: '5.5rem',
-        render: (r) => <Badge tone={r.state === 'busy' ? 'info' : r.state === 'probation' ? 'warning' : 'muted'}>{r.state ?? '—'}</Badge>,
+        render: (r) => <Badge tone={r.state === 'busy' ? 'info' : r.state === 'probation' ? 'warning' : 'muted'}>{r.state ?? 'n/a'}</Badge>,
         sortValue: (r) => r.state ?? '',
       },
       {
         key: 'task',
         header: 'Current task',
-        render: (r) => <span className="block max-w-[16rem] truncate text-slate-400">{r.currentTask ?? '—'}</span>,
+        render: (r) => <span className="block max-w-[16rem] truncate text-slate-400">{r.currentTask ?? 'n/a'}</span>,
       },
       {
         key: 'cost',
         header: 'Cost',
         width: '5.5rem',
         align: 'right',
-        render: (r) => <span className="tabular-nums">{r.cost === undefined ? '—' : formatMicros(r.cost)}</span>,
+        render: (r) => <span className="tabular-nums">{r.cost === undefined ? 'n/a' : formatMicros(r.cost)}</span>,
         sortValue: (r) => r.cost ?? 0,
       },
       {
@@ -179,16 +179,16 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         align: 'right',
         render: (r) => {
           if (!r.tasksDone) {
-            // no work yet is not a 0% success rate — say nothing rather than something wrong
+            // no work yet is not a 0% success rate, say nothing rather than something wrong
             return (
               <span className="text-slate-500" title="No completed tasks yet">
-                —
+              ,
               </span>
             );
           }
           return (
             <span className="tabular-nums">
-              {r.successRate === undefined ? '—' : formatPercent(r.successRate)}
+              {r.successRate === undefined ? 'n/a' : formatPercent(r.successRate)}
             </span>
           );
         },
@@ -256,7 +256,7 @@ export function AgentsPanel({ projectId, tabId }: { projectId: string; tabId: st
         empty={
           <EmptyState
             title="No agents"
-            description="Nobody has been hired yet. Start a run — the orchestrator derives the capability requirements from the goal and builds the org, or hire someone manually from the Org tab."
+            description="Nobody has been hired yet. Start a run, the orchestrator derives the capability requirements from the goal and builds the org, or hire someone manually from the Org tab."
           />
         }
       />

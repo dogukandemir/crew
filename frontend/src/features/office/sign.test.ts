@@ -10,7 +10,7 @@ import { signLayout } from './OfficeScene';
 const pulse = (over: Partial<Parameters<typeof signLayout>[1] & object> = {}) =>
   ({ seats: 3, working: 2, blocked: 1, producing: 2, shipped: 1, brandNew: false, ...over }) as Parameters<typeof signLayout>[1];
 
-describe('signLayout — the board and everything on it', () => {
+describe('signLayout, the board and everything on it', () => {
   it('measures the plate by its widest row, name included', () => {
     const l = signLayout({ name: 'Engineering', subtitle: 'Ship the launch' }, pulse());
     for (const row of l.rows) {

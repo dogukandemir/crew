@@ -1,16 +1,16 @@
-# 00 — Vision & Scope
+# 00: Vision & Scope
 
 ## 1. One-paragraph vision
 
 Crew is a **company simulator for autonomous AI work**. You open a tab, name a project, and
 state a goal. A top-level orchestrator agent analyses the goal, works out which skills are
-required, and — because the people it needs do not exist yet — **hires them**: it creates
+required, and, because the people it needs do not exist yet, **hires them**: it creates
 departments, squads and individual agents with the right roles, tools and models. The
 resulting organization executes the work, debates the hard decisions, picks a solution
 through a designated senior decider, verifies the result, and **pays out rewards** that
 determine each agent's reputation, budget and autonomy for the next round. You watch all of
-it live — by project, by department, by individual agent — and you can interrupt, steer,
-approve or kill anything at any time. You are **the Captain** — the deployment's owner —
+it live, by project, by department, by individual agent, and you can interrupt, steer,
+approve or kill anything at any time. You are **the Captain**, the deployment's owner,
 and your word travels the chain through the command desk (ADR 0012) as attributed orders,
 ideas and questions.
 
@@ -25,7 +25,7 @@ ideas and questions.
 3. **Rewards with teeth.** Agents are scored on verified outcomes, cost efficiency and
    quality. Reputation is not decoration: it gates model tier, spend limits, autonomy level
    and promotion into senior roles (including the decider role).
-4. **Three-level cognition.** Project brain, department brain, agent brain — separate memory
+4. **Three-level cognition.** Project brain, department brain, agent brain, separate memory
    scopes with controlled read/write and upward "insight promotion", so the org gets smarter
    without every agent drowning in every other agent's context.
 5. **Observability as a first-class feature.** Every thought, tool call, token and dollar is
@@ -62,12 +62,12 @@ approval policy); replacing CrewAI's internals.
 
 **Out of scope but designed for:** Postgres + Redis horizontal scale, OIDC/SSO, remote
 worker fleet. The interfaces (event bus, repository layer, tool policy) are shaped so these
-are swaps, not rewrites — see ADR 0003/0004.
+are swaps, not rewrites, see ADR 0003/0004.
 
 ## 5. Success criteria for v1
 
 - A goal can be stated, an org formed, work executed end-to-end by real LLM agents, and the
-  result verified — with no manual agent authoring by the user.
+  result verified, with no manual agent authoring by the user.
 - Every state change visible in the UI within 1s of occurring.
 - Zero project can exceed its configured budget (hard-enforced, tested).
 - No secret is ever visible to an agent's context or stored in plaintext.

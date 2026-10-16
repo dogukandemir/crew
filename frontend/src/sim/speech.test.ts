@@ -41,7 +41,7 @@ describe('what kind of thing is being said', () => {
   it('calls an escalation and a hand-off by their event type', () => {
     expect(speechKindOf(event('agent.escalated', 1), true)).toBe('escalation');
     expect(speechKindOf(event('agent.delegated', 1), true)).toBe('delegation');
-    // Even when the payload says otherwise — the event type is the truth.
+    // Even when the payload says otherwise, the event type is the truth.
     expect(speechKindOf(event('agent.escalated', 1, { direction: 'up' }), true)).toBe('escalation');
   });
 

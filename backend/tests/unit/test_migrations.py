@@ -1,7 +1,7 @@
 """The upgrade path: a database from an older release must migrate on boot.
 
 The suite builds fresh schemas (drop_db + create_all), so the path a real
-installation takes — an EXISTING data dir whose schema predates an additive column —
+installation takes, an EXISTING data dir whose schema predates an additive column,
 is easy to leave broken. It was: starting the app against a pre-review data dir raised
 `database schema mismatch in audit_log: missing ['project_id']` because no revision
 carried the ADD COLUMN. These tests build the old shape explicitly on a temp DB.

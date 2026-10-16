@@ -10,7 +10,7 @@ const STORAGE_KEY = 'crew.gettingStarted.dismissed';
 
 /**
  * The welcome checklist (ADR 0015): four honest steps, each reading the record.
- * It disappears when everything is done — or when you say so; it never nags.
+ * It disappears when everything is done, or when you say so; it never nags.
  */
 export function GettingStarted({
   providerReady,
@@ -66,7 +66,7 @@ export function GettingStarted({
             try {
               window.localStorage.setItem(STORAGE_KEY, '1');
             } catch {
-              /* private mode — dismissing is best-effort */
+              /* private mode, dismissing is best-effort */
             }
             setDismissed(true);
           }}

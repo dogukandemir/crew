@@ -1,8 +1,8 @@
-# 04 — Agent Model & Skills
+# 04: Agent Model & Skills
 
 ## 1. Anatomy of an agent
 
-An agent is a row plus a generated prompt. Nothing about it is hand-written per agent —
+An agent is a row plus a generated prompt. Nothing about it is hand-written per agent,
 the HiringService composes a `RoleSpec` and the PromptBuilder renders it.
 
 ```
@@ -27,21 +27,21 @@ Agent
 
 System prompt sections, in order (kept under a hard token budget per tier):
 
-1. **Identity** — name, role, grade, one-line mission.
-2. **Soul** — the person (ADR 0016): personality traits, values, vision, voice and
+1. **Identity**, name, role, grade, one-line mission.
+2. **Soul**, the person (ADR 0016): personality traits, values, vision, voice and
    background, with the honesty guard attached: *it shapes HOW work is done and written,
    never what counts as true*. Present only when the agent has a soul (`prompt_version`
    2); absent for pre-soul hires.
-3. **Chain of command** — who I report to, who reports to me, when to escalate, the exact
+3. **Chain of command**, who I report to, who reports to me, when to escalate, the exact
    escalation contract (what to include: what I tried, evidence, what I need).
-4. **Authority** — what I may decide alone; what needs approval; where the policy engine will
+4. **Authority**, what I may decide alone; what needs approval; where the policy engine will
    physically stop me (so the agent does not waste turns attempting denied actions).
-5. **Method** — role-specific operating procedure (e.g. analyst: source before claim; critic:
+5. **Method**, role-specific operating procedure (e.g. analyst: source before claim; critic:
    attack the strongest version; decider: weigh evidence, preserve dissent).
-6. **Deliverable contract** — the exact output schema required for the task.
-7. **Context pack** — retrieved brain entries, labelled with provenance and trust level
+6. **Deliverable contract**, the exact output schema required for the task.
+7. **Context pack**, retrieved brain entries, labelled with provenance and trust level
    (`trusted` = internal, `untrusted` = from the internet).
-8. **Standing rules** — untrusted-content handling, no fabricated evidence, cite sources,
+8. **Standing rules**, untrusted-content handling, no fabricated evidence, cite sources,
    report blockers early rather than guessing.
 
 The prompt is versioned (`prompt_version` on the agent) and stored with the run so the replay
@@ -64,7 +64,7 @@ Grade determines the *defaults*; the project may override per department (e.g. a
 config-only. Escalation on retry may jump one tier regardless of grade.
 
 **Also tiered:** embeddings/retrieval use `fast`/`embed` tier; critic and decider **must** be
-at least `reasoning` — a policy check (`decider.min_tier`) refuses a Chief decision from a
+at least `reasoning`, a policy check (`decider.min_tier`) refuses a Chief decision from a
 cheap model, preventing "gaming the decider" with an under-powered agent.
 
 ## 3. Skill registry
@@ -84,7 +84,7 @@ cheap model, preventing "gaming the decider" with an under-powered agent.
   (`agents.company_knowledge`, 0..1): `0.05` on hire, `+0.02 × effort_weight` per verified
   task, capped at `0.95`. Tenure is `now − created_at` (`tenure_days`). Both feed the
   system prompt's `TENURE:` line, so a veteran reasons with more context than a first-day
-  hire — and every movement lands on the record as one `agent.grew` event, never inferred
+  hire, and every movement lands on the record as one `agent.grew` event, never inferred
   from two snapshots.
 
 ## 4. Tools & capability grants
@@ -133,8 +133,8 @@ agent-level occupancy so a swarm does not self-contend.
 
 Every agent has a cost ledger. The Orchestrator's staffing decisions are explicitly
 cost-aware: for each gap it compares (a) hire a Junior + cheap model, (b) reuse an idle Mid,
-(c) call a Principal once. The heuristic — cheap for well-specified, repetitive work; senior
-for ambiguous, high-impact or irreversible work — is stated in the HiringService prompt and
+(c) call a Principal once. The heuristic, cheap for well-specified, repetitive work; senior
+for ambiguous, high-impact or irreversible work, is stated in the HiringService prompt and
 recorded on the hire event (`rationale`), so you can audit whether the org is spending
 sensibly.
 

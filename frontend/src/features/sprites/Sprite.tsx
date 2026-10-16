@@ -6,7 +6,7 @@
  * bounding box. That is what lets a desk and a person occupy the same isometric
  * space and sort against each other.
  *
- * `image-rendering: pixelated` is not decoration — a browser smoothing a 24×40
+ * `image-rendering: pixelated` is not decoration, a browser smoothing a 24×40
  * sprite into a 30-pixel box is what turns pixel art into a blur.
  */
 import { useId } from 'react';
@@ -56,7 +56,7 @@ export function Sprite({
   // The SHEET, not the cell. An SVG <image> draws the whole file it is pointed at,
   // so a cell is selected by scaling the sheet up to the atlas's own pixel size and
   // sliding it so the wanted cell lands under a clip window the size of that cell.
-  // Sizing the <image> to the cell — which is what this did first — squashes all
+  // Sizing the <image> to the cell, which is what this did first, squashes all
   // 793 sprites into every one of them, and the office turns into static.
   const clipId = `sprite-${rawId.replace(/:/g, '')}`;
   const sprite = (

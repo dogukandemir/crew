@@ -1,6 +1,6 @@
-# 16 · System review — production readiness
+# 16 · System review: production readiness
 
-Reviewed 2026-10-07. Scope: the whole repository — frontend, backend, tooling, docs, and
+Reviewed 2026-10-07. Scope: the whole repository, frontend, backend, tooling, docs, and
 the office's live behaviour. Every finding carries the evidence that found it. This is the
 punch list: fixes land as commits and are struck out here with their hash.
 
@@ -13,7 +13,7 @@ punch list: fixes land as commits and are struck out here with their hash.
 - Scanned for the operational gaps a stranger hits first: CI, deploy, error handling,
   secrets, self-host instructions, first-run experience.
 
-## P1 · Backend suite — GREEN, and a reporting trap
+## P1 · Backend suite: GREEN, and a reporting trap
 
 **Not a defect.** `pytest` runs 54 tests green (exit 0). The confusion was mine: the
 project sets `addopts = "-q"`, and adding another `-q` on the command line makes pytest
@@ -21,21 +21,21 @@ print the dots and *no summary line at all*, so a grep for "passed" found nothin
 suite looked broken. Worth knowing: run `pytest` without the extra `-q`, or read the exit
 code, which is the signal that cannot lie.
 
-## P2 · No CI — HIGH
+## P2 · No CI: HIGH
 
 No `.github/`. Both suites are hand-run on one machine, so nothing stops a regression from
 being merged and nothing proves the suites are green to anyone else.
 
-Action: one workflow, two jobs — frontend (tsc, vitest, build) and backend (pytest).
+Action: one workflow, two jobs, frontend (tsc, vitest, build) and backend (pytest).
 
-## P3 · No error boundary in the frontend — HIGH
+## P3 · No error boundary in the frontend: HIGH
 
 No `ErrorBoundary` anywhere. Any render error blanks the entire app to white, including
 the toolbar you would need to get out of it.
 
 Action: a boundary around the app shell with a recoverable error state.
 
-## P4 · Nobody else can run it — CLOSED, and partly my own misreading
+## P4 · Nobody else can run it: CLOSED, and partly my own misreading
 
 The first scan was wrong about the missing pieces: `.env.example`, `frontend/.env.example`
 and a README quick start **already existed**, including a zero-key path
@@ -50,19 +50,19 @@ and a README quick start **already existed**, including a zero-key path
   exactly what it does and does not promise, and a README section showing the two commands.
 - `docker compose --profile mock up mock` runs the mock the same way.
 
-## P5 · First run without keys — CLOSED
+## P5 · First run without keys: CLOSED
 
 The zero-key path existed (the README's `CREW_OFFLINE_LLM=true`) but nothing on the screen
 said so, so an empty office looked like a broken app. The office's empty state now names
 the setting: set a provider key, or run the backend with `CREW_OFFLINE_LLM=true` for the
-same pipeline against the deterministic fake runner — and the mock in `dev/mock/` needs no
+same pipeline against the deterministic fake runner, and the mock in `dev/mock/` needs no
 backend at all.
 
 ## FIXED · The desk screens lied about who was working
 
 Reported: on some computers the machine looked busy with nobody at it, and at
 others it looked idle under somebody who was working. One cause, two directions:
-the screen was lit from `activity` — `typing`/`tool` — which says what a person is
+the screen was lit from `activity`, `typing`/`tool`, which says what a person is
 doing, never where they are. A researcher with a live task works at the lab bench,
 the junior of a squad pair works at the senior's desk, somebody on another
 department's task stands in that department; in all three the desk at home burned
@@ -72,11 +72,11 @@ How it was found, because the method is the point: the desk sprite's two states
 (`prop.desk` vs `prop.desk.busy`) were told apart in the live DOM by decoding the
 clip rect and the image offset back into an atlas cell origin, and each desk was
 then compared against the person nearest it. Live proof of the bug: Max, given a
-task whose title is research vocabulary, walked to the lab bench and typed there —
+task whose title is research vocabulary, walked to the lab bench and typed there,
 his home desk was lit and empty the whole time.
 
 The fix is `deskInUse` (sim/targets.ts): the screen is on only when its owner is
-seated at its own desk, working — and not mid-walk (the target says "seated" the
+seated at its own desk, working, and not mid-walk (the target says "seated" the
 moment somebody is on their way, and after the floor re-grids that walk can be
 long). Desks also now carry `data-desk`/`data-busy`, so the next report of this
 kind can be measured instead of guessed at.
@@ -102,7 +102,7 @@ Two features' worth of finding, one of them not a feature at all.
   Verified live: the room appeared at t+40, the panel walked across the floor, sat down
   and talked; after the decision they dispersed and the publish plan left `escalated`.
 - **The event log was frozen at page-open.** `SocketProvider` backfills history once and
-  then relies on a socket — and the dev mock has no socket, so the office's whole
+  then relies on a socket, and the dev mock has no socket, so the office's whole
   activity layer, the meeting room included, never saw anything that happened after the
   page loaded. A ten-second poll of the latest page now stands in where the socket is
   silent (the ingest dedupes, so it is a no-op when the socket delivers).
@@ -114,18 +114,18 @@ Two features' worth of finding, one of them not a feature at all.
 
 ## Office findings still open (docs/15 plus this review)
 
-- O1 The arrival walk: the ARRIVAL is proven, and the walk MECHANISM is real — a
+- O1 The arrival walk: the ARRIVAL is proven, and the walk MECHANISM is real, a
   position traced changing over ~30 s on the desk→bench route, written per frame by a
   live tick. Re-verified today: a hired agent vanished at t+7.5 and reappeared at t+27.5
   with a real transform and a real depth (2311.18). What is still not frame-traced is one
-  specific sequence — entrance → a brand-new desk — and that is the same machinery on a
+  specific sequence, entrance → a brand-new desk, and that is the same machinery on a
   different route, not a different machinery.
 - O9 RESOLVED as a measurement artifact. `data-depth` appeared frozen at 0 for a live
-  arrival, and "frozen" was true — of the measuring tab, not the product: that page was
+  arrival, and "frozen" was true, of the measuring tab, not the product: that page was
   running a stale module graph, with a dead walker loop (nothing moved, no trails, no
   depths). In a healthy instance the same agent's depth at reappearance reads 2311.18.
-  The distinction now takes one look, because the tick keeps a dev probe —
-  `window.__office` with ticks/walkers/sprites — which separates "dead rAF", "empty
+  The distinction now takes one look, because the tick keeps a dev probe,
+  `window.__office` with ticks/walkers/sprites, which separates "dead rAF", "empty
   walker map" and "empty sprite map", three states that look identical from outside.
   Ops note for the same reason: when the dev server's watcher misses a change, a hard
   reload is what settles it; several "defects" this session were one.
@@ -135,7 +135,7 @@ Two features' worth of finding, one of them not a feature at all.
 - O3 A department whose roster is entirely archived keeps its room standing.
 - O4 The `belt` category is drawn as a rail, not a sprite (may be by design; undecided).
 - O5 Dead `@keyframes speech-pop` left in office2d.css.
-- O6 The side-view character cells carry hair across the face — a documented trap.
+- O6 The side-view character cells carry hair across the face, a documented trap.
 - O7 The wall clock sprite exists in the atlas and nothing places it.
 - O8 Three sprites seen once outside the building, never reproduced.
 
@@ -153,13 +153,13 @@ Two features' worth of finding, one of them not a feature at all.
 - **Tags and bubbles blinked at the far-zoom threshold.** Hysteresis instead of a single
   cut-off. `5abefe6`
 - **The lab bench was stretched, not tiled.** `scaleForWidth` scales both axes, so a 2 m
-  bench asked to span 4 m was drawn 1.7 m tall — the pale slab on the floor. `c57a450`
+  bench asked to span 4 m was drawn 1.7 m tall, the pale slab on the floor. `c57a450`
 
 ## Confirmed good, so the list is not a rumour
 
 - `frontend/src/api/client.ts` has real error handling: typed `ApiError`, network status 0,
   problem+json codes, retry classification.
 - Backend settings are a single validated object with auth modes, vault key, provider keys,
-  budget caps, sandbox and egress controls — not scattered `os.environ` reads.
+  budget caps, sandbox and egress controls, not scattered `os.environ` reads.
 - No `TODO`/`FIXME`/`HACK` markers anywhere in either source tree.
 - Frontend: 206 tests, tsc clean, build clean.

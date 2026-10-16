@@ -1,4 +1,4 @@
-"""Runtime settings (docs/01 §6, .env.example). One validated Settings object, built at boot."""
+"""Runtime settings (docs/01 §6.env.example). One validated Settings object, built at boot."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # Tier routing (docs/04). Defaults ride DeepSeek V4 (Apr 2026): `deepseek-flash`
     # (V4.1-Flash) and `deepseek-v4-pro`. The legacy names `deepseek-chat` /
-    # `deepseek-reasoner` were retired by the provider on 2026-07-24 — never pin them.
+    # `deepseek-reasoner` were retired by the provider on 2026-07-24, never pin them.
     tier_reasoning: str = Field("deepseek/deepseek-v4-pro", validation_alias=_a("CREW_TIER_REASONING", "tier_reasoning"))
     tier_standard: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_STANDARD", "tier_standard"))
     tier_fast: str = Field("deepseek/deepseek-flash", validation_alias=_a("CREW_TIER_FAST", "tier_fast"))
@@ -191,7 +191,7 @@ def get_settings() -> Settings:
     if not s.vault_key:
         # No master key configured: generate one ONCE and keep it beside the data it
         # protects. A session-only key would silently orphan every stored secret on
-        # restart — and the first thing the vault stores is a provider key.
+        # restart, and the first thing the vault stores is a provider key.
         key_file = s.data_path / "vault.key"
         if key_file.exists():
             s.vault_key = key_file.read_text(encoding="utf-8").strip()

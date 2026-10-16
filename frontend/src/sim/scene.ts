@@ -1,5 +1,5 @@
 /**
- * Scene projection (pure) — the seam between the domain and any renderer.
+ * Scene projection (pure), the seam between the domain and any renderer.
  *
  * `Office` is the *static* floor (rooms, desks, doors, corridors) and only
  * changes when the organization changes. `SceneState` is the *dynamic* frame

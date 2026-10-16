@@ -101,7 +101,7 @@ async def test_always_allow_list_skips_re_asking_and_revokes(tool_context, bound
                                            sample_cmd="rm -rf build", note="trusted clean step",
                                            decided_by="owner", source_approval_id=r1["approval_id"])
 
-    # A fresh task: the allowlist alone covers it — no new approval is filed.
+    # A fresh task: the allowlist alone covers it, no new approval is filed.
     ctx2 = await tool_context(project_id=project["id"], agent=agent, task_id="t-2", workspace=tmp_path)
     r2 = await asyncio.to_thread(invoker.invoke, ctx2, "shell_run", {"cmd": "rm -rf build"})
     assert r2.get("ok") is True, r2
@@ -251,7 +251,7 @@ def test_quarantine_store_is_reusable_and_meta_readable():
 
 @pytest.mark.asyncio
 async def test_releases_are_bound_to_the_reviewed_url_and_norm(bound_loop, project):
-    """Closes: `kind != x or url != y` swapped to `and` — a grant for one URL/command
+    """Closes: `kind != x or url != y` swapped to `and`, a grant for one URL/command
     must never release a different one."""
     url_a, url_b = f"https://a.example/{project['id']}", "https://other.example/x"
     ap1 = await request_approval(project["id"], capability="net.fetch", agent_id=None,
@@ -303,7 +303,7 @@ async def test_gate_content_event_title_carries_the_url(tool_context, bound_loop
 
 @pytest.mark.asyncio
 async def test_allowlist_crud_is_scoped_and_revocable(bound_loop, project):
-    """Closes: the allowlist lookup/revoke/list booleans and blanks — include_revoked's
+    """Closes: the allowlist lookup/revoke/list booleans and blanks, include_revoked's
     default, the project scoping, the double-revoke guard, and the audit reason."""
     assert await sreview.allowlist_hit(project["id"], "") is False
     aid = await sreview.allow_command(project["id"], norm="npm run build",

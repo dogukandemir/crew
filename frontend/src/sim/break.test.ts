@@ -32,7 +32,7 @@ const org = (count: number): OrgNode => ({
   ],
 });
 
-const idle = (): Activity => ({ kind: 'idle', note: 'idle — no work assigned', where: 'desk' });
+const idle = (): Activity => ({ kind: 'idle', note: 'idle, no work assigned', where: 'desk' });
 const typing = (): Activity => ({ kind: 'typing', note: 'working', where: 'desk' });
 
 function setUp(count: number, idleIds: string[], idleForMs = 120_000) {
@@ -86,7 +86,7 @@ describe('the break corner', () => {
   it('leaves somebody sitting alone without a made-up conversation', () => {
     const { targets } = setUp(2, ['a0']);
     expect(targets.a0.seated).toBe(true);
-    expect(targets.a0.reason).toBe('idle — at the break corner');
+    expect(targets.a0.reason).toBe('idle, at the break corner');
   });
 
   it('keeps people at their desks while they are still working', () => {

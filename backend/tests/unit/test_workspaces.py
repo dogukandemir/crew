@@ -30,7 +30,7 @@ def test_relative_path_is_refused():
 
 def test_validate_creates_nested_dirs_and_tolerates_repeats(tmp_path):
     """A chosen root may be several levels deep without existing (fresh machine) and
-    the wizard writes it again on a retry — both must just work."""
+    the wizard writes it again on a retry, both must just work."""
     nested = tmp_path / "fresh" / "deeper" / "root"
     out = workspaces.validate_company_path(str(nested))
     assert Path(out) == nested and nested.is_dir(), "parents must be created"
@@ -48,7 +48,7 @@ async def test_resolve_reads_the_recorded_path_and_heals_a_missing_folder(tmp_pa
     chosen = Path(row.settings["workspace"])
     shutil.rmtree(chosen.parent)  # the whole company tree vanished (moved disk, cleanup)
     healed = workspaces.resolve_workspace(row)
-    assert healed == chosen, "the recorded path wins — always"
+    assert healed == chosen, "the recorded path wins, always"
     assert await asyncio.to_thread(chosen.is_dir), \
         "and a run must never die on an unmade directory (parents included)"
 

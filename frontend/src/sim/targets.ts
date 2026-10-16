@@ -27,7 +27,7 @@ export interface Target {
    */
   faceTowards?: Point;
   /**
-   * True when the character is sitting — at their own desk, or on a chair in the
+   * True when the character is sitting, at their own desk, or on a chair in the
    * break corner. The renderer only ever seats people at their own workstation:
    * visiting somebody does not mean taking their chair.
    */
@@ -47,7 +47,7 @@ export interface TargetInput {
   breakAfterMs?: number;
   /**
    * The council in session, if any. Its panel is IN A MEETING, and that outranks
-   * everything else a member might be doing — it is what is actually happening to
+   * everything else a member might be doing, it is what is actually happening to
    * them (docs/02 §4).
    */
   meeting?: { id: string; question: string; members: readonly string[] } | null;
@@ -59,7 +59,7 @@ const RING_RADIUS = 52;
 const PAIRABLE: TaskState[] = ['assigned', 'running', 'ready', 'verifying'];
 
 /**
- * Stand beside someone rather than on top of them — and on the side you are
+ * Stand beside someone rather than on top of them, and on the side you are
  * arriving from, so walking over ends in a natural position.
  */
 function beside(anchor: Point, from: Point): Point {
@@ -83,7 +83,7 @@ export function resolvePeer(office: Office, selfId: string, name: string): strin
     /orchestrator/i.test(office.agentOf[id].role ?? ''),
   );
 
-  // A report goes to the reporter's own manager — the org tree's `manager_id` —
+  // A report goes to the reporter's own manager, the org tree's `manager_id`,
   // and only falls back to whoever runs the floor. So "reports to my manager"
   // walks to a real desk, and a manager's own report walks up from there.
   if (/^(manager|lead|head|boss|supervisor)$/.test(wanted)) {
@@ -177,7 +177,7 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
     }
 
     if (arriving.has(agentId)) {
-      out[agentId] = { agentId, roomId: home, point: desk, reason: 'just hired — walking to their desk' };
+      out[agentId] = { agentId, roomId: home, point: desk, reason: 'just hired, walking to their desk' };
       continue;
     }
 
@@ -187,7 +187,7 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
       out[agentId] = {
         agentId,
         roomId: seat ?? home,
-        // Stand beside the boss and face them — never on top of them.
+        // Stand beside the boss and face them, never on top of them.
         point: seat ? beside(seatPoint, desk) : desk,
         reason: act.note,
         faceTowards: seatPoint,
@@ -254,7 +254,7 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
           agentId,
           roomId: '__break',
           point: office.breakSpot,
-          reason: 'idle — at the break corner',
+          reason: 'idle, at the break corner',
         };
         shared.__break = [...(shared.__break ?? []), agentId];
         continue;
@@ -422,12 +422,12 @@ export function computeTargets(input: TargetInput): Record<string, Target> {
 /**
  * Is the machine at a desk being worked at, right now?
  *
- * This used to be asked of `activity` alone — `typing` or `tool` — which is the
+ * This used to be asked of `activity` alone, `typing` or `tool`, which is the
  * wrong question: activity says what somebody is doing, never where they are. A
  * researcher with a live task works at the lab bench; the junior of a squad pair
  * works at the senior's desk; somebody on another department's task stands in
  * that department. In each case the desk at home lit up with an empty chair,
- * which reads as a machine running by itself — and where the person actually was
+ * which reads as a machine running by itself, and where the person actually was
  * had no screen at all. Tying the screen to sitting at its own desk makes the
  * screen and the body the same fact, so they cannot disagree.
  */

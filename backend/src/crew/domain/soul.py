@@ -1,14 +1,14 @@
 """Agent souls (ADR 0016): every hire is a person, not a template stamp.
 
-A soul is composed at hire time from curated banks — a human name, personality
-traits, values, a vision, a voice, a quirk, a one-line background — *deterministically*:
+A soul is composed at hire time from curated banks, a human name, personality
+traits, values, a vision, a voice, a quirk, a one-line background, *deterministically*:
 the same seed (project + role + hire ordinal) composes the same person, so an offline
 run replays exactly. When a provider key is configured the model may deepen the
 wording; the soul records which happened (`source`), and the model may never invent
 facts the banks did not carry.
 
 The soul shapes HOW an agent works and writes (it rides the system prompt as the SOUL
-section); it never outranks the standing rules or the record — personality is not a
+section); it never outranks the standing rules or the record, personality is not a
 license to fabricate.
 """
 
@@ -69,18 +69,18 @@ _NAME_POOLS: list[tuple[str, list[str], list[str], float]] = [
 _BANKS: dict[str, dict[str, list[str]]] = {
     "leader": {
         "traits": [
-            "decisive under ambiguity — picks a direction and owns it",
+            "decisive under ambiguity, picks a direction and owns it",
             "comfortable holding a hard no and saying why",
             "systems-minded, allergic to busywork",
             "reads the room before speaking",
             "protects the team's deep-work time like budget",
             "asks 'what would make this decision wrong?' before committing",
-            "keeps promises small — and keeps them",
+            "keeps promises small, and keeps them",
             "steady when the numbers turn ugly",
         ],
         "values": [
             "clarity is kindness",
-            "the record is the truth — write it down",
+            "the record is the truth, write it down",
             "small sharp teams over big soft ones",
             "decisions are cheap to revisit; indecision is not",
             "credit belongs to the work",
@@ -106,7 +106,7 @@ _BANKS: dict[str, dict[str, list[str]]] = {
         "backgrounds": [
             "came up through {field} teams that shipped weekly",
             "spent a decade turning around projects other people had given up on",
-            "ran small teams before this — never more than a dozen people",
+            "ran small teams before this, never more than a dozen people",
             "learned the trade in {field}, where vague plans died fast",
         ],
     },
@@ -120,7 +120,7 @@ _BANKS: dict[str, dict[str, list[str]]] = {
             "notices when 'almost done' has been true for three days",
         ],
         "values": [
-            "flow first — idle people are the expensive kind of waste",
+            "flow first, idle people are the expensive kind of waste",
             "the handoff is the work",
             "small merges, small risks",
             "say the uncomfortable schedule truth early",
@@ -131,7 +131,7 @@ _BANKS: dict[str, dict[str, list[str]]] = {
             "Wants to be the lead people request by name.",
         ],
         "voices": [
-            "direct, in status order — did, doing, blocked",
+            "direct, in status order, did, doing, blocked",
             "calm under deadline",
             "uses checklists out loud",
         ],
@@ -148,7 +148,7 @@ _BANKS: dict[str, dict[str, list[str]]] = {
     },
     "craft": {
         "traits": [
-            "methodical — keeps a scratchpad of dead ends",
+            "methodical, keeps a scratchpad of dead ends",
             "sceptical of first results, including their own",
             "quietly stubborn about correctness",
             "fast to prototype, slow to claim",
@@ -215,7 +215,7 @@ _BANKS: dict[str, dict[str, list[str]]] = {
         "quirks": [
             "re-derives the number before accepting it",
             "keeps a list of claims nobody ever verified",
-            "signs off in one line — or doesn't",
+            "signs off in one line, or doesn't",
         ],
         "backgrounds": [
             "came up through {field} review boards nobody liked but everyone needed",
@@ -255,7 +255,7 @@ def role_archetype(role: str) -> str:
 
 
 def pick_name(rng: random.Random, used: set[str] | None = None) -> tuple[str, str, str, str]:
-    """(origin, first, last, full) — unique against `used` when possible."""
+    """(origin, first, last, full), unique against `used` when possible."""
     weights = [p[3] for p in _NAME_POOLS]
     for _ in range(40):
         origin, firsts, lasts, _w = rng.choices(_NAME_POOLS, weights=weights, k=1)[0]
@@ -275,7 +275,7 @@ def compose_soul(*, role: str, grade: int, seed: str,
     """A whole person, deterministically. Same seed → same soul, forever.
 
     `name` wins when a caller already has one (HR candidates arrive named); `grade`
-    nudges nothing — character is grade-independent on purpose."""
+    nudges nothing, character is grade-independent on purpose."""
     rng = random.Random(f"crew-soul:{seed}")
     arche, field = _ROLE_PROFILE.get(role, ("craft", "product"))
     bank = _BANKS[arche]
@@ -301,7 +301,7 @@ def compose_soul(*, role: str, grade: int, seed: str,
 
 
 def soul_prompt_block(soul: dict[str, Any]) -> str:
-    """The SOUL section as the system prompt reads it — compact, behaviour-shaped."""
+    """The SOUL section as the system prompt reads it, compact, behaviour-shaped."""
     if not soul:
         return ""
     lines = [f"Personality: {'; '.join(soul.get('traits') or [])}." ]
@@ -319,12 +319,12 @@ def soul_prompt_block(soul: dict[str, Any]) -> str:
 
 
 def render_soul_md(soul: dict[str, Any], *, role_title: str = "") -> str:
-    """soul.md — the person on one page, for the drawer and for export."""
+    """soul.md, the person on one page, for the drawer and for export."""
     if not soul:
         return ""
     head = f"# {soul.get('name', 'Unnamed')}"
     if role_title:
-        head += f" — {role_title}"
+        head += f", {role_title}"
     out = [head]
     if soul.get("vision"):
         out += ["", f"> {soul['vision']}"]

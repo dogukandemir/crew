@@ -6,7 +6,7 @@ import { MotionControl } from '../../app/MotionControl';
  * Same one-metre discipline as the office: this file owns the pixels, `hqScene.ts`
  * owns the layout and the routes, and the record owns the words. People walk only
  * along routes the model staged from real events; a note on a walker is a line the
- * record already wrote — the scene never improvises a sentence.
+ * record already wrote, the scene never improvises a sentence.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as RPointerEvent, WheelEvent as RWheelEvent } from 'react';
@@ -90,7 +90,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
     setZoomPct(100);
   }, [world, size]);
 
-  // A walker exists from the first render — created lazily, because the rAF loop
+  // A walker exists from the first render, created lazily, because the rAF loop
   // writes straight to the DOM element the render registers.
   const getWalker = (person: HqPerson): Walker => {
     let w = walkersRef.current.get(person.id);
@@ -125,11 +125,11 @@ export function HqFloor({ hq }: { hq: Hq }) {
       const stage = staged.get(person.id);
       const target = stage ? stage.at : person.home;
       if (!w.placed) {
-        // First appearance shows the CURRENT state in place — a board that is sitting
+        // First appearance shows the CURRENT state in place, a board that is sitting
         // is found seated, not watched shuffling in. Walking is for transitions seen
         // live (and it is also the only honest thing to do when the tab cannot paint:
         // see the hidden-tab note below). The lazy creation in render means map
-        // membership cannot tell "new" — that is what `placed` is for.
+        // membership cannot tell "new", that is what `placed` is for.
         w.placed = true;
         w.pos = { ...target };
         w.motion.current.x = target.x;
@@ -146,7 +146,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
     }
     // Paint the staged positions now: the rAF loop repaints every frame, but a tab
     // that never produces frames (headless, backgrounded) must still show the state
-    // the record describes — initial layout is React's, not the loop's, business.
+    // the record describes, initial layout is React's, not the loop's, business.
     for (const person of world.people) {
       const w = walkers.get(person.id);
       const el = gRefs.current.get(person.id);
@@ -238,11 +238,11 @@ export function HqFloor({ hq }: { hq: Hq }) {
   }, [world]);
 
   // Labels hold their screen size: world-scaled text at the fitted zoom of a whole
-  // headquarters is 3 px tall — a name tag nobody can read is a name tag nobody has.
+  // headquarters is 3 px tall, a name tag nobody can read is a name tag nobody has.
   const labelScale = clamp(0.9 / cam.scale, 1, 4.5);
 
   // Board members share one table, so their name tags stack on top of each other at
-  // the fitted zoom. Stagger them by seat order — one readable name per row.
+  // the fitted zoom. Stagger them by seat order, one readable name per row.
   // (the translate sits OUTSIDE the label scale, so the step is in world units:
   //  14 screen px ÷ the camera zoom.)
   const boardTagDy = useMemo(() => {
@@ -294,7 +294,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
       onPointerCancel={onPointerUp}
       onLostPointerCapture={onPointerUp}
       onPointerLeave={onPointerUp}
-      tabIndex={0} role="region" aria-label="Company floor — arrow keys pan, plus and minus zoom, F fits"
+      tabIndex={0} role="region" aria-label="Company floor, arrow keys pan, plus and minus zoom, F fits"
       onKeyDown={event => {
         if ((event.target as Element).closest('button')) return;
         const shifts: Record<string, [number, number]> = { ArrowLeft: [70, 0], ArrowRight: [-70, 0], ArrowUp: [0, 70], ArrowDown: [0, -70] };

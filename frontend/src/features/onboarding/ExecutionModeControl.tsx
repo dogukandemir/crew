@@ -15,11 +15,11 @@ export function ExecutionModeControl({ onConfigure }: { onConfigure: () => void 
   });
   if (!data) return null;
   if (health.data?.version.endsWith('-mock')) return <section className="my-5 rounded-lg border border-amber-800 p-4" aria-label="Demo scenario">
-    <p className="font-medium text-amber-100">Demo scenario — simulated company</p>
+    <p className="font-medium text-amber-100">Demo scenario, simulated company</p>
     <p className="mt-1 text-sm text-slate-300">Explore the office, agent activity and results. This scenario uses fictional work and costs, with no model requests.</p>
   </section>;
   return <section className="my-5 space-y-3 rounded-lg border border-slate-700 p-4" aria-label="Execution mode">
-    <p className="font-medium">{data.offline_llm ? 'Demo — explore with simulated work' : 'Live — real agents and real deliverables'}</p>
+    <p className="font-medium">{data.offline_llm ? 'Demo, explore with simulated work' : 'Live, real agents and real deliverables'}</p>
     <div className="flex flex-wrap items-center gap-2"><ProviderStatus state={data} /><span className="text-xs text-slate-400">{data.model}</span></div>
     <p className="text-xs text-slate-400">{data.offline_llm
       ? 'Demo makes no model requests and costs nothing in provider usage. Connect a provider, then switch to Live when ready.'

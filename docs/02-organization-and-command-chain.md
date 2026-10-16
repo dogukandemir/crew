@@ -1,4 +1,4 @@
-# 02 — Organization & Command Chain
+# 02: Organization & Command Chain
 
 The org is a tree of **org units**. It is data, not code: every unit is a row, every change is
 an event. New units appear when the work requires a capability the org does not have.
@@ -59,16 +59,16 @@ an event. New units appear when the work requires a capability the org does not 
 ```
 
 **The Captain** is the one seat above the org: the human who owns this deployment. The
-Captain speaks through the **command desk** (ADR 0012) — natural language in, real actions
+Captain speaks through the **command desk** (ADR 0012), natural language in, real actions
 out, every turn an event on the record. What lands reaches the floor through the
 orchestrator as attributed `CAPTAIN DIRECTIVES` (binding); ideas are weighed; questions are
-answered and never reach task prompts. Engine seats — the orchestrator, the CEO, the chair
-and the board — cannot be dismissed from the desk; that call belongs to the board.
+answered and never reach task prompts. Engine seats, the orchestrator, the CEO, the chair
+and the board, cannot be dismissed from the desk; that call belongs to the board.
 
 ### The executive tier (functions)
 
 Between the orchestrator and the department heads sit optional **function chiefs**
-(ADR 0008): one C-role per *function* — a group of departments that share an executive
+(ADR 0008): one C-role per *function*, a group of departments that share an executive
 concern.
 
 | Function | C-role | Departments (by category) |
@@ -90,16 +90,16 @@ agents are the **CEO** (hired at bootstrap) and, on demand, the same function ch
 scope up (`cto`/`cmo`/`cpo`/`coo`/`cfo`). A member project's orchestrator reports to the
 CEO; `company.review()` reads every member's books and writes one grounded directive
 into each member's event stream, and orchestrators read directives into their task
-prompts as binding work — "COMPANY DIRECTIVES (from the board)".
+prompts as binding work, "COMPANY DIRECTIVES (from the board)".
 
 Seated with the CEO are the **board of directors**: a `chair` (the CEO's manager) and
 two `board_member` seats (`projects.settings.chair_id` / `board_ids`). The chain reads
 `chair → CEO → orchestrator → chief? → head → lead → worker`. The board convenes
 sessions on the council machinery (`board.convened`) and its caps are deliberately
-narrow: it reads, convenes, binds and asks for money — it never hires into the org it
+narrow: it reads, convenes, binds and asks for money, it never hires into the org it
 governs. **Money between projects is a decision**: `company.portfolio()` ranks members
 by their record (shared verdict helper with the review) and `company.allocate()` writes
-the caps — a `stop` project's cap lands exactly on its spend, so "no new money" is
+the caps, a `stop` project's cap lands exactly on its spend, so "no new money" is
 enforceable, and `company.allocation.decided` carries every line with its basis. The
 whole company renders on one floor (`GET /companies/{id}/hq`): executive suites, the
 board room, one pod per member project with its teams.
@@ -108,17 +108,17 @@ board room, one pod per member project with its teams.
 
 | Action | Orchestrator | Head | Lead | Worker | Decider |
 |--------|:---:|:---:|:---:|:---:|:---:|
-| Create/close department | ✅ | – | – | – | – |
-| Hire/fire agents | ✅ (any) | ✅ (own dept) | propose | – | – |
-| Allocate budget | ✅ | ✅ (within envelope) | request | – | – |
-| Create tasks in a dept | ✅ | ✅ | within squad | – | – |
-| Execute a task | – | – | ✅ | ✅ | – |
-| Reassign a task | ✅ | ✅ | own squad | – | – |
-| Convene council | ✅ | ✅ (own scope) | – | – | – |
-| Bind a decision | – | – | – | – | ✅ |
-| Override a decision | ✅ (logged, reason required) | – | – | – | – |
-| Request human approval | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Terminate a run | ✅ | own dept | own squad | – | – |
+| Create/close department | yes | – | – | – | – |
+| Hire/fire agents | yes (any) | yes (own dept) | propose | – | – |
+| Allocate budget | yes | yes (within envelope) | request | – | – |
+| Create tasks in a dept | yes | yes | within squad | – | – |
+| Execute a task | – | – | yes | yes | – |
+| Reassign a task | yes | yes | own squad | – | – |
+| Convene council | yes | yes (own scope) | – | – | – |
+| Bind a decision | – | – | – | – | yes |
+| Override a decision | yes (logged, reason required) | – | – | – | – |
+| Request human approval | yes | yes | yes | yes | yes |
+| Terminate a run | yes | own dept | own squad | – | – |
 
 Everything in the matrix is enforced in `control/org.py` + the PolicyEngine
 (`core/security.py`), not by prompt text. Prompts express the *intent*; the policy engine
@@ -129,15 +129,15 @@ expresses the *law*.
 | Role | Purpose | Typical grade | Model tier |
 |------|---------|---------------|-----------|
 | `orchestrator` | Executive: decompose goals, hire, arbitrate, settle rewards | Principal | reasoning |
-| `ceo` | Executive: the portfolio — which projects run, at what budget, what stops | Chief | reasoning |
+| `ceo` | Executive: the portfolio, which projects run, at what budget, what stops | Chief | reasoning |
 | `chair` | Governance: chairs the board of directors; the CEO's manager | Chief | reasoning |
-| `board_member` | Governance: an owners' seat — challenges direction, votes the record | Chief | reasoning |
-| `cfo` | Executive: the money function — envelopes, allocation truth, the ledger | Chief | reasoning |
+| `board_member` | Governance: an owners' seat, challenges direction, votes the record | Chief | reasoning |
+| `cfo` | Executive: the money function, envelopes, allocation truth, the ledger | Chief | reasoning |
 | `cto` | Executive: the technology function (engineering, data, security) | Chief | reasoning |
 | `cmo` | Executive: the market function (research, business) | Chief | reasoning |
 | `cpo` | Executive: the product function (design, content, media) | Chief | reasoning |
 | `coo` | Executive: the operations function (org, meta) | Chief | reasoning |
-| `hr` | People manager: owns hiring — interviews every candidate against the gap, the budget and the floor (ADR 0016) | Senior | reasoning |
+| `hr` | People manager: owns hiring, interviews every candidate against the gap, the budget and the floor (ADR 0016) | Senior | reasoning |
 | `head` | Department manager: staffing, planning within domain, quality bar | Senior | reasoning |
 | `lead` | Squad manager: sequencing, unblocking, integration | Senior | standard |
 | `worker` | Does the work with tools | Junior→Senior | fast/standard |
@@ -159,9 +159,9 @@ HiringService can compose new ones (see §5).
   `video-editing`, `prompt-engineering`, `unit-testing`, `security-review`, …) with a
   description and the tool grants normally needed to exercise it.
 - `skills` table holds the catalog; `agent_skills` holds per-agent proficiency
-  (`0..1`, seeded on hire, updated by reward events — skill-specific scores).
+  (`0..1`, seeded on hire, updated by reward events, skill-specific scores).
 - Every task carries `required_skills[]` with weights. A skill counts as covered once the
-  roster's best proficiency reaches 0.75 — below that it is a **capability gap**. The hiring
+  roster's best proficiency reaches 0.75, below that it is a **capability gap**. The hiring
   gate (`control/hiring.py`) scores a candidate on a covered/needed **ratio** (hard floor 0.5)
   blended into a weighted total: `0.45 × coverage + 0.25 × budget fit + 0.2 × complementarity
   + 0.1 × vision` ≥ 0.55.
@@ -186,14 +186,14 @@ gap detected
                        └─ Orchestrator approves (auto-approve if under threshold)
 ```
 
-**ADR 0016 — hiring goes through HR.** Before the first wave that actually hires, the
+**ADR 0016, hiring goes through HR.** Before the first wave that actually hires, the
 project seats a **Head of People** (a `People` department; the bootstrap hire is direct).
-Every subsequent growth hire — head, lead, worker, function chief — runs as an *opening*
+Every subsequent growth hire, head, lead, worker, function chief, runs as an *opening*
 through `hiring.hr_hire()`: candidates arrive with souls, an interview scores them against
 the real gap, the real budget bound (`min(project headroom, department envelope remaining)`)
 and the people already on the floor, and only the passing candidate is hired. Friction is
 bounded by the owner's rule: **at most two rejections per opening, and the candidate after
-them always lands** — occasional on purpose (`hr_friction`, default 0.28 of openings), so
+them always lands**, occasional on purpose (`hr_friction`, default 0.28 of openings), so
 the record reads like a company, not a pipeline loop. Rejected candidates exist only on the
 record (`hiring.candidate.rejected`), never as agent rows.
 
@@ -202,12 +202,12 @@ Guardrails on spawning (all enforced in code, see docs/08):
 - Each hire costs budget; a hire that would breach the project envelope is refused and the
   Orchestrator must re-plan with what it has (or ask the user).
 - New agents start at the **lowest grade that can plausibly do the job** (`Trainee`/`Junior`)
-  with `autonomy_level = supervised` and cheap models — promotion is earned (docs/05). This
+  with `autonomy_level = supervised` and cheap models, promotion is earned (docs/05). This
   keeps the cost curve sane and makes the reward system load-bearing.
 - Anti-thrash: a hire is rejected if an identical role spec was laid off in the last N events
   without materially different requirements.
-- Every spawn emits its real event — `org.department.created`, `org.squad.created`,
-  `org.agent.hired` or `org.function.formed` — plus an `audit` entry with the gap that
+- Every spawn emits its real event, `org.department.created`, `org.squad.created`,
+  `org.agent.hired` or `org.function.formed`, plus an `audit` entry with the gap that
   justified it.
 
 ## 6. Council & decision protocol

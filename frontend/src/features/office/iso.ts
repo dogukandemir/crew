@@ -6,7 +6,7 @@
  * forecloses the vertical axis, so people read as lying down on the floor.
  *
  * This is the fix, and it is how 2D games have always done it. A dimetric
- * projection with a 2:1 axis ratio keeps **verticals vertical on screen** — a
+ * projection with a 2:1 axis ratio keeps **verticals vertical on screen**, a
  * standing character is drawn straight up, and every prop is drawn as a real
  * volume with a lit top face and two shaded side faces. Nothing is rotated in
  * 3D; the whole scene is flat SVG that merely *looks* three-dimensional.
@@ -32,7 +32,7 @@ export interface WorldPoint {
 export const ISO = {
   /** Horizontal spread per world unit. */
   kx: 1,
-  /** Vertical spread per world unit — half of kx gives the classic 2:1 diamond. */
+  /** Vertical spread per world unit, half of kx gives the classic 2:1 diamond. */
   ky: 0.5,
   /** Screen pixels per world unit of height (verticals are not foreshortened). */
   kz: 1,
@@ -86,11 +86,11 @@ export interface BoxFaces {
 /**
  * The three visible faces of a box standing on the floor.
  *
- * `lift` raises the whole box off the ground — that is what turns a slab into a
+ * `lift` raises the whole box off the ground, that is what turns a slab into a
  * seat on a stem, and a counter top into something you can see the front of.
  *
  * Light comes from the upper left, so the top face keeps its colour and the two
- * visible sides are darkened by `FACE_SHADE` — that contrast is what makes a flat
+ * visible sides are darkened by `FACE_SHADE`, that contrast is what makes a flat
  * rectangle read as a solid object.
  */
 export function boxFaces(

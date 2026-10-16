@@ -58,7 +58,7 @@ This is a source and local behavior review, not a penetration-test certification
 
 Priority meanings: **P0** = immediate public-release blocker; **P1** = required before recommending live use or a broad launch; **P2** = important hardening, usability, or growth work. Priority reflects this product's intended use, not a formal CVSS score. Authentication findings become immediate blockers for any shared or remotely accessible deployment.
 
-### F01 — P0: the file jail accepts sibling directories
+### F01: P0: the file jail accepts sibling directories
 
 **Reproduced.** [`execution/tools.py:63–70`](../../../backend/src/crew/execution/tools.py#L63) checks containment with a string prefix after resolving the path. A workspace named `workspace` therefore also accepts a sibling named `workspace-other`. A synthetic read of `../workspace-other/canary.txt` succeeded. Read, write, list, and delete helpers share this check.
 
@@ -66,7 +66,7 @@ Priority meanings: **P0** = immediate public-release blocker; **P1** = required 
 
 **Required change:** use path-aware ancestry checks; reject the root for destructive operations; test sibling prefixes, traversal, absolute paths, case behavior, and symlinks on supported platforms. A path check alone does not eliminate symlink race conditions: enforce the same filesystem boundary in the execution environment.
 
-### F02 — P0: real tool execution omits project policy context
+### F02: P0: real tool execution omits project policy context
 
 **Code-confirmed.** [`execution/runner.py:117`](../../../backend/src/crew/execution/runner.py#L117) constructs `ToolContext` without its project object. [`execution/tools.py:717`](../../../backend/src/crew/execution/tools.py#L717) consequently passes `None` into policy evaluation. Project-specific pause state, deny settings, approval requirements, and extra egress configuration are not evaluated through that object. Agent role and grant checks still exist; this is not a complete absence of security.
 
@@ -74,7 +74,7 @@ Priority meanings: **P0** = immediate public-release blocker; **P1** = required 
 
 **Required change:** make project/run identity mandatory and reload authoritative policy at each tool boundary. Fail closed if the project cannot be resolved. Add an integration test that changes policy while a real runner task is active and proves the next tool call is denied.
 
-### F03 — P0: default Docker networking exposes an unauthenticated API
+### F03: P0: default Docker networking exposes an unauthenticated API
 
 **Configuration reproduced; exposure inferred from Docker semantics.** [`docker-compose.yml:15`](../../../docker-compose.yml#L15) publishes `8787:8787`, while the backend listens on `0.0.0.0` and defaults to development/local authentication. [`core/settings.py:105`](../../../backend/src/crew/core/settings.py#L105) only rejects unsafe local authentication outside development mode. A development configuration with a non-loopback host was accepted in a probe.
 
@@ -82,7 +82,7 @@ Omitting the host IP publishes a Docker port on all host interfaces by default; 
 
 **Required change:** bind the local-first distribution to `127.0.0.1` on the host; explicitly reject unsafe deployment combinations; validate browser Origin/Host where appropriate; use an authenticated local bootstrap mechanism. Make remote hosting a separately documented, tested configuration.
 
-### F04 — P1, P0 for remote use: token authentication does not establish meaningful authorization
+### F04: P1, P0 for remote use: token authentication does not establish meaningful authorization
 
 **Reproduced and code-confirmed.** The entire API router requires authentication at [`api/routes.py:68`](../../../backend/src/crew/api/routes.py#L68), including its login route around line 515. An unauthenticated login request in token mode returned 401. A validly signed viewer token with a nonexistent user ID could update a project and received 200.
 
@@ -90,7 +90,7 @@ Omitting the host IP publishes a Docker port on all host interfaces by default; 
 
 **Required change:** separate unauthenticated login/bootstrap routes; require a strong configured secret for token mode; resolve current users and disabled/revoked state; enforce an explicit role and ownership matrix on each operation. A viewer must not change budgets, approve tools, write secrets, or stop projects. Avoid shipping shared credentials in the frontend bundle.
 
-### F05 — P1: spending caps are neither atomic nor comprehensive
+### F05: P1: spending caps are neither atomic nor comprehensive
 
 **Reproduced.** [`core/security.py:300`](../../../backend/src/crew/core/security.py#L300) separates reservation reads, counters, and ledger writes. With a controlled concurrent interleaving, two reservations of 80 each both succeeded against 100 available: the ledger totaled 160 while the stored reservation counter was 80. Reusing an idempotency key caused an integrity error after the counter had already changed: counter 20, ledger 10.
 
@@ -100,7 +100,7 @@ Omitting the host IP publishes a Docker port on all host interfaces by default; 
 
 **Required change:** a central model gateway with atomic, idempotent reservations for every billable call; hierarchical limits; explicit time windows; settlement and reconciliation on success, failure, timeout, and restart. Set output/token limits before requests. Label estimated versus provider-reported usage and expose unknown cost instead of silently converting it to zero.
 
-### F06 — P1: verification can reward imaginary deliverables
+### F06: P1: verification can reward imaginary deliverables
 
 **Reproduced.** [`control/verify.py:51`](../../../backend/src/crew/control/verify.py#L51) accepts keyword overlap and filename/URL-shaped text as evidence. A narrative referring to nonexistent `imaginary.py`, with no artifacts and a mocked judge explicitly rejecting the result, still returned **pass, quality 1.0**. The final quality selection around line 135 allows the heuristic score to override a negative judge.
 
@@ -108,7 +108,7 @@ Omitting the host IP publishes a Docker port on all host interfaces by default; 
 
 **Required change:** task-specific acceptance contracts backed by actual artifacts, hashes, executable checks, or structured evidence. A claimed file must exist in the correct workspace. Failed mandatory checks must veto success. Distinguish verified, partially verified, failed, and unable-to-verify outcomes. Keep simulated results visibly separate from real results.
 
-### F07 — P1: stop, pause, cancel, and recovery are not reliable control contracts
+### F07: P1: stop, pause, cancel, and recovery are not reliable control contracts
 
 **Code-confirmed.** [`control/orchestrator.py:1034`](../../../backend/src/crew/control/orchestrator.py#L1034) changes run state and opens an in-memory breaker, but does not reliably terminate an in-flight worker. API cancellation around [`api/routes.py:900`](../../../backend/src/crew/api/routes.py#L900) updates stored status; execution does not consistently treat that terminal status as a prohibition on subsequent work or completion. Project pause and run pause are not the same checked state. Resume does not fully restore paused-budget execution.
 
@@ -116,13 +116,13 @@ The Docker subprocess timeout path lacks guaranteed named-container cleanup. Kil
 
 **Required change:** define separate semantics for “stop scheduling,” “pause at next boundary,” and “terminate active execution.” Implement cancellation tokens and worker/container termination, guard terminal state transitions, and reconcile outstanding reservations during recovery. The UI must state the achieved action accurately; do not promise that all in-flight work has been aborted unless it has.
 
-### F08 — P1: allowed HTTP requests can redirect outside the intended egress boundary
+### F08: P1: allowed HTTP requests can redirect outside the intended egress boundary
 
 **Code-confirmed.** [`execution/tools.py:93`](../../../backend/src/crew/execution/tools.py#L93) follows redirects while the HTTP tool validates the initial host. Private-host matching is based on host text, not the full set of resolved addresses at connection time. A permitted site can redirect to an internal or otherwise disallowed destination before content review occurs.
 
 **Required change:** validate scheme, port, resolved addresses, and every redirect hop; block loopback, link-local, private, and metadata destinations unless explicitly intended. Protect against DNS changes between validation and connection. Prefer one enforced egress service for all agent networking. Stream responses with a byte/time limit rather than downloading an unbounded body and truncating afterward.
 
-### F09 — P1: approvals can outlive their intended authority
+### F09: P1: approvals can outlive their intended authority
 
 **Reproduced.** An approval whose expiry was yesterday still authorized `fs.delete` through [`core/security.py:476`](../../../backend/src/crew/core/security.py#L476). General grants are broader than a specific tool invocation and do not establish a one-use, argument-bound approval contract. Security-review approvals also need expiry/revocation consistency.
 
@@ -130,7 +130,7 @@ Command normalization collapses whitespace, including whitespace inside quoted c
 
 **Required change:** define reusable versus one-shot grants explicitly. Bind one-shot approval to project, run, agent, capability, canonical typed arguments, expiry, and consumption state. Preserve the exact command bytes for command approval hashes. Show what is being approved, the scope, and the duration.
 
-### F10 — P1: secret protection has gaps across loading, logging, and storage
+### F10: P1: secret protection has gaps across loading, logging, and storage
 
 **Code-confirmed.** The exact-string redactor learns secrets during creation/import, but provider keys loaded from the vault at startup are not consistently registered. Tool arguments and runner callbacks can reach persisted events before centralized redaction; sanitizing the final result is insufficient. Relevant paths include [`core/security.py:171`](../../../backend/src/crew/core/security.py#L171), [`control/onboarding.py:230`](../../../backend/src/crew/control/onboarding.py#L230), and [`execution/tools.py:743`](../../../backend/src/crew/execution/tools.py#L743).
 
@@ -138,7 +138,7 @@ The vault key is stored alongside the database unless externally configured. Enc
 
 **Required change:** redact centrally at persistence, logging, event, and export boundaries; register secrets on every load; use restrictive file permissions; document key rotation and recovery; test redaction after restart. Replace absolute “nothing leaves your machine” language with a precise description of provider requests, enabled tools, and telemetry settings.
 
-### F11 — P1: workspace identity and container persistence can lose or mix real work
+### F11: P1: workspace identity and container persistence can lose or mix real work
 
 **Reproduced:** two distinct projects with the same display name in one company received the same workspace path through [`control/workspaces.py`](../../../backend/src/crew/control/workspaces.py).
 
@@ -146,7 +146,7 @@ The vault key is stored alongside the database unless externally configured. Enc
 
 **Required change:** use immutable IDs in workspace allocation, store a durable mapping, persist workspaces separately, and define a safe host-folder mounting workflow. Test project rename, duplicate names, backup/restore, and container recreation with real artifact files.
 
-### F12 — P1: the documented live setup does not match the distribution
+### F12: P1: the documented live setup does not match the distribution
 
 The backend image **did build and start with its default command**. There is no general Docker boot failure. However:
 
@@ -158,13 +158,13 @@ The backend image **did build and start with its default command**. There is no 
 
 **Required change:** make Demo and Live explicit runtime modes; ship a supported sandbox worker; validate each advertised provider; provide host/container-specific Ollama instructions. Do not solve the sandbox gap by casually granting the entire API container unrestricted control of the host Docker daemon. See [CrewAI's provider migration guidance](https://github.com/crewAIInc/crewAI/blob/main/docs/v1.15.17/en/learn/litellm-removal-guide.mdx).
 
-### F13 — P1: durable deployment lacks a versioned database upgrade path
+### F13: P1: durable deployment lacks a versioned database upgrade path
 
 **Code-confirmed.** [`core/db.py:73`](../../../backend/src/crew/core/db.py#L73) creates tables in development but skips creation in production. The repository does not include the migration system described by the architecture documentation; existing additive schema handling is not a complete migration history.
 
 **Required change:** provide versioned migrations, a fresh-install production path, upgrade fixtures from prior releases, and backup/restore instructions. A successful developer database startup does not establish safe upgrades for public users.
 
-### F14 — P1: event delivery can silently omit history
+### F14: P1: event delivery can silently omit history
 
 **Code-confirmed.** [`api/ws.py:108`](../../../backend/src/crew/api/ws.py#L108) replays at most 2,000 events before signaling replay completion with the stream head. A longer disconnection can skip the remainder. Queue overflow and frame truncation can drop events without a consistent gap notification. The frontend has gap-handling concepts that the server does not fully implement.
 
@@ -172,13 +172,13 @@ The backend image **did build and start with its default command**. There is no 
 
 **Required change:** commit domain changes and an outbox record together; paginate replay; make sequence gaps explicit; deduplicate delivery; reconcile from snapshots. Test overflow, reconnect beyond 2,000 events, and concurrent writers. Keep the audit-chain threat model honest: local hash chaining alone is not an externally anchored tamper-proof record.
 
-### F15 — P1: concurrency and blocking work can overwhelm the control plane
+### F15: P1: concurrency and blocking work can overwhelm the control plane
 
 **Code-confirmed.** The execution semaphore around [`control/orchestrator.py:242`](../../../backend/src/crew/control/orchestrator.py#L242) is created per run, not globally. Multiple runs can each consume the full allowance. Synchronous model calls in asynchronous planning/judging/council code can block the API event loop. In-memory background task tracking is not durable scheduling.
 
 **Required change:** enforce a shared scheduler with company/project/provider limits; isolate blocking calls; apply timeouts; store job ownership and leases. Begin with a single supported application process and a bounded worker pool. Multiple services or a new database are not prerequisites for solving this.
 
-### F16 — P1/P2: dependency risk and licensing need an explicit release decision
+### F16: P1/P2: dependency risk and licensing need an explicit release decision
 
 **Reproduced scan:** the installed Python environment reports five vulnerability records for `chromadb==1.1.1`, representing **four unique advisories**. They include upstream code-execution and authorization issues. The scanner did not identify a fixed version. Crew's own memory implementation uses SQL/lexical search, and no Chroma server configuration was found; **this review did not establish that Crew exposes those vulnerable server paths**. Do not describe this as a demonstrated remote-code-execution exploit in Crew.
 
@@ -188,13 +188,13 @@ The backend image **did build and start with its default command**. There is no 
 
 The npm audit returned zero known vulnerabilities. Git-history secret scanning produced six historical test-fixture matches, not confirmed real credentials. Add continuous scanning rather than treating either result as a permanent guarantee.
 
-### F17 — P1: the first-run flow blurs simulation, readiness, and spending
+### F17: P1: the first-run flow blurs simulation, readiness, and spending
 
 **Observed in the actual offline UI.** The first-run screen shows a connected state and completed provider step without a prominent Demo/offline label. A user can reasonably infer that a real model is ready. The founding wizard's quick flow hides budgets under detailed setup, while submission creates the company/project and starts a run.
 
 **Required change:** always show Demo or Live next to connection status. Before starting, show provider/model, workspace, spending cap, network/tool permissions, and the expected deliverable. Make “Create company” and “Start first project” distinct choices or clearly disclose the combined action. When live execution is unavailable, give a specific corrective action rather than a generic green readiness state.
 
-### F18 — P2: accessibility and navigation need consolidation
+### F18: P2: accessibility and navigation need consolidation
 
 **Observed:** the founding modal fits a 390-pixel viewport without global horizontal overflow, but its dense columns and small helper text reduce readability. Keyboard navigation can leave the open modal; this was verified without submitting the form. The dialog lacks a complete accessible-name/focus-management contract.
 
@@ -202,13 +202,13 @@ Implement labeling, initial focus, focus containment/restoration, and inert back
 
 The production build succeeds but warns about the main JavaScript chunk at approximately 552 kB before compression. Lazy-load heavy views and measure real interaction performance before expanding the visual simulation. No frame-rate or Core Web Vitals benchmark was performed; the bundle warning is not proof of an unusably slow application.
 
-### F19 — P1/P2: API contracts and multi-step commands need stronger boundaries
+### F19: P1/P2: API contracts and multi-step commands need stronger boundaries
 
 **Code-confirmed.** Large route modules use loosely structured request/response data and repeated state-changing logic. Founding spans multiple committed operations and then starts work. A retry after a partial failure can create duplicates or leave a partial company. Several state strings and text/dictionary inputs need tighter validation and bounds.
 
 **Required change:** model state transitions explicitly; validate state enums and payload limits; give long-running commands an idempotency key and durable result; generate frontend types from a versioned API schema. Keep business rules in application services rather than route handlers. The approximately 1,980-line routes module, 1,262-line organization module, and 1,081-line orchestrator are useful refactoring boundaries, not evidence that a full rewrite is necessary.
 
-### F20 — P2: public repository packaging and claims need editorial repair
+### F20: P2: public repository packaging and claims need editorial repair
 
 The repository needs a security reporting policy, contribution guide, code of conduct, issue/PR templates, release notes, maintainer expectations, and a repeatable release workflow. The current CI validates application tests/builds but does not establish clean cross-platform installation, supported-provider behavior, dependency review, or secret scanning.
 

@@ -1,4 +1,4 @@
-"""Live provider tests — excluded from the default run (addopts excludes `live`).
+"""Live provider tests, excluded from the default run (addopts excludes `live`).
 
 Run these only with a real key and a small budget:
 

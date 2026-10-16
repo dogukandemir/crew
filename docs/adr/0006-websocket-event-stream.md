@@ -1,4 +1,4 @@
-# ADR 0006 — WebSocket event stream as the only live channel
+# ADR 0006: WebSocket event stream as the only live channel
 
 - **Status:** Accepted
 - **Date:** 2026-10-06
@@ -20,5 +20,5 @@ budget on the server and cannot deliver per-step agent telemetry.
 - The UI has exactly one live source of truth; panels are projections of the event stream.
 - Because events are also persisted, the same code path serves live view and replay.
 - We must handle reconnection, resume and gaps explicitly (specified in docs/11 §3).
-- No push of full objects on subscribe — the UI bootstraps from REST, then applies deltas:
+- No push of full objects on subscribe, the UI bootstraps from REST, then applies deltas:
   keeps frames small and logic simple.

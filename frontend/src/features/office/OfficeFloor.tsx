@@ -39,7 +39,7 @@ const HEADROOM = 140;
 
 /**
  * Where the API is, and whether it is the zero-key mock. The demo clock the reset
- * control drives lives in `dev/mock` only — the control renders only when the mock is
+ * control drives lives in `dev/mock` only, the control renders only when the mock is
  * what's behind the API, so a real deployment never shows a button that does nothing.
  */
 const API_BASE = (import.meta.env as Record<string, string | undefined>).VITE_API_BASE
@@ -61,7 +61,7 @@ function useNow(intervalMs: number): number {
  * Domain state decides *where* everyone should be (targets.ts); a single rAF
  * loop walks them there along the corridor network and writes transforms
  * straight to the DOM, so 30 characters move at 60fps without re-rendering
- * React. The view holds only presentation state — never domain truth.
+ * React. The view holds only presentation state, never domain truth.
  */
 export function OfficeFloor({ projectId }: { projectId: string; tabId: string }) {
   const org = useOrg(projectId);
@@ -111,9 +111,9 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
    * Keep the floor in position order.
    *
    * SVG has no z-index: element order IS paint order. Every prop and every person in
-   * a room is a child of the depth layer carrying `data-depth` — the world x + y of
+   * a room is a child of the depth layer carrying `data-depth`, the world x + y of
    * its base, which the projection turns into height on screen, larger being nearer
-   * — so this walks that list once a frame and re-appends it only when something has
+   *, so this walks that list once a frame and re-appends it only when something has
    * actually crossed something else. A person walking behind a desk is behind it,
    * and in front of it on the way back, without anybody deciding so.
    */
@@ -159,11 +159,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   const office = useMemo(() => {
     // The floor is EXTENDED, never re-packed: the slots from the last build go back in,
     // so a room that already exists keeps its place and only new rooms are allocated.
-    // That is what makes a hire a local event — the department it joins re-grids its
+    // That is what makes a hire a local event, the department it joins re-grids its
     // own desks and nobody else in the building moves.
     //
     // The ref is written inside the memo on purpose: it is the memo's own output that
-    // the next build needs. StrictMode calling this twice is harmless — the second call
+    // the next build needs. StrictMode calling this twice is harmless, the second call
     // restores the slots the first one just produced, which is the same placement.
     const built = buildOffice(org.data?.root, {
       showArchived,
@@ -381,8 +381,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
       last = t;
       // Dev probe: is this loop alive, and does it have anything to drive? Three
-      // stacked things can stop the office dead — a dead rAF, an empty walker map,
-      // a sprite map with no elements in it — and from outside they look identical.
+      // stacked things can stop the office dead, a dead rAF, an empty walker map,
+      // a sprite map with no elements in it, and from outside they look identical.
       // `targets` adds the one piece pixels cannot answer: WHERE each character is
       // headed and why (a council that failed to seat its panel looks exactly like
       // an empty meeting room).
@@ -449,7 +449,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         m.current.speed = dt > 0 ? travelled / dt : 0;
         m.current.facing = flip < 0 ? -1 : 1;
         // The floor's order is a property of where things stand, so it is written
-        // where positions are written — here, and not in React.
+        // where positions are written, here, and not in React.
         m.current.x = next.x;
         m.current.y = next.y;
         m.current.seated = !next.moving && !!targetsRef.current[id]?.seated;
@@ -513,8 +513,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   // ── Camera interaction ─────────────────────────────────────────────────────
   useEffect(() => {
     // The frame is resolved FROM THE EVENT, on every wheel, and never captured at mount.
-    // The captured version came back null — the office's labelled element does not exist
-    // yet when this effect first runs — so every wheel was rejected, no preventDefault
+    // The captured version came back null, the office's labelled element does not exist
+    // yet when this effect first runs, so every wheel was rejected, no preventDefault
     // was called, and the browser took the gesture as its own page zoom, in Chrome and
     // Firefox alike. The handler's own trace said exactly that:
     //   { mounted: true, frameTag: null, sawEvent: true, inFrame: false }
@@ -526,8 +526,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       // two-finger scroll flung the zoom about while the reader was only trying to look
       // around, which is not what that gesture means anywhere else.
       // Alt is a first-class zoom modifier here, not a fallback. Firefox handles its
-      // own Ctrl+wheel page zoom INSIDE the browser, and no preventDefault — in any
-      // phase, from any element — cancels it. A Ctrl-only binding therefore still zooms
+      // own Ctrl+wheel page zoom INSIDE the browser, and no preventDefault, in any
+      // phase, from any element, cancels it. A Ctrl-only binding therefore still zooms
       // the page in Firefox however early we listen, which is exactly what was
       // reported. Alt+wheel is unclaimed by Firefox, Chrome and Edge alike, so it means
       // the floor in all three; Ctrl+wheel keeps working where the browser allows it.
@@ -539,7 +539,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
       setCam((c) => ({ ...c, x: c.x - e.deltaX, y: c.y - e.deltaY }));
     };
     // Capture phase, on the window: a browser decides its own page zoom from a Ctrl+wheel
-    // event, so preventDefault has to land before the default action — and a dropped
+    // event, so preventDefault has to land before the default action, and a dropped
     // wheel is not a no-op, the browser takes it as page zoom. That is what was
     // happening: the gesture was rejected here, not by the browser.
     // The guard resolves the game frame FROM THE EVENT (see captureWheel), never from a
@@ -712,7 +712,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
         <span className="office-sep" />
 
         {/* How big the sprites are drawn. Every option is the same geometry at a
-            different size — one factor on both axes — so this is a choice about
+            different size, one factor on both axes, so this is a choice about
             scale, never about shape. */}
         <Select aria-label="Character size" className="w-32 text-xs" value={spriteScale}
           onChange={event => setSpriteScale(event.target.value as typeof spriteScale)}>
@@ -789,7 +789,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           className={cn('office-canvas', panning && 'is-panning')}
           tabIndex={0}
           role="region"
-          aria-label="Office floor — drag or use arrow keys to pan, Alt plus scroll to zoom, inspect an agent for activity and output"
+          aria-label="Office floor, drag or use arrow keys to pan, Alt plus scroll to zoom, inspect an agent for activity and output"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -822,7 +822,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           </div>
 
           {/* Restart the mock backend's hiring clock and reload, so the growth can be
-              watched from t=0. The clock lives in the mock (`dev/mock`) — this renders
+              watched from t=0. The clock lives in the mock (`dev/mock`), this renders
               only when the mock is behind the API, never against a real backend. */}
           {MOCK_BEHIND && (
             <button

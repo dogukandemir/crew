@@ -1,4 +1,4 @@
-"""Batch 1 of docs/17 — the three doors that were painted on.
+"""Batch 1 of docs/17, the three doors that were painted on.
 
 - a granted approval must OPEN the gate it was requested for (it used to be recorded
   and then ignored, so the retried call was denied forever);
@@ -143,7 +143,7 @@ async def test_reaper_frees_busy_agents_with_nothing_running(bound_loop, project
 
 @pytest.mark.asyncio
 async def test_antithrash_has_a_window(bound_loop, project):
-    """A layoff blocks an identical no-rationale rehire within the window — and only within it."""
+    """A layoff blocks an identical no-rationale rehire within the window, and only within it."""
     first = await org.hire_agent(project_id=project["id"],
                                  spec=RoleSpec.from_template(Role.SPECIALIST), rationale="first hire")
     async with session_scope() as s:
@@ -161,7 +161,7 @@ async def test_antithrash_has_a_window(bound_loop, project):
                                   rationale="a real reason this time")
     assert second["id"] != first["id"], "a rationale opens the door"
 
-    # age both archives beyond the project's layoff_idle_days window (14) — the door opens
+    # age both archives beyond the project's layoff_idle_days window (14), the door opens
     async with session_scope() as s:
         for aid in (first["id"], second["id"]):
             row = await s.get(Agent, aid)
@@ -176,7 +176,7 @@ async def test_antithrash_has_a_window(bound_loop, project):
 @pytest.mark.asyncio
 async def test_a_standalone_order_is_adopted_by_the_next_wave(bound_loop, project):
     """The command desk's promise: a task created outside any run (run_id NULL) must be
-    picked up and executed by the next wave. It used to sit `assigned` forever — every
+    picked up and executed by the next wave. It used to sit `assigned` forever, every
     wave only ever looked at tasks clamped to its own run."""
     async with session_scope() as s:
         a = await _agent(s, project["id"], name="Ordered", grade=3)

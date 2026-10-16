@@ -14,7 +14,7 @@ const STANDALONE = '__standalone__';
 /**
  * New project (ADR 0015, company-first): when opened from a company's portfolio the
  * project is born UNDER that company (fixed, no selector); opened freely it defaults
- * to the first company and still offers "standalone" — the model keeps that freedom,
+ * to the first company and still offers "standalone", the model keeps that freedom,
  * the flow just stops hiding it.
  */
 export function NewProjectDialog() {
@@ -99,7 +99,7 @@ export function NewProjectDialog() {
         {companyContext ? (
           <Field label="Company">
             <p className="text-xs text-slate-300">
-              ⌂ {contextName ?? 'This company'} — the project reports up to its CEO from birth.
+              ⌂ {contextName ?? 'This company'}, the project reports up to its CEO from birth.
             </p>
           </Field>
         ) : (
@@ -112,7 +112,7 @@ export function NewProjectDialog() {
               onChange={(e) => setCompanyId(e.target.value)}
               className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 focus:border-emerald-500/60 focus:outline-none"
             >
-              <option value={STANDALONE}>— standalone (no company) —</option>
+              <option value={STANDALONE}>standalone (no company)</option>
               {(companies.data?.items ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
                   ⌂ {c.name}
@@ -127,7 +127,7 @@ export function NewProjectDialog() {
         <Field label="Goal" hint="What should the org achieve? The Orchestrator interprets this and forms the org.">
           <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Build a launch plan for the Q3 campaign." />
         </Field>
-        <Field label="Budget cap (USD)" hint="Hard-enforced server-side — a run cannot exceed the cap.">
+        <Field label="Budget cap (USD)" hint="Hard-enforced server-side, a run cannot exceed the cap.">
           <Input type="number" min="0" step="0.5" value={budget} onChange={(e) => setBudget(e.target.value)} />
         </Field>
         {create.isError && <PanelError error={create.error} label="Create project" />}

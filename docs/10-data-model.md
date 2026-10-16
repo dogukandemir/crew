@@ -1,4 +1,4 @@
-# 10 — Data Model
+# 10: Data Model
 
 SQLAlchemy 2.x declarative, async. SQLite in dev (WAL), Postgres in prod. All ids are
 `uuid4().hex` strings (32-char, not sortable). All timestamps UTC. Money = `cost_micros` BIGINT (1 USD = 1e6).
@@ -53,23 +53,23 @@ workstream, brain_scope_tags(json)`
 
 ### agents
 `id, project_id, department_id, squad_id, manager_id, name, role, grade(int 0..5),
-state(idle|busy|probation|suspended|archived), break_until(datetime — the Captain's break,
+state(idle|busy|probation|suspended|archived), break_until(datetime, the Captain's break,
 ADR 0012; matching skips the agent until it passes), mission, responsibilities(json),
 decision_style, autonomy(supervised|bounded|autonomous), model_tier, model_id,
 token_cap_per_step, spend_cap_per_run_micros, spend_cap_per_day_micros, spend_today_micros,
 score(float), score_confidence(float), evidence_count, success_rate, tasks_done, tasks_failed,
-penalty_count, company_knowledge(float 0..1 — ADR 0014: grows with verified work),
-soul(json — ADR 0016: the person: traits, values, vision, voice, quirks, background,
+penalty_count, company_knowledge(float 0..1, ADR 0014: grows with verified work),
+soul(json, ADR 0016: the person: traits, values, vision, voice, quirks, background,
 source(deterministic|model:<id>)),
 prompt_version, brain_id, tools(json), approval_rules(json), created_at,
 archived_at, last_active_at`
 
 Hiring candidates (ADR 0016) are **events, not tables**: the `hiring.*` payloads carry who
-applied, their interview scores, and why they walked — the record keeps them; the roster
+applied, their interview scores, and why they walked, the record keeps them; the roster
 never does.
 
 ### skills / agent_skills
-`skills: id, label, category, description, typical_tools(json), related(json)` — global catalog
+`skills: id, label, category, description, typical_tools(json), related(json)`, global catalog
 `agent_skills: agent_id, skill_id, proficiency(float), evidence_count, last_used_at`
 
 ### runs
@@ -87,7 +87,7 @@ escalation_reason`
 
 ### work_items (the board, ADR 0010)
 `id, project_id (FK), run_id?, parent_id (self; epic > feature > story), kind(epic|feature|story|bug),
-title, body, acceptance (JSON), state(backlog|ready|in_progress|review|done|blocked — authoritative only
+title, body, acceptance (JSON), state(backlog|ready|in_progress|review|done|blocked, authoritative only
 while unpromoted), severity(low|normal|high|critical), priority(1 = highest), department_id?, squad_id?,
 created_by (user:*|agent id|system:*), assignee_agent_id?, task_id (set on promotion; afterwards the
 column is derived from the task), tags (JSON), source (JSON: task_id/bug provenance), created_at,
@@ -152,7 +152,7 @@ what they can see (ADR 0017).
 
 ### command_allows
 `id, project_id, command_norm, sample_cmd, note, created_by, source_approval_id, created_at,
-revoked_at, revoke_reason` — the owner's standing "always allow" list (ADR 0017). Rows exist
+revoked_at, revoke_reason`, the owner's standing "always allow" list (ADR 0017). Rows exist
 only through an explicit human grant; every add/revoke is audited.
 
 ### audit_log
@@ -176,7 +176,7 @@ revoked_at`
    `verification_results`, `council_positions`, `brain_links`) have **no UPDATE/DELETE** paths
    in the repository layer; supersession replaces mutation.
 3. A task's `depends_on` forms a DAG (checked in the Planner before insert).
-4. `agents.department_id` MAY be null — the "unassigned" roster is a real feature; exactly one
+4. `agents.department_id` MAY be null, the "unassigned" roster is a real feature; exactly one
    agent per project has `role='orchestrator'` and state != archived.
 5. `budget_ledger` sums per scope must equal `spend_micros` (reconciled by a startup check).
 6. Every `brain_entries` row has non-empty `source`.
@@ -194,7 +194,7 @@ revoked_at`
 
 ## 5. Retention & size control
 
-Rows marked **planned** do not run yet in 0.1.0 — they are the target.
+Rows marked **planned** do not run yet in 0.1.0, they are the target.
 
 | Table | Growth | Policy |
 |-------|--------|--------|

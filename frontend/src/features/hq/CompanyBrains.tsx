@@ -24,8 +24,8 @@ const SCOPE_LABEL: Record<string, string> = {
 };
 
 /**
- * The company's memory page (ADR 0015): the umbrella brain — mission, review lessons,
- * allocation decisions — and the members' index, so you can see WHERE the portfolio's
+ * The company's memory page (ADR 0015): the umbrella brain, mission, review lessons,
+ * allocation decisions, and the members' index, so you can see WHERE the portfolio's
  * knowledge lives without opening every project. Reading here is reading what the
  * agents retrieve; nothing is simulated.
  */
@@ -62,7 +62,7 @@ export function CompanyBrains({ companyId }: { companyId: string }) {
           )}
           {entries.isSuccess && entries.data.items.length === 0 && (
             <p className="rounded border border-dashed border-slate-700/70 p-4 text-center text-[11px] text-slate-500">
-              Nothing written yet — the mission seeds it at founding; reviews and allocations add decisions.
+              Nothing written yet, the mission seeds it at founding; reviews and allocations add decisions.
             </p>
           )}
           {entries.isSuccess && entries.data.items.length > 0 && (

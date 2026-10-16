@@ -1,4 +1,4 @@
-"""Crew — autonomous agent organization platform (backend)."""
+"""Crew: autonomous agent organization platform (backend)."""
 
 import os
 

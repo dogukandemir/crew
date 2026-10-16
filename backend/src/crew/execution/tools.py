@@ -127,7 +127,7 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
     """The security review gate for fetched web content (ADR 0017).
 
     → {"outcome": "clean"|"released"|"gated", "review": Verdict, "body": str|None,
-       "response": dict|None}. Risky content is quarantined and an approval is filed —
+       "response": dict|None}. Risky content is quarantined and an approval is filed,
     the agent never sees it before a human releases it.
     """
     review = run_on_loop(sreview.review_content(text, url=url, kind=kind, project_id=ctx.project_id), timeout=150)
@@ -167,7 +167,7 @@ def h_web_search(ctx: ToolContext, args: dict) -> dict:
     query = str(args.get("query", ""))[:300]
     if not query:
         return {"ok": False, "error": "query is required"}
-    # Search is internet access too — it obeys egress, same as http_get (ADR 0017).
+    # Search is internet access too, it obeys egress, same as http_get (ADR 0017).
     decision = policy.check_egress("html.duckduckgo.com", ctx.project)
     if not decision.allowed:
         run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
@@ -339,7 +339,7 @@ def _command_gate(ctx: ToolContext, *, tool: str, capability: str, cmd: str) -> 
 
     Order: the owner's always-allow list first (no re-query), then the deterministic
     review. A risky command runs only with a granted approval on file for exactly this
-    normalized command — otherwise the approval is filed and the command is held.
+    normalized command, otherwise the approval is filed and the command is held.
     Returns a gating response dict, or None when the command may run.
     """
     norm = sreview.normalize_command(cmd)
@@ -379,7 +379,7 @@ def h_shell_run(ctx: ToolContext, args: dict) -> dict:
                             severity="error", title="shell sandbox unavailable",
                             payload={"tool": "shell_run"},
                             agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
-        return {"ok": False, "error": "sandbox_unavailable: Docker is required — "
+        return {"ok": False, "error": "sandbox_unavailable: Docker is required, "
                                       "commands never run on the host"}
     workspace = (ctx.workspace or Path.cwd()).resolve()
     try:
@@ -405,7 +405,7 @@ def h_python_eval(ctx: ToolContext, args: dict) -> dict:
                             severity="error", title="python sandbox unavailable",
                             payload={"tool": "python_eval"},
                             agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
-        return {"ok": False, "error": "sandbox_unavailable: Docker is required — "
+        return {"ok": False, "error": "sandbox_unavailable: Docker is required, "
                                       "code never runs on the host"}
     workspace = (ctx.workspace or Path.cwd()).resolve()
     name = f"_eval_{os.urandom(4).hex()}.py"
@@ -525,7 +525,7 @@ def h_escalate(ctx: ToolContext, args: dict) -> dict:
     async def _record() -> dict:
         """Escalating is a fact about the task, not just a ribbon on the floor.
 
-        The tool used to emit and return — the API has served `escalated_to` all along
+        The tool used to emit and return, the API has served `escalated_to` all along
         and nothing ever wrote it. The reason and the manager it went to are persisted
         now, so the panel, the verifier and the failure ladder read one escalation
         (docs/17 batch 3).
@@ -630,7 +630,7 @@ def h_report_bug(ctx: ToolContext, args: dict) -> dict:
         severity = "normal"
 
     async def _file() -> dict:
-        # the bug lands on the board under the story being worked, READY — the next
+        # the bug lands on the board under the story being worked, READY, the next
         # wave's board pass brings it to the team that owns it (ADR 0010)
         parent = None
         if ctx.task_id:
@@ -649,7 +649,7 @@ def h_report_bug(ctx: ToolContext, args: dict) -> dict:
             source={"task_id": ctx.task_id,
                     "by_name": ctx.agent.name if ctx.agent else None})
         return {"ok": True, "data": {"item_id": item["id"], "state": "ready",
-                                     "note": "on the board, ready — the next wave brings it to the team"}}
+                                     "note": "on the board, ready, the next wave brings it to the team"}}
 
     return run_on_loop(_file())
 
@@ -685,7 +685,7 @@ def h_join_task(ctx: ToolContext, args: dict) -> dict:
                 assignee = await s.get(Agent, assignee_id)
             await inbox.deliver(ctx.project_id, sender=ctx.agent,
                                 handle=assignee.name if assignee else assignee_id,
-                                text=(f"I joined to help with “{title[:80]}” — ask me directly "
+                                text=(f"I joined to help with “{title[:80]}”, ask me directly "
                                       f"whenever the work needs another pair of hands."),
                                 task_id=task_id, run_id=ctx.run_id, kind="reply")
         return {"ok": True, "data": {"joined": True, "task_id": task_id,
@@ -817,7 +817,7 @@ class ToolInvoker:
             return {"ok": False, "error": "policy_denied", "detail": decision.reason}
         if decision.outcome == PolicyOutcome.REQUIRE_APPROVAL:
             invocation = {"tool": name, "args": args, "run_id": ctx.run_id}
-            # A human's standing approval ("⚡ Always allow") covers this agent +
+            # A human's standing approval ("Always allow") covers this agent +
             # capability until revoked. The hard gates (net_post / fs_delete /
             # git_push) deliberately keep asking every time.
             standing = None
@@ -966,7 +966,7 @@ def build_crewai_tools(ctx: ToolContext) -> list[Any]:
 
         def _make(spec_name: str, schema_cls: type, desc: str, tool_name: str) -> Any:
             class _Tool(BaseTool):  # type: ignore[misc]
-                # the class attributes must not shadow the closure names they read —
+                # the class attributes must not shadow the closure names they read,
                 # `description: str = description` is a NameError raised at build time
                 # (found by mutation-testing the never-called build path)
                 name: str = tool_name

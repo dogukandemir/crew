@@ -2,7 +2,7 @@
  * The board tab (ADR 0010): epics → features → stories, bugs, per-team views.
  *
  * Columns for items that became real tasks are DERIVED from the task state by the
- * backend, so this view cannot disagree with the engine — the card says "follows task"
+ * backend, so this view cannot disagree with the engine, the card says "follows task"
  * and cannot be dragged. Only items still waiting for promotion move by hand.
  */
 import { useMemo, useState } from 'react';
@@ -160,7 +160,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
               className={selectCls}
               aria-label="Parent"
             >
-              <option value="">— top level —</option>
+              <option value="">top level</option>
               {parents.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.kind === 'epic' ? 'Epic' : 'Feature'} · {p.title.slice(0, 36)}
@@ -200,7 +200,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
       {total === 0 ? (
         <EmptyState
           title="The board is empty"
-          description="Start a run — the planner writes its epic, features and stories here — or add an epic, feature, story, task or bug by hand; work moved to Ready is picked up by the next wave."
+          description="Start a run, the planner writes its epic, features and stories here, or add an epic, feature, story, task or bug by hand; work moved to Ready is picked up by the next wave."
         />
       ) : (
         <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
@@ -216,7 +216,7 @@ export function BoardTab({ projectId }: { projectId: string }) {
                 <span className="text-[10px] text-slate-500">{col.items.length}</span>
               </header>
               <ul className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden p-2">
-                {col.items.length === 0 && <li className="px-1 py-2 text-[10px] text-slate-600">—</li>}
+                {col.items.length === 0 && <li className="px-1 py-2 text-[10px] text-slate-600">n/a</li>}
                 {col.items.map((item) => (
                   <Card
                     key={item.id}

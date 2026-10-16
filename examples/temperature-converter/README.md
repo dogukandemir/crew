@@ -4,8 +4,8 @@ A small Python utility for converting temperatures between Celsius and Fahrenhei
 
 The module `converter.py` provides two pure functions:
 
-- `celsius_to_fahrenheit(value)` — convert Celsius to Fahrenheit
-- `fahrenheit_to_celsius(value)` — convert Fahrenheit to Celsius
+- `celsius_to_fahrenheit(value)`, convert Celsius to Fahrenheit
+- `fahrenheit_to_celsius(value)`, convert Fahrenheit to Celsius
 
 Both functions accept an `int` or `float` and return a `float`. Any other type
 (e.g. `str`, `None`) raises `TypeError`.
@@ -70,6 +70,6 @@ python -m unittest -v test_converter.py
 
 ## Files
 
-- `converter.py` — the two conversion functions.
-- `test_converter.py` — unittest test suite for both functions.
-- `README.md` — this document.
+- `converter.py`, the two conversion functions.
+- `test_converter.py`, unittest test suite for both functions.
+- `README.md`, this document.

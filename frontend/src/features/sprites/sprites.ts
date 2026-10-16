@@ -12,7 +12,7 @@
  * `SPRITE_UNIT` converts a sprite pixel into world units. It is derived, not
  * chosen: a sprite's footprint of `a × b` tiles is `(a + b) * tilePixels / 2`
  * pixels wide, and the same footprint in this world is `(a + b) * UNITS_PER_METRE`
- * wide — so one sprite pixel is `UNITS_PER_METRE / (tilePixels / 2)`. Get this
+ * wide, so one sprite pixel is `UNITS_PER_METRE / (tilePixels / 2)`. Get this
  * wrong and every prop lands off its own tile however good the art is.
  *
  * One honest note: the generator draws a metre of height as 24 pixels while its
@@ -26,21 +26,21 @@ import { UNITS_PER_METRE } from '../office/iso';
 
 /**
  * World units per sprite pixel. ONE number for both axes, and it is the atlas's
- * own metre — not a number this file works out for itself.
+ * own metre, not a number this file works out for itself.
  *
  * The manifest says how many pixels a metre costs (`pixelsPerMetre`), for floor
  * and for height alike, so converting a sprite pixel into this world's units is
  * that same metre read through `UNITS_PER_METRE`. Nothing else is needed, and
  * nothing else may be used: mapping the two axes with two different factors is
- * what sheared every desk, and deriving the factor from the tile size — which is
- * what this did — silently re-introduces the very mismatch the atlas is built to
+ * what sheared every desk, and deriving the factor from the tile size, which is
+ * what this did, silently re-introduces the very mismatch the atlas is built to
  * avoid, because a tile is only a metre if the art says it is.
  */
 export const SPRITE_UNIT = UNITS_PER_METRE / ATLAS.world.pixelsPerMetre;
 
 const BY_NAME = new Map<string, AtlasEntry>(ATLAS.entries.map((e) => [e.name, e]));
 
-/** The atlas cell for a name, or undefined — never a silent substitute. */
+/** The atlas cell for a name, or undefined, never a silent substitute. */
 export function entry(name: string): AtlasEntry | undefined {
   return BY_NAME.get(name);
 }
@@ -49,7 +49,7 @@ export function entry(name: string): AtlasEntry | undefined {
  * How wide a sprite is on screen at scale 1, in world units.
  *
  * A caller that asks for "a board two metres wide" needs the art's own width to
- * divide by. Stating that width by hand — as a 2 in a formula — is how the lab's
+ * divide by. Stating that width by hand, as a 2 in a formula, is how the lab's
  * board ended up a whole wall: the number was the art's, and it was wrong.
  */
 export function spriteWidth(name: string): number | undefined {
@@ -69,14 +69,14 @@ export function scaleForWidth(name: string, units: number): number {
  * This is what makes furniture arithmetic possible: the desk is 1.4 × 0.7 m and says
  * so, so a chair can stand against its near edge and a bench-top can hold a
  * microscope. Without it a renderer has only a bounding box, and every placement
- * becomes a hand-tuned offset that drifts the moment the art changes — which is how a
+ * becomes a hand-tuned offset that drifts the moment the art changes, which is how a
  * row of chairs ended up 20 cm clear of its own table.
  */
 /**
  * How many copies of a sprite span `units`, and where the run starts.
  *
  * `scaleForWidth` scales BOTH axes, so a 2 m lab bench asked to span a 4 m room is
- * drawn 1.7 m tall — a pale slab, and the brightest thing on the floor. Anything that
+ * drawn 1.7 m tall, a pale slab, and the brightest thing on the floor. Anything that
  * has to be longer than its own art is tiled, not stretched; this is the arithmetic
  * for that, so the caller cannot get it wrong by hand.
  */
@@ -97,7 +97,7 @@ export function spriteFootprint(name: string): { a: number; b: number } | undefi
  * The world offset from a sprite's anchor to the centre of its own footprint.
  *
  * A sprite is anchored at the far corner of its footprint, so a caller that knows
- * where the MIDDLE of something is — a seat, a table's centre, a stool — has to step
+ * where the MIDDLE of something is, a seat, a table's centre, a stool, has to step
  * back by half the footprint before it can place the art: exactly half `a` along x
  * and half `b` along y. For art that declares no footprint (a character, whose
  * footprint is the point it stands on) this falls back to the cell's own diamond,
@@ -122,8 +122,8 @@ export type SpritePose = (typeof ATLAS.poses)[number];
 /**
  * What a sprite is, in the taxonomy the floor is built from.
  *
- * StarNet's build tools name the parts of a station — select, room, hallway,
- * SURFACE, prop, belt — and the moment that taxonomy arrived here it answered a
+ * StarNet's build tools name the parts of a station, select, room, hallway,
+ * SURFACE, prop, belt, and the moment that taxonomy arrived here it answered a
  * question nothing else could: which category is missing? The lab benches, the
  * review table and the round tables were all `surface`, and all of them were still
  * boxes; that is not a coincidence you can see by reading the renderer, but it is

@@ -75,7 +75,7 @@ describe('activity derivation', () => {
   it('celebrates a freshly completed task', () => {
     const a = deriveActivity({ ...base, events: [ev('task.completed', 3)] });
     expect(a.kind).toBe('celebrating');
-    expect(a.bubble).toBe('✅');
+    expect(a.bubble).toBe('✓');
   });
 
   it('shows a tool call while it is fresh and drops it once stale', () => {

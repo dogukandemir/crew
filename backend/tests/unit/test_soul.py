@@ -1,4 +1,4 @@
-"""ADR 0016: souls — deterministic people, human names, the SOUL prompt section."""
+"""ADR 0016: souls, deterministic people, human names, the SOUL prompt section."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ async def test_employee_names_stay_unique_within_a_project(bound_loop, project):
 
 @pytest.mark.asyncio
 async def test_agent_snapshot_carries_the_soul_into_the_execution_path(bound_loop, project):
-    """The live runner builds its CrewAI agent from AgentSnapshot — the soul must ride."""
+    """The live runner builds its CrewAI agent from AgentSnapshot, the soul must ride."""
     from crew.execution.runner import AgentSnapshot
 
     a = await org.hire_agent(project_id=project["id"],

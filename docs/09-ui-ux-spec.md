@@ -1,4 +1,4 @@
-# 09 — UI/UX Spec
+# 09: UI/UX Spec
 
 Frontend: React 19 + TypeScript + Vite, TanStack Query (server state), Zustand (UI state),
 Tailwind + Radix primitives (shadcn-style), React Flow (org chart, DAG), Recharts (metrics).
@@ -22,18 +22,18 @@ Tailwind + Radix primitives (shadcn-style), React Flow (org chart, DAG), Rechart
   badge shows unread events / pending approvals.
 - Tab strip shows a live status dot per project (running / paused / needs-attention / done)
   and a cost counter.
-- A project can be opened in **two tabs** (e.g. org chart + agent timeline side by side) —
+- A project can be opened in **two tabs** (e.g. org chart + agent timeline side by side),
   identities are `project_id + viewKey`.
 - Global header: connection state, global kill switch (double-confirm), global budget meter.
 
-**Hierarchy (ADR 0015).** A tab's kind decides its internal views — the company is one
+**Hierarchy (ADR 0015).** A tab's kind decides its internal views, the company is one
 level up, never a sibling:
 
 ```
    COMPANY TAB (kind=company)            MEMBER PROJECT TAB
    ├─ HQ        the floor, board,        ├─ Office / Overview / Org / Tasks /
    │            review, allocation       │  Board / Agents / Brains / Rewards /
-   ├─ Projects  portfolio cards +        │  Events / Settings — and NO HQ;
+   ├─ Projects  portfolio cards +        │  Events / Settings, and NO HQ;
    │            ＋ New project here      │  the header leads ⌂ Company › Project
    ├─ Brains    umbrella + member index  └─ Brains links up to the company brain
    ├─ Events    company-stream
@@ -42,7 +42,7 @@ level up, never a sibling:
 
 - The **breadcrumb** (`⌂ Company ›`) is the only way up; the strip groups members next to
   their company and prefixes them `⌂`.
-- **Company-first founding:** the welcome screen leads with *Found a company* — a wizard
+- **Company-first founding:** the welcome screen leads with *Found a company*, a wizard
   (Quick: template + name; Detailed: mission, project, budgets, workspace root, run mode)
   that calls `POST /api/found` and lands on the company floor. *Standalone project* stays
   one click away; the new-project dialog offers `Company ▾` (preselected) vs standalone.
@@ -50,7 +50,7 @@ level up, never a sibling:
   (`min-h-0 flex-1 overflow-y-auto`); the modal's scroller is a sibling above the backdrop
   so a popup taller than the window can always be scrolled and closed. The onboarding gate
   scrolls its own root (`items-start` + `my-auto` centering). Verify dialogs at a
-  ~380-px-tall window — an unscrollable popup is a bug (the founding wizard shipped one).
+  ~380-px-tall window, an unscrollable popup is a bug (the founding wizard shipped one).
 - A four-step **getting-started checklist** reads the record (provider → company → project
   → first run); it hides when done and never marks a step from a dismissal.
 
@@ -65,7 +65,7 @@ level up, never a sibling:
 ```
 
 ### 2.1 Overview
-- Goal brief (interpretation, assumptions — with a "correct this" affordance).
+- Goal brief (interpretation, assumptions, with a "correct this" affordance).
 - Live stage stepper (INTAKE → PLANNING → …), with the elapsed time per stage.
 - Mission control cards: tasks done/total, org size, spend, success rate, open escalations,
   pending approvals, decisions taken.
@@ -107,7 +107,7 @@ level up, never a sibling:
 - Tree by scope (project / departments / agents) with entry counts and last activity.
 - Entry viewer: body, provenance (run/task/agent/url), trust badge, importance, usage, decay.
 - Promotion feed ("Research promoted 'rate-limit playbook' to the project brain"),
-  supersession history, and a search box that shows the retrieval score breakdown — the same
+  supersession history, and a search box that shows the retrieval score breakdown, the same
   numbers the agents get.
 - Actions: edit (marks entry `human_edited`), supersede, archive, export.
 
@@ -138,7 +138,7 @@ level up, never a sibling:
 ## 3. Interaction & feel
 
 - **Streaming first**: skeletons never block; panels fill as events arrive.
-- **Never lie**: unknown = "—", stale = a "stale" chip with the reason, disconnected = a banner
+- **Never lie**: unknown = "n/a", stale = a "stale" chip with the reason, disconnected = a banner
   plus a resume action (`since_seq`).
 - **One-click depth**: any name anywhere is a link to that unit's view; any cost is a link to
   the ledger; any claim is a link to its evidence.
@@ -146,7 +146,7 @@ level up, never a sibling:
   `O` org, `Space` pause/play in replay.
 - Accessibility: full keyboard traversal in the DAG/org views (React Flow a11y), contrast-checked
   palette, reduced-motion honored (pulses become static badges).
-- Approvals and escalations show as a persistent notification tray — they are the two things
+- Approvals and escalations show as a persistent notification tray, they are the two things
   that need *you*.
 
 ## 4. Frontend architecture
@@ -172,7 +172,7 @@ frontend/src/
 
 - Events are the only live source: the socket provider pushes into a normalized cache keyed by
   scope; components subscribe to slices (no prop-drilling, no refetch storms).
-- Optimistic UI only for user commands (pause, approve, rename) — never for agent state.
+- Optimistic UI only for user commands (pause, approve, rename), never for agent state.
 - Every panel has an empty state that teaches (e.g. Tasks empty → "Ask the Orchestrator to
   plan" with a one-click action).
 

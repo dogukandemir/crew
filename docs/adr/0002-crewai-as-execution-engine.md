@@ -1,4 +1,4 @@
-# ADR 0002 — CrewAI as the execution engine, not the orchestrator
+# ADR 0002: CrewAI as the execution engine, not the orchestrator
 
 - **Status:** Accepted
 - **Date:** 2026-10-06
@@ -13,7 +13,7 @@ enforced, tested or observed reliably.
 - CrewAI executes **bounded work**: one squad, one workstream, one wave of the task DAG.
 - CrewAI **Flows** drive organisation-level control flow (intake → plan → hire → dispatch →
   verify → reward → learn) because it must be deterministic and resumable.
-- Everything organisational — org chart, authority, budget, policy, rewards, memory scopes —
+- Everything organisational, org chart, authority, budget, policy, rewards, memory scopes,
   lives in our own control plane and is enforced in Python.
 - All CrewAI usage is confined to `backend/src/crew/execution/`, behind `CrewRunner` and
   `CouncilRunner` protocols, so the engine can be swapped or faked.

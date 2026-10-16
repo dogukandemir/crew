@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   Crew office — the building seen isometrically.
+   Crew office, the building seen isometrically.
 
    The scene is one SVG. There is no 3D plane and nothing is rotated: `iso.ts`
    projects world coordinates with a 2:1 axis ratio, which keeps verticals
@@ -8,7 +8,7 @@
    the WebGL office draws from the same identity.
 
    Motion is written straight to `transform` attributes by one rAF loop, so the
-   CSS below must never animate `transform` on a positioned element — only
+   CSS below must never animate `transform` on a positioned element, only
    opacity, or it would fight the walker.
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -36,10 +36,10 @@
   border-bottom: 1px solid var(--office-line);
   background: linear-gradient(180deg, #191e27, #141821);
 }
-.office-toolbar button, .office-toolbar select { min-height: 32px; }
+.office-toolbar button.office-toolbar select { min-height: 32px; }
 @media (max-width: 639px) {
   .office-toolbar { gap: 4px; padding: 6px; }
-  .office-toolbar .office-sep, .office-legend, .office-hint { display: none; }
+  .office-toolbar .office-sep.office-legend.office-hint { display: none; }
   .office-toolbar .office-stat { font-size: 12px; }
 }
 .office-sep {
@@ -122,7 +122,7 @@
 }
 
 /* Name tag: an outline keeps it legible over a desk or a wall. 11px was unreadable at
-   the fitted zoom — the tag is drawn in world units, so it shrinks with the floor. */
+   the fitted zoom, the tag is drawn in world units, so it shrinks with the floor. */
 .office-scene .sprite-tag {
   fill: #eef2f8;
   font-size: 16px;
@@ -142,7 +142,7 @@
 
 /* Reveal by TRANSITION, not by a keyframe animation.
    The depth layer re-appends a person's group whenever the walk order changes, and
-   re-inserting an element cancels and replays its own AND its descendants' animations —
+   re-inserting an element cancels and replays its own AND its descendants' animations,
    so the old keyframe pop ran again every time somebody walked past another desk, and
    the bubble kept flickering between invisible and visible. Measured: computed opacity
    hit 0 on every character, and re-appending the group produced a NEW animation object

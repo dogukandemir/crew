@@ -1,4 +1,4 @@
-# 14 — The realtime office renderer
+# 14: The realtime office renderer
 
 Status: implemented (browser), cloud path designed only.
 Related: [`09-ui-ux-spec.md`](09-ui-ux-spec.md), [`07-observability.md`](07-observability.md),
@@ -8,9 +8,9 @@ Related: [`09-ui-ux-spec.md`](09-ui-ux-spec.md), [`07-observability.md`](07-obse
 
 **The office is a projection of the event log, and the renderer knows nothing about the domain.**
 
-Everything visible on the floor — who is at a desk, who is walking to the review table, who has
+Everything visible on the floor, who is at a desk, who is walking to the review table, who has
 walked into the orchestrator's office because something is blocked, who is in the coffee corner
-because they have been idle too long — is derived from real domain state. There is no decorative
+because they have been idle too long, is derived from real domain state. There is no decorative
 animation and no invented activity: if the floor looks busy, the organization is busy.
 
 The second rule follows from the first: **the simulation never imports React or three.js.** It is
@@ -27,16 +27,16 @@ org tree ──┘   (pose + note)      (where + why)       (one frame)        (
 
 | Stage | Module | Input | Output | Tested |
 |---|---|---|---|---|
-| Activity | `sim/activity.ts` | agent, its task, its recent events | `Activity` — a pose kind, a bubble, a human sentence, and *where they should be* | ✅ |
-| Target | `sim/targets.ts` | activities + tasks + floor plan | `Target` — a concrete point plus the reason | ✅ |
-| Frame | `sim/scene.ts` | floor plan + activities + targets + tasks | `SceneState` — one serialisable frame | ✅ |
-| Characters | `features/characters/look.ts`, `sim`-free | agent id + role + grade | a stable appearance | ✅ |
-| Department pulse | `sim/rooms.ts` | floor plan + activities + events | production, shipments and newness per room | ✅ |
+| Activity | `sim/activity.ts` | agent, its task, its recent events | `Activity`, a pose kind, a bubble, a human sentence, and *where they should be* | yes |
+| Target | `sim/targets.ts` | activities + tasks + floor plan | `Target`, a concrete point plus the reason | yes |
+| Frame | `sim/scene.ts` | floor plan + activities + targets + tasks | `SceneState`, one serialisable frame | yes |
+| Characters | `features/characters/look.ts`, `sim`-free | agent id + role + grade | a stable appearance | yes |
+| Department pulse | `sim/rooms.ts` | floor plan + activities + events | production, shipments and newness per room | yes |
 | Rig + render | `office3d/*`, `office/*` | the frame above | pixels | ⬜ deliberately thin |
 
 Precedence is explicit and documented in `ACTIVITY_ORDER`: something wrong (`blocked`, `waiting`)
 outranks something active (`typing`, `tool`, `talking`, `walking`), which outranks idle. Movement
-carries meaning — an escalation walks to the orchestrator, verification walks to the shared table,
+carries meaning, an escalation walks to the orchestrator, verification walks to the shared table,
 a task owned by another department walks you across the floor to it.
 
 ### Two cadences
@@ -45,7 +45,7 @@ The floor plan (`sim/floorplan.ts`) is *static*: it only changes when the organi
 `SceneState` is *dynamic*: rebuilt every second. Keeping them separate is what will let the cloud
 version push a floor plan once and then stream small per-tick frames.
 
-## 3. Layer boundaries — and what moves to the cloud
+## 3. Layer boundaries: and what moves to the cloud
 
 ```
 src/sim/            pure, framework-free, deterministic          ← portable as-is
@@ -75,7 +75,7 @@ whole point is that it is meant to cross a wire.
 
 ### Wire plan (not built yet)
 
-- One frame per second per project is enough — the client interpolates movement between frames
+- One frame per second per project is enough, the client interpolates movement between frames
   from the `intent`, which is why `SceneState` carries *destinations* rather than positions.
 - Deltas: a frame is ~1.5 KB of JSON for 24 agents. At scale, send only changed agents plus a
   monotonically increasing `seq`, and full state on reconnect (the pattern already used by
@@ -87,18 +87,18 @@ whole point is that it is meant to cross a wire.
 
 ## 4. Characters: procedural, deterministic, unencumbered
 
-`office3d/characters.ts` generates a person from their agent id — skin tone, hair style and colour,
+`office3d/characters.ts` generates a person from their agent id, skin tone, hair style and colour,
 build, clothing, dress code, glasses, headsets, caps, lanyard.
 
 Why generated rather than downloaded: **no licensed assets and no hundreds of megabytes of binaries
-in a public repository**, infinite variation, and no dependency on a CDN at runtime. Everything —
-including every texture — is drawn in code (`scenery.tsx`) or built from shared primitives
+in a public repository**, infinite variation, and no dependency on a CDN at runtime. Everything,
+including every texture, is drawn in code (`scenery.tsx`) or built from shared primitives
 (`assets.ts`).
 
 Determinism is the point: the same agent looks the same on every reload and on every machine, which
 is what turns a crowd into *your* team. Appearance variation is deliberately **decorrelated from
 role**, so the org chart does not turn into a set of stereotypes. Only genuinely occupational things
-follow the role — a lab coat for QA, hi-vis for facilities, a headset for support, a dress code that
+follow the role, a lab coat for QA, hi-vis for facilities, a headset for support, a dress code that
 steps up with seniority, which is what a real company actually looks like.
 
 ### One cast, two renderers
@@ -110,7 +110,7 @@ person at a desk in one view is the person in the other, walking the same way.
 The 2.5D floor draws each of them as **SVG** (`features/characters/SvgCharacter.tsx`):
 chibi proportions with a big head and stubby limbs, one soft outline for the whole
 cast, big eyes, a small smile and a blush. Those choices are what make a figure
-likeable at 70 pixels tall. Cuteness is treated as a constraint rather than a hope —
+likeable at 70 pixels tall. Cuteness is treated as a constraint rather than a hope,
 the head is a tested fraction of the body, variation between people is deliberately
 damped so a floor reads as one cast, and the seated fold is *derived* so the sole
 always lands on the floor line.
@@ -131,7 +131,7 @@ floor of ~24 animated people at frame rate:
   walk cycle straight onto the object graph. React re-renders only when *state* changes.
 - One shadow-casting directional light; shadow-casting is off for accessories; `dpr` is capped at
   1.75 and antialiasing is left to the browser.
-- The renderer is **lazy-loaded** (`OfficeTab`), so three.js never lands in the initial bundle —
+- The renderer is **lazy-loaded** (`OfficeTab`), so three.js never lands in the initial bundle,
   it is a separate ~264 KB gzip chunk fetched when the office first opens.
 
 ### WebGL is not guaranteed
@@ -172,14 +172,14 @@ zooming in made them swallow the scene.
 
 ## 8. Roadmap toward the hosted product
 
-1. **Now** — single-tenant rendering in the browser from the same event log the UI already has.
-2. **Seats and rooms as data** — move desks/furniture into the org model so an org can be laid out
+1. **Now**, single-tenant rendering in the browser from the same event log the UI already has.
+2. **Seats and rooms as data**, move desks/furniture into the org model so an org can be laid out
    by policy rather than by packing algorithm.
-3. **Scene worker per project** — move `useSceneFrame`'s composition server-side and stream
+3. **Scene worker per project**, move `useSceneFrame`'s composition server-side and stream
    `SceneState` over the existing WebSocket. Client changes: one file.
-4. **Multi-tenant** — scope workers by project, send only authorized fields (a viewer should not
+4. **Multi-tenant**, scope workers by project, send only authorized fields (a viewer should not
    receive another tenant's spend figures), and rate-limit per connection.
-5. **Rich behaviour** — meetings, pairing, day cycle, and the council convening at
+5. **Rich behaviour**, meetings, pairing, day cycle, and the council convening at
    the table, all driven by real events rather than timers.
 
 ## 9. What people do to each other
@@ -227,8 +227,8 @@ screen.y = (worldX + worldY) · 0.5 − height
 Verticals stay vertical. A character is drawn upright because there is nothing to rotate, and a
 height is a real screen height. That single property is what makes the scene read as a place.
 
-**Everything solid is a volume.** `boxFaces()` returns three polygons for any box on the floor — a lit
-top face and two shaded sides — and every prop in `office/props.tsx` is built from that. The contrast
+**Everything solid is a volume.** `boxFaces()` returns three polygons for any box on the floor, a lit
+top face and two shaded sides, and every prop in `office/props.tsx` is built from that. The contrast
 between the faces is what makes a monitor read as a monitor. Sizes come from metres: `mh(0.74)` is
 desk height, `mh(1.5)` is a person, and the character's on-screen size is derived from the same
 scale, so people are correctly bigger than the furniture.
@@ -247,13 +247,13 @@ Three things are drawn on top of the simulation, and each one is a fact from the
 | "producing" | at least one agent in the room is typing or running a tool | pulsing pill on the department board |
 | "✓ n shipped · <title>" | `task.completed` events for that room's agents, inside a 20-minute window | under the department name |
 | "new" | an `org.department.created` event, or a room that the session has not seen before | on the department board |
-| Walk to the boss | the org tree's own `manager_id` — a real command chain, not a guess | a character walking to a real desk |
+| Walk to the boss | the org tree's own `manager_id`, a real command chain, not a guess | a character walking to a real desk |
 
 Speech bubbles are the clearest example of the honesty rule. The colour and the badge come from what
 the message *is*: an escalation is red with a `!`, a report upward is green with a `↑`, a directive
 coming down is violet with a `↓`, a hand-off is blue with a `→`, work talk is white, and chat between
 colleagues who are not working on anything is amber with a `☕`. The words are always the event's own
-text — `textOf()` reads `payload.text` and nothing else, and when there is no text there is no bubble
+text, `textOf()` reads `payload.text` and nothing else, and when there is no text there is no bubble
 rather than a plausible-looking one.
 
 What a "squad" is, and why pairing needs one, is in §9. What this system cannot honestly claim is also
@@ -267,14 +267,14 @@ holds a body is built from it:
 
 | Rule | Why |
 |---|---|
-| A chair's seat top is `mh(HIP_SIT)` — 0.5 m — and the chair is centred on the sitter | the pose table puts a seated body's hips there; anywhere else and they float |
+| A chair's seat top is `mh(HIP_SIT)`, 0.5 m, and the chair is centred on the sitter | the pose table puts a seated body's hips there; anywhere else and they float |
 | Only the desk's owner is ever drawn seated | `Target.seated` is set for your own desk and for a break chair, and for nothing else |
 | A monitor is lit only while its owner is typing or running a tool | one agent, one desk, one computer: a glance tells you who is actually computing |
 | The break corner's chairs come from `breakSeats()` | the simulation seats people on that list and the renderer draws chairs from it, so the two cannot disagree |
 | A shared table is stated, never dramatised | "on a break with <names>" is a fact; what they said is not knowable and is not invented |
 
 The same discipline applies to the drawing itself. Height is a real screen height in this projection,
-so a horizontal edge that dips below the eyes is a band across the face — the hair cap's lower edge is
+so a horizontal edge that dips below the eyes is a band across the face, the hair cap's lower edge is
 tested by eye against the eye line, and the eyes are drawn without brows because at the size a floor
 of characters is actually seen, brows plus a fringe read as one dark bar.
 
@@ -292,8 +292,8 @@ them because of what the log says they are doing.
 The break corner is one layout, not two. `breakLayout()` in the floor plan returns the tables, the
 vending machine, its queue spots, the foosball table and its two ends; the simulation seats people on
 those points and the renderer draws the props that own them, so they cannot drift apart. What is said
-about somebody there is a fact and nothing more — "on a break with <names>" or "playing foosball with
-<name>" — because two idle people standing at a table is knowable and a conversation is not.
+about somebody there is a fact and nothing more, "on a break with <names>" or "playing foosball with
+<name>", because two idle people standing at a table is knowable and a conversation is not.
 
 **Poses are chosen by movement, not by intent.** `walking` is a destination as well as a pose: an agent
 sent to the review table keeps that activity after it arrives. The rig therefore plays the walk cycle

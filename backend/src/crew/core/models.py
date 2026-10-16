@@ -1,4 +1,4 @@
-"""SQLAlchemy models — the projection of the event log (docs/10)."""
+"""SQLAlchemy models, the projection of the event log (docs/10)."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ class Project(Base):
     goal: Mapped[str] = mapped_column(Text, default="")
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
-    # "project" | "company" — a company is a headquarters project whose agents run the
+    # "project" | "company", a company is a headquarters project whose agents run the
     # portfolio (ADR 0009); kind keeps companies out of the ordinary project lists.
     kind: Mapped[str] = mapped_column(String(16), default="project", index=True)
     company_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
@@ -136,12 +136,12 @@ class Agent(Base):
     grade: Mapped[int] = mapped_column(Integer, default=1)
     state: Mapped[str] = mapped_column(String(20), default="idle", index=True)
     # The Captain's break (ADR 0012): set by the command desk; assignment skips the
-    # agent until it passes — a break never interrupts a task already in their hands.
+    # agent until it passes, a break never interrupts a task already in their hands.
     break_until: Mapped[datetime | None] = mapped_column(nullable=True)
     mission: Mapped[str] = mapped_column(Text, default="")
     responsibilities: Mapped[list] = mapped_column(JSON, default=list)
     decision_style: Mapped[str] = mapped_column(String(40), default="analytical")
-    # Soul (ADR 0016): the person behind the role — name, traits, values, vision,
+    # Soul (ADR 0016): the person behind the role, name, traits, values, vision,
     # voice, quirks, background. Composed at hire (domain/soul.py), rides the system
     # prompt as the SOUL section. JSON, nullable-default: pre-soul hires have {}.
     soul: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -160,7 +160,7 @@ class Agent(Base):
     tasks_failed: Mapped[int] = mapped_column(Integer, default=0)
     penalty_count: Mapped[int] = mapped_column(Integer, default=0)
     # Growth (ADR 0014): company-specific familiarity 0..1. It grows with VERIFIED
-    # work — settlement raises it, nothing else does — and the prompt builder reads
+    # work, settlement raises it, nothing else does, and the prompt builder reads
     # it, so an eight-week veteran does not reason like a first-day hire.
     company_knowledge: Mapped[float] = mapped_column(Float, default=0.0)
     prompt_version: Mapped[int] = mapped_column(Integer, default=1)
@@ -270,7 +270,7 @@ class WorkItem(Base):
 
     Not executable. Executable work stays in `tasks`; a READY story or bug is promoted
     into a real task by the orchestrator's board pass, and after that its board column
-    is DERIVED from the task's state — the board cannot disagree with the engine.
+    is DERIVED from the task's state, the board cannot disagree with the engine.
     """
 
     __tablename__ = "work_items"
@@ -551,7 +551,7 @@ class Approval(Base):
 class CommandAllow(Base):
     """The owner's "always allow" list (ADR 0017): an approved risky command that runs
     without re-asking. Revocable, per project, every change audited. A row is created
-    only by a human grant (`always: true`) — never by an agent."""
+    only by a human grant (`always: true`), never by an agent."""
 
     __tablename__ = "command_allows"
 
@@ -570,9 +570,9 @@ class CommandAllow(Base):
 
 class CapabilityAllow(Base):
     """A standing TOOL approval (the owner's ask, 2026-10-14): when a gated tool
-    (e.g. `python_eval` for a supervised agent) is approved with "⚡ Always allow",
+    (e.g. `python_eval` for a supervised agent) is approved with "Always allow",
     future calls of this capability by THIS agent skip the gate until revoked. Only
-    a human grant writes here — agents can request approvals, never grants."""
+    a human grant writes here, agents can request approvals, never grants."""
 
     __tablename__ = "capability_allows"
 

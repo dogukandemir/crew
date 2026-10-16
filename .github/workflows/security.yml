@@ -43,18 +43,25 @@ jobs:
       # package cannot be removed, and all four advisories are still unpatched upstream.
       # They are excepted BY ID, on the record: anything else still fails this gate, and
       # the guard below expires the exception the moment the pinned Chroma moves.
+      # A second reviewed, version-bounded exception covers CVE-2026-59951 in mcp
+      # (docs/DEPENDENCIES.md §Outstanding mcp advisory): CrewAI pins `mcp~=1.28.1`
+      # (still true on 1.15.28, checked 16 October 2026), the fixed line starts at
+      # 1.30.0, and no app code imports or serves mcp — the advisory needs an MCP
+      # streamable-HTTP server reachable by untrusted callers, which Crew never starts.
       - name: Known-advisory exception is still current
         if: always()
         working-directory: backend
         run: |
           grep -q '^chromadb==1.5.9' requirements-audit.txt || {
             echo "::error::chromadb is no longer pinned at 1.5.9 — re-review the four Chroma advisories in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
+          grep -q '^mcp==1.28.1' requirements-audit.txt || {
+            echo "::error::mcp is no longer pinned at 1.28.1 — re-review CVE-2026-59951 in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
       - name: Backend audit — raw record (evidence; never fails the gate)
         if: always()
         continue-on-error: true
         working-directory: backend
         run: uvx pip-audit --disable-pip --require-hashes -r requirements-audit.txt --format json --output pip-audit-raw.json
-      - name: Backend audit (four reviewed Chroma advisories excepted, listed by ID)
+      - name: Backend audit (four Chroma and one mcp advisories excepted, listed by ID)
         if: always()
         working-directory: backend
         run: >
@@ -62,6 +69,7 @@ jobs:
           --format json --output pip-audit.json
           --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813
           --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
+          --ignore-vuln CVE-2026-59951
       - name: Preserve audit evidence
         if: always()
         uses: actions/upload-artifact@v7

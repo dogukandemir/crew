@@ -94,7 +94,12 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # The interactive docs and the schema enumerate every route and payload, so a deployment
+    # does not serve them; development keeps them (16 October finding).
     app = FastAPI(title="Crew", version=__version__, lifespan=lifespan,
+                  docs_url="/docs" if settings.is_dev else None,
+                  redoc_url="/redoc" if settings.is_dev else None,
+                  openapi_url="/openapi.json" if settings.is_dev else None,
                   description="Autonomous agent organization platform. See docs/ for the specification.")
     # Only explicitly configured browser origins may control the local service.
     # Dev DX (docs/13 troubleshooting): while CREW_ENV=dev any loopback port is allowed,
@@ -112,6 +117,22 @@ def create_app() -> FastAPI:
     async def browser_origin_guard(request: Request, call_next):
         if not origin_allowed(request.headers.get("origin")):
             return JSONResponse(status_code=403, content={"detail": "untrusted browser origin"})
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def limit_request_body(request: Request, call_next):
+        """Bound the body before Starlette parses it (16 October finding): every write route
+        takes strings and arrays, and an unbounded request is otherwise read into memory whole.
+        A write without a declared length is refused too, since a chunked body has no cap."""
+        declared = request.headers.get("content-length")
+        if declared is not None:
+            if not declared.isdigit():
+                return JSONResponse(status_code=400, content={"detail": "invalid Content-Length"})
+            if int(declared) > settings.max_request_bytes:
+                return JSONResponse(status_code=413, content={
+                    "detail": f"request body exceeds {settings.max_request_bytes} bytes"})
+        elif request.method in ("POST", "PUT", "PATCH"):
+            return JSONResponse(status_code=411, content={"detail": "Content-Length is required"})
         return await call_next(request)
 
     @app.middleware("http")

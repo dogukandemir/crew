@@ -230,7 +230,7 @@ visible in the record either way.
 5. **Replay** exists server-side (`GET /api/projects/{id}/events?from_seq&to_seq`, dossier
    export); the UI scrubber is frontend work.
 6. **Live provider runs**: the CrewAI path is exercised through construction + callbacks, and by
-   real end-to-end runs on the dev host (the Launch project, 14 and 16 October, owner's key);
+   real end-to-end runs on the dev host (the launch tenant, 14 and 16 October, owner's key);
    a keyed run still cannot be part of CI.
 7. **Concurrency**: crews run in a thread pool with a global semaphore; there is no per-project
    fairness scheduler or job resumption across process restarts beyond the stage machine.
@@ -303,7 +303,7 @@ path (ADR 0019):
   with "0 chars". The handler now writes bytes (byte-exact digest, no CRLF rewrite), registers
   the artifact with the producer's attempt stamp, and returns the byte count.
 
-Parallelism: `CREW_MAX_CONCURRENT_CREWS` defaults to 4 (the Launch pack queued four independent
+Parallelism: `CREW_MAX_CONCURRENT_CREWS` defaults to 4 (the launch pack queued four independent
 deliverables two at a time). The number drives both the wave semaphore and the provider-call
 gate; the semaphore is built once per event loop, so a change takes effect on a restart.
 

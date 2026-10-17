@@ -1,3 +1,6 @@
+# These entries are anchored to commits. A history rewrite changes every SHA, so
+# re-run `gitleaks detect --no-git=false` after one and re-cut this list (see
+# docs/RELEASING.md step 1) rather than assuming it still covers.
 # Exact historical synthetic test-fixture findings reviewed on 2026-10-10.
 # No path, directory or generic credential-pattern exemptions.
 c6d87c81775284045bfeab71583d591dbc12486a:backend/tests/api/test_api.py:generic-api-key:267

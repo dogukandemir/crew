@@ -234,7 +234,7 @@ async def test_council_life_lines_are_bounded_and_capped(project, monkeypatch, c
     """ADR 0018: a failure council requeues the task (two fresh attempts, or a criteria
     set of at most two), but a task gets at most two council life-lines before the third
     failure aborts it. The old contract (never requeue, always abort) turned every hard
-    task into an operator dead end; the KaffeKlip runs paid for that twice."""
+    task into an operator dead end; the live runs paid for that twice."""
     from crew.control.council import council
 
     async with session_scope() as s:

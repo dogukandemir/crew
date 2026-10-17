@@ -130,7 +130,7 @@ def current_artifacts(artifacts: list[Artifact]) -> list[Artifact]:
     """Verify the latest publication per logical filename, from the producer's FINAL
     attempt only; earlier attempts stay on disk as evidence, never as the deliverable.
     Without this the judge read v1+v2+v3 as one document and failed a "one page"
-    criterion (KaffeKlip, 14 October). Rows published before attempts were stamped keep
+    criterion (the launch tenant, 14 October). Rows published before attempts were stamped keep
     taking part."""
     stamped = [a for a in artifacts if isinstance((a.meta or {}).get("attempt"), int)]
     if stamped:

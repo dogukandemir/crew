@@ -145,12 +145,6 @@ class PolicyEngine:
                 f"supervised agent needs approval for {cap.value}",
                 cap.value,
             )
-        if context.get("cost_usd") and float(context["cost_usd"]) > settings.require_approval_above_usd:
-            return PolicyDecision(
-                PolicyOutcome.REQUIRE_APPROVAL,
-                f"costs ${context['cost_usd']:.2f} > approval threshold ${settings.require_approval_above_usd:.2f}",
-                cap.value,
-            )
         return PolicyDecision(PolicyOutcome.ALLOW, "", cap.value)
 
     def allowed_egress(self, project: Project | None) -> list[str]:

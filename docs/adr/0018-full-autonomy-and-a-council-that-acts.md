@@ -5,7 +5,7 @@ Status: accepted · Relates to: 0007 (pipeline), 0011 (governance), 0012 (comman
 
 ## Context
 
-The first two live runs (KaffeKlip launch pack, 14 October 2026) delivered four of five
+The first two live runs (a demo launch pack, 14 October 2026) delivered four of five
 tasks and then stalled, twice, on the same two design gaps:
 
 1. **Human gates stalled unattended runs.** `python_eval` under a supervised agent filed

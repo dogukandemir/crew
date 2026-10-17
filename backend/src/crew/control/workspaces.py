@@ -45,6 +45,12 @@ def company_root(company: Project) -> Path:
     return default_root() / f"{sanitize_folder(company.name)}-{company.id}"
 
 
+# Directories an agent workspace must never be: the sandbox mounts the workspace read-write,
+# so pointing one at a system root hands every shell tool the machine (16 October finding).
+_FORBIDDEN_ROOTS = ("/", "/etc", "/usr", "/bin", "/sbin", "/boot", "/dev", "/proc", "/sys",
+                    "/var", "/opt", "c:/", "c:/windows", "c:/program files", "c:/program files (x86)")
+
+
 def validate_company_path(raw: str) -> str:
     """Validate a wizard-supplied workspace path and create it. Refuses quietly-correct-looking
     relative paths, a chosen root must be absolute, so there is never doubt where it landed."""
@@ -52,6 +58,11 @@ def validate_company_path(raw: str) -> str:
     if not p.is_absolute():
         raise ValueError("workspace path must be absolute")
     p = p.resolve()
+    posix = p.as_posix().lower()
+    if posix in _FORBIDDEN_ROOTS or posix.rstrip("/") in _FORBIDDEN_ROOTS:
+        raise ValueError(f"workspace path must not be a system directory: {p}")
+    if p == Path.home().resolve():
+        raise ValueError("workspace path must not be the home directory itself")
     if settings.sandbox_url and not p.is_relative_to(settings.default_workspace_root.resolve()):
         raise ValueError("Docker workspaces must stay inside the dedicated workspace volume")
     p.mkdir(parents=True, exist_ok=True)

@@ -42,6 +42,12 @@ artifacts/
 logs/
 *.log
 
+# --- Local overrides (never committed: an override file is where a real secret ends up) ---
+docker-compose.override.yml
+.env
+.env.local
+!.env.example
+
 # --- Editors / OS ---
 .vscode/*
 !.vscode/settings.json

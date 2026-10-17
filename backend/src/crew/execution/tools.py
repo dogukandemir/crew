@@ -356,7 +356,7 @@ def _run_in_container(*, workspace: Path, argv: list[str], timeout: int) -> subp
         return run(workspace, argv, timeout, lifecycle.current_run.get())
     name = f"crew-{os.urandom(8).hex()}"
     full = ["docker", "create", "--rm", "--name", name, "--network", "none",
-            "--read-only", "--tmpfs", "/tmp", "--memory", "1g", "--cpus", "1",
+            "--read-only", "--tmpfs", "/tmp:size=64m", "--memory", "1g", "--cpus", "1",
             "--pids-limit", "256", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "-v", f"{workspace}:/work", "-w", "/work",
             SANDBOX_IMAGE] + argv

@@ -73,7 +73,7 @@ def execute(payload):
             _containers.setdefault(run_id, set()).add(name)
         command = ["docker", "create", "--rm", "--name", name, "--label", "crew.sandbox=true",
                    "--network", "none", "--read-only", "--tmpfs", "/tmp:size=64m",
-                   "--memory", "1g", "--cpus", "1", "--pids-limit", "128",
+                   "--memory", "1g", "--cpus", "1", "--pids-limit", "256",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                    "--mount", f"type=volume,src={VOLUME},dst=/work,volume-subpath={relative}",
                    "-w", "/work", IMAGE, *argv]

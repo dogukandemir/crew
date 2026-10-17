@@ -1,4 +1,4 @@
-"""The stalls the KaffeKlip live runs hit (14 October 2026), closed by tests: human
+"""The stalls the live runs hit (14 October 2026), closed by tests: human
 gates get a per-project off switch (YOLO), council outcomes act instead of parking,
 and verification reads the producer's final attempt, not its history (ADR 0018)."""
 

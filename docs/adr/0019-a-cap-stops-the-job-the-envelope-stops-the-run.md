@@ -4,7 +4,7 @@ Status: accepted · Relates to: 0007 (pipeline), 0018 (autonomy), docs/03 §5, d
 
 ## Context
 
-The Launch project's third live run (16 October 2026, goal: the KaffeKlip pilot launch pack)
+The launch tenant's third live run (16 October 2026, goal: a demo pilot launch pack)
 ended `paused_budget` with the project envelope half full, cap $6.00, spent $2.99, reserved
 $0.00, available $3.01. Four of its five deliverable tasks had failed verification, the wave
 re-planned them, and the run stopped for good: no wave could heal it. The pause was a latch in

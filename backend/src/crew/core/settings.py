@@ -80,7 +80,7 @@ class Settings(BaseSettings):
 
     # ── safety rails ──────────────────────────────────────────────────────────
     # Four independent tasks in one wave is the normal shape of a deliverable plan
-    # (the Launch pack: four documents that do not depend on each other). At 2 they
+    # (the launch pack: four documents that do not depend on each other). At 2 they
     # queued in pairs and the run took 28 minutes; the gate below shares this number.
     max_concurrent_crews: int = Field(4, ge=1, le=64, validation_alias=_a("CREW_MAX_CONCURRENT_CREWS", "max_concurrent_crews"))
     max_agents_per_project: int = Field(24, ge=1, le=1000, validation_alias=_a("CREW_MAX_AGENTS_PER_PROJECT", "max_agents_per_project"))
@@ -88,10 +88,16 @@ class Settings(BaseSettings):
     default_project_budget_usd: float = Field(10.0, gt=0, allow_inf_nan=False, validation_alias=_a("CREW_DEFAULT_PROJECT_BUDGET_USD", "default_project_budget_usd"))
     hard_budget_usd: float = Field(50.0, gt=0, allow_inf_nan=False, validation_alias=_a("CREW_HARD_BUDGET_USD", "hard_budget_usd"))
     tool_sandbox: str = Field("docker", validation_alias=_a("CREW_TOOL_SANDBOX", "tool_sandbox"))
+    # A body is refused before it is parsed: every write route takes strings and arrays, and
+    # without a cap a single request can be read into memory unboundedly.
+    max_request_bytes: int = Field(8_000_000, ge=1024, le=1_000_000_000,
+                                  validation_alias=_a("CREW_MAX_REQUEST_BYTES", "max_request_bytes"))
+    # The host folder picker is a development affordance: behind a same-host reverse proxy
+    # every peer looks like 127.0.0.1, so a deployment opts in explicitly.
+    allow_host_picker: bool = Field(False, validation_alias=_a("CREW_ALLOW_HOST_PICKER", "allow_host_picker"))
     sandbox_url: str = Field("", validation_alias=_a("CREW_SANDBOX_URL", "sandbox_url"))
     sandbox_token_file: str = Field("/sandbox-auth/token", validation_alias=_a("CREW_SANDBOX_TOKEN_FILE", "sandbox_token_file"))
     egress_allowlist: str = Field("", validation_alias=_a("CREW_EGRESS_ALLOWLIST", "egress_allowlist"))
-    require_approval_above_usd: float = Field(2.0, ge=0, allow_inf_nan=False, validation_alias=_a("CREW_REQUIRE_APPROVAL_ABOVE_USD", "require_approval_above_usd"))
     auto_hire_default: bool = Field(True, validation_alias=_a("CREW_AUTO_HIRE_DEFAULT", "auto_hire_default"))
     offline_llm: bool = Field(True, validation_alias=_a("CREW_OFFLINE_LLM", "offline_llm"))
 

@@ -108,7 +108,7 @@ class ProjectSettingsInput(APIModel):
         for name, (low, high) in integer_limits.items():
             if name in value and (type(value[name]) is not int or not low <= value[name] <= high):
                 raise ValueError(f"{name} must be an integer between {low} and {high}")
-        for name in ("autonomous_intake", "require_goal_confirmation", "require_human_verification", "auto_hire", "cadence_enabled"):
+        for name in ("autonomous_intake", "require_goal_confirmation", "require_human_verification", "auto_hire", "cadence_enabled", "yolo"):
             if name in value and type(value[name]) is not bool:
                 raise ValueError(f"{name} must be a boolean")
         for name in ("max_senior_ratio", "budget_warning_pct"):
@@ -440,12 +440,16 @@ def run_dict(r: Run) -> dict:
 
 
 # ── system & auth ───────────────────────────────────────────────────────────────────
-@api.get("/health")
+@public_api.get("/health")
 async def health() -> dict:
+    """Liveness and contract identity, reachable without a session: a container healthcheck,
+    the login screen and a stranger's first curl all need it. The deployment's mode details are
+    not published here (auth mode has its own public probe, /api/auth/config; the rest lives on
+    the guarded /api/system/status)."""
     from crew.core.db import ping
 
     return {"status": "ok" if await ping() else "degraded", "version": __version__,
-            "contract": CONTRACT_VERSION, "offline_llm": settings.offline_llm, "env": settings.env, "auth_mode": settings.auth_mode,
+            "contract": CONTRACT_VERSION, "offline_llm": settings.offline_llm,
             "server_time": datetime.now(UTC).isoformat()}
 
 
@@ -548,6 +552,12 @@ def pick_directory(request: Request, user: dict = Depends(require_user)) -> dict
     Supports the founding wizard's Browse button (ADR 0017). Returns `{path: null,
     supported: false}` where no desktop picker exists so the UI can say "type it".
     """
+    # Policy first, capability second: a deployment refuses the picker whether or not a
+    # desktop happens to be reachable (16 October finding: behind a same-host TLS proxy every
+    # peer is 127.0.0.1, so the loopback test below is not a boundary once deployed).
+    if not settings.is_dev and not settings.allow_host_picker:
+        raise _problem(403, "the directory picker is disabled outside development "
+                            "(set CREW_ALLOW_HOST_PICKER=true to allow it)")
     if not _picker_available():
         return {"path": None, "supported": False}
     # Loopback-only in EVERY mode (review 2026-10-14): a dev build used to skip this, so
@@ -835,6 +845,7 @@ async def patch_project(project_id: str, body: ProjectPatch, user: dict = Depend
         p = await s.get(Project, project_id)
         if p is None:
             raise _problem(404, "project not found", project_id)
+        cap_before = p.budget_cap_micros
         merged = dict(p.settings or {})
         if body.settings:
             merged.update(body.settings)
@@ -852,12 +863,19 @@ async def patch_project(project_id: str, body: ProjectPatch, user: dict = Depend
                 if parent is None or body.budget_cap_micros > parent.budget_cap_micros:
                     raise _problem(409, "project cap exceeds company cap", project_id)
             p.budget_cap_micros = body.budget_cap_micros
+        cap_after = p.budget_cap_micros
         p.settings = merged
         s.add(p)
         out = org.serialize_project(p)
         await ev.emit("project.updated", project_id=project_id, title="project updated",
                       payload={"project_id": project_id, "fields": body.model_dump(exclude_none=True)},
                       actor=user["id"])
+    if cap_after != cap_before:
+        # docs/08 §9 promises every budget cap change on the hash chain, and the money records
+        # are the last place to skip it (16 October finding: the desk audited, this route did not).
+        await audit(actor_kind="user", actor_id=user["id"], action="budget.updated",
+                    resource_kind="project", resource_id=project_id, project_id=project_id,
+                    reason=f"cap {cap_before} -> {cap_after} micros")
     return out
 
 

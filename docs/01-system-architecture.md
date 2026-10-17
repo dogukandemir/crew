@@ -35,7 +35,7 @@
                 │
 ┌───────────────▼──────────────────────────────────────────────────────────────┐
 │  STORAGE: SQLite (dev) → Postgres (prod)  ·  Vector index (sqlite-vec/Chroma) │
-│           Workspaces on disk  ·  Artifacts on disk  ·  Logs (structlog JSON) │
+│           Workspaces on disk  ·  Artifacts on disk  ·  Logs (JSON) │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -78,7 +78,7 @@ CrewAI runner, model router, tools, prompts, HTTP, sandbox.
 | Client state | TanStack Query (server) + Zustand (UI) | Commands vs. socket-fed caches cleanly separated |
 | Graph viz | React Flow (org chart, task DAG) | Interactive, layout-friendly |
 | Live channel | WebSocket | Bidirectional, ordered, supports resume; ADR 0006 |
-| Logging | structlog → JSON | Correlate by `trace_id`/`project_id` |
+| Logging | JSON to stdout | Correlate by `trace_id`/`project_id` |
 | Tests | pytest + httpx AsyncClient; vitest + RTL | Backend behaviour and frontend components |
 
 ## 4. Runtime model

@@ -175,24 +175,27 @@ def test_audit_chain_verifies_and_detects_tampering():
 
 
 # ── mutation-testing kills (each test names the mutant class it closes) ─────────────
-def test_policy_allows_without_context_and_on_the_cost_boundary(fake_agent, fake_project):
-    """Closes: `context or {}` swapped to `and` (None context must not crash the plain
-    path), the cost `>` boundary (exactly-at-threshold is not 'above'), `and`↔`or` on
-    the cost guard, and the ALLOW/REQUIRE returns being blanked to None."""
+def test_policy_allows_without_context_and_a_cost_in_context_changes_nothing(fake_agent, fake_project):
+    """Closes: `context or {}` swapped to `and` (a None context must not crash the plain path)
+    and the ALLOW/REQUIRE returns being blanked to None.
+
+    The cost rule this test used to pin was removed on 16 October: nothing in the platform
+    could put a cost in a tool's context, so the branch was unreachable and the setting
+    (CREW_REQUIRE_APPROVAL_ABOVE_USD) read as a guarantee the code did not make. A cost in
+    the context now changes no decision; reintroduce the rule here, with a real caller, when
+    a tool that costs money exists.
+    """
     from crew.core.settings import settings as s
 
     a = fake_agent(role="worker", grade=Grade.SENIOR, tools=[Capability.BRAIN_READ.value],
                    autonomy="autonomous")
     assert policy.check(agent=a, capability=Capability.BRAIN_READ,
                         project=fake_project()).outcome == PolicyOutcome.ALLOW
-    thr = s.require_approval_above_usd
-    at = policy.check(agent=a, capability=Capability.BRAIN_READ, project=fake_project(),
-                      context={"cost_usd": thr})
-    assert at.outcome == PolicyOutcome.ALLOW, "exactly at the threshold is not above it"
-    over = policy.check(agent=a, capability=Capability.BRAIN_READ, project=fake_project(),
-                        context={"cost_usd": thr + 0.01})
-    assert over.outcome == PolicyOutcome.REQUIRE_APPROVAL
-
+    assert not hasattr(s, "require_approval_above_usd")
+    priced = policy.check(agent=a, capability=Capability.BRAIN_READ, project=fake_project(),
+                          context={"cost_usd": 999.0})
+    assert priced.outcome == PolicyOutcome.ALLOW
+    assert "threshold" not in priced.reason
 
 def test_no_actor_deny_list_and_empty_host_are_denied(fake_agent, fake_project):
     """Closes: the no-actor / deny-list / empty-host DENY returns being blanked."""

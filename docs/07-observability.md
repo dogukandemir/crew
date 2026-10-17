@@ -137,5 +137,5 @@ Thresholds raise `*.warning` events and surface as UI badges; a project-level
 ## 7. Log correlation
 
 Every log line carries `project_id`, `trace_id`, `span_id`, `agent_id`, `task_id`, so
-`structlog` output joins cleanly with the event store. Agent-visible errors are sanitized;
+The JSON log output joins cleanly with the event store. Agent-visible errors are sanitized;
 the raw exception goes to logs and the audit trail only (never into a model's context).

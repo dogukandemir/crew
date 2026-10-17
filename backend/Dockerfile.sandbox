@@ -4,4 +4,16 @@ COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 WORKDIR /app
 COPY src/crew/__init__.py /app/crew/__init__.py
 COPY src/crew/execution/process.py src/crew/execution/sandbox_worker.py /app/crew/execution/
+# Non-root at runtime. uid/gid 10001 is shared with the API image on purpose:
+# the broker creates /sandbox-auth/token with mode 0600 and the API has to read
+# it. The Docker socket stays root-owned, so Compose adds the host's socket GID
+# to this container's groups (DOCKER_SOCKET_GID in .env, docs/DEPLOYING.md).
+RUN groupadd --gid 10001 crew \
+ && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin crew \
+ && mkdir -p /workspaces /sandbox-auth \
+ && chown crew:crew /workspaces /sandbox-auth
+ENV HOME=/home/crew \
+    PYTHONDONTWRITEBYTECODE=1
+EXPOSE 8790
+USER crew
 CMD ["python", "-m", "crew.execution.sandbox_worker"]

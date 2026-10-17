@@ -4,6 +4,8 @@ Crew is an experimental, single-process application for one trusted shared works
 
 Check the [tested support matrix](SUPPORT-MATRIX.md) before choosing a provider or deployment. The Docker instructions below describe the distribution; platform support is limited to the evidence recorded there.
 
+These instructions are for local development and evaluation: one machine, loopback ports, Demo mode by default. For a host that other people reach over the network, use [DEPLOYING.md](DEPLOYING.md), which covers token authentication, a TLS reverse proxy, allowed origins, the sandbox's Docker socket, log rotation, backups and upgrades.
+
 Use **Home** (the Crew logo) for your companies and projects. A project's main views are **Office**, **Overview**, **Tasks** and **Deliverables**; **More views** holds team structure, board, memory, scores, events and settings. Tasks and files default to the latest run, with **All runs** available for history. On the office floor, choose a room or agent for a closer view. **System**, **Animated** and **Calm** control visual motion without changing whether agents work.
 
 ## Docker
@@ -68,12 +70,12 @@ uv run python -m crew auth create-user --email owner@example.com --role admin
 
 The command prompts for a password (at least 12 characters). Prefer this to putting a password in shell history. Roles are `viewer`, `operator`, and `admin`. They share workspace data; these are not tenant boundaries. Tokens stay in browser memory and a reload requires signing in again. Sign out revokes the server session.
 
-The default Compose distribution is local mode. Token mode in Compose requires an explicit backend environment override; merely adding an arbitrary variable to the root `.env` does not inject it into the container. Keep public hosting out of scope until you have configured token authentication, HTTPS, exact allowed origins and reviewed the trust model.
+The default Compose distribution is local mode. Token mode in Compose requires an explicit backend environment override; merely adding an arbitrary variable to the root `.env` does not inject it into the container. Keep public hosting out of scope until you have configured token authentication, HTTPS, exact allowed origins and reviewed the trust model. The production Compose file (`docker-compose.prod.yml`) sets token mode, a required signing secret and required origins for you, and [DEPLOYING.md](DEPLOYING.md) walks through the host procedure.
 
 ## Backup and upgrade
 
 1. Stop runs and stop the API before copying data. Keep the previous application version available.
-2. Back up the **entire data directory**, including `crew.db`, any SQLite sidecar files and `vault.key`, plus every project workspace. If using `CREW_VAULT_KEY` instead of a key file, retain that secret separately. Back up Docker named-volume contents with your Docker volume backup tooling while services are stopped.
+2. Back up the **entire data directory**, including `crew.db`, any SQLite sidecar files and `vault.key`, plus every project workspace. If using `CREW_VAULT_KEY` instead of a key file, retain that secret separately. `scripts/backup.sh` does this without stopping the API (host or `--mode docker`) and `scripts/restore.sh` restores and verifies a generation; both are documented in [DEPLOYING.md](DEPLOYING.md). Back up Docker named-volume contents with your Docker volume backup tooling while services are stopped.
 3. Rebuild/reinstall using the committed lockfiles, then start one API process. It applies schema migrations automatically. Before upgrading an existing SQLite schema, it creates a consistent database snapshot under `data/backups` using SQLite's backup API (including committed WAL data).
 4. Check health, open existing projects and inspect files before starting new work. Interrupted runs are paused for review rather than automatically replayed.
 

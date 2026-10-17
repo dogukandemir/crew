@@ -1,0 +1,215 @@
+# Production profile: one host, one API process, authentication ON.
+#
+# This is the host-deployment file. docker-compose.yml stays the local/demo
+# distribution (loopback-only ports, container-local auth, Demo mode).
+# The end-to-end guide is docs/DEPLOYING.md; every variable below is documented
+# in .env.example. `${VAR:?message}` makes Compose refuse to render the stack
+# while a value a public deployment cannot guess is missing.
+#
+#   cp .env.example .env       # then fill in CREW_JWT_SECRET and CREW_CORS_ORIGINS
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# The API binds 0.0.0.0 inside its container network and publishes only to
+# CREW_BIND_HOST (loopback by default). Put a TLS reverse proxy in front and
+# leave the published ports on loopback unless the proxy runs elsewhere.
+services:
+  backend:
+    build: ./backend
+    image: crew-backend:${CREW_IMAGE_TAG:-prod}
+    init: true
+    environment:
+      # --- runtime ---------------------------------------------------------
+      CREW_ENV: prod
+      CREW_HOST: 0.0.0.0
+      CREW_PORT: "8787"
+      CREW_LOG_LEVEL: ${CREW_LOG_LEVEL:-info}
+      CREW_DATA_DIR: /data
+      CREW_WORKSPACE_ROOT: /workspaces
+      CREW_DATABASE_URL: ${CREW_DATABASE_URL:-}
+      # --- authentication (never local mode here) --------------------------
+      # Hard-coded, not overridable from .env: a production stack must not be
+      # able to fall back to mode where every caller is the administrator.
+      CREW_AUTH_MODE: token
+      CREW_CONTAINER_LOCAL_AUTH: "false"
+      CREW_JWT_SECRET: ${CREW_JWT_SECRET:?set CREW_JWT_SECRET in .env (>=32 characters)}
+      CREW_ACCESS_TOKEN_TTL_MIN: ${CREW_ACCESS_TOKEN_TTL_MIN:-720}
+      # Empty means the app generates data/vault.key on first boot and reads it
+      # back on every later boot. Set it only if you keep the key outside /data
+      # and back it up yourself.
+      CREW_VAULT_KEY: ${CREW_VAULT_KEY:-}
+      # --- browser origins (exact, scheme + host + port) -------------------
+      # This is the CSRF boundary: the app rejects any request whose Origin
+      # header is not listed. Blank would deny every browser.
+      CREW_CORS_ORIGINS: ${CREW_CORS_ORIGINS:?set CREW_CORS_ORIGINS in .env (exact browser origins)}
+      # Body cap enforced before parsing (413 over the cap, 411 without a
+      # Content-Length). Keep the reverse proxy's client_max_body_size at or
+      # above this value.
+      CREW_MAX_REQUEST_BYTES: ${CREW_MAX_REQUEST_BYTES:-8000000}
+      # The host folder picker stays off on a host: behind a same-host proxy
+      # every peer looks like 127.0.0.1.
+      CREW_ALLOW_HOST_PICKER: ${CREW_ALLOW_HOST_PICKER:-false}
+      # --- model providers -------------------------------------------------
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      # CREW_TIER_* and CREW_MODEL_PRICES are deliberately not injected: an env
+      # pin wins over the provider chosen in the UI, for every later boot. Add
+      # them under `environment:` here if you want the env to own the routing.
+      # --- safety rails ----------------------------------------------------
+      CREW_OFFLINE_LLM: ${CREW_OFFLINE_LLM:-true}
+      CREW_VALIDATE_EVENTS: ${CREW_VALIDATE_EVENTS:-true}
+      CREW_MAX_CONCURRENT_CREWS: ${CREW_MAX_CONCURRENT_CREWS:-4}
+      CREW_MAX_AGENTS_PER_PROJECT: ${CREW_MAX_AGENTS_PER_PROJECT:-24}
+      CREW_MAX_DEPARTMENTS_PER_PROJECT: ${CREW_MAX_DEPARTMENTS_PER_PROJECT:-6}
+      CREW_DEFAULT_PROJECT_BUDGET_USD: ${CREW_DEFAULT_PROJECT_BUDGET_USD:-10.0}
+      CREW_HARD_BUDGET_USD: ${CREW_HARD_BUDGET_USD:-50.0}
+      CREW_REQUIRE_APPROVAL_ABOVE_USD: ${CREW_REQUIRE_APPROVAL_ABOVE_USD:-2.0}
+      CREW_AUTO_HIRE_DEFAULT: ${CREW_AUTO_HIRE_DEFAULT:-true}
+      CREW_EGRESS_ALLOWLIST: ${CREW_EGRESS_ALLOWLIST:-}
+      CREW_TOOL_SANDBOX: docker
+      CREW_SANDBOX_URL: http://sandbox:8790
+      CREW_SANDBOX_TOKEN_FILE: /sandbox-auth/token
+    ports:
+      # Loopback unless the operator widens it. A wider binding exposes an
+      # authenticated API to the network without TLS unless a proxy covers it.
+      - "${CREW_BIND_HOST:-127.0.0.1}:${CREW_BACKEND_PORT:-8787}:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - crew-data:/data
+      - crew-workspaces:/workspaces
+      - sandbox-auth:/sandbox-auth:ro
+    networks: [default, sandbox-private]
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; c=http.client.HTTPConnection('127.0.0.1',8787,timeout=5); c.request('GET','/api/health'); assert c.getresponse().status in (200,401,403)"]
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 45s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 16384
+    deploy:
+      resources:
+        limits:
+          cpus: "${CREW_BACKEND_CPUS:-2.0}"
+          memory: ${CREW_BACKEND_MEMORY_LIMIT:-2g}
+          pids: ${CREW_BACKEND_PIDS_LIMIT:-512}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CREW_LOG_MAX_SIZE:-10m}
+        max-file: "${CREW_LOG_MAX_FILE:-5}"
+
+  sandbox:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.sandbox
+    image: crew-sandbox:${CREW_IMAGE_TAG:-prod}
+    init: true
+    environment:
+      CREW_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-crew}-workspaces
+      CREW_SANDBOX_TOKEN_FILE: /sandbox-auth/token
+    volumes:
+      # The broker alone receives the daemon socket: it can start containers,
+      # so it is host-level authority in practice. Keep it on the private
+      # network, never publish 8790, never mount this socket into an agent
+      # container, and keep the Docker engine patched.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - crew-workspaces:/workspaces
+      - sandbox-auth:/sandbox-auth
+    networks: [sandbox-private]
+    group_add:
+      # The socket is usually root:<gid of docker on the host>. Read it with
+      #   stat -c '%g' /var/run/docker.sock
+      # and set DOCKER_SOCKET_GID in .env to that number.
+      - "${DOCKER_SOCKET_GID:-999}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,urllib.request; r=urllib.request.Request('http://127.0.0.1:8790/health',headers={'Authorization':'Bearer '+pathlib.Path('/sandbox-auth/token').read_text().strip()}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt: ["no-new-privileges:true"]
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
+    deploy:
+      resources:
+        limits:
+          cpus: "${CREW_SANDBOX_CPUS:-1.0}"
+          memory: ${CREW_SANDBOX_MEMORY_LIMIT:-1g}
+          pids: ${CREW_SANDBOX_PIDS_LIMIT:-256}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CREW_LOG_MAX_SIZE:-10m}
+        max-file: "${CREW_LOG_MAX_FILE:-5}"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle at build time: the absolute public origin the
+        # browser will use. It must be one of CREW_CORS_ORIGINS, and the proxy
+        # must route /api/ and /ws/ of that origin to the backend.
+        VITE_API_BASE: ${CREW_PUBLIC_ORIGIN:?set CREW_PUBLIC_ORIGIN in .env (for example https://crew.example.com)}
+    image: crew-frontend:${CREW_IMAGE_TAG:-prod}
+    init: true
+    ports:
+      - "${CREW_BIND_HOST:-127.0.0.1}:${CREW_FRONTEND_PORT:-5173}:5173"
+    networks: [default]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 15s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    ulimits:
+      nofile:
+        soft: 2048
+        hard: 4096
+    deploy:
+      resources:
+        limits:
+          cpus: "${CREW_FRONTEND_CPUS:-0.5}"
+          memory: ${CREW_FRONTEND_MEMORY_LIMIT:-256m}
+          pids: ${CREW_FRONTEND_PIDS_LIMIT:-128}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CREW_LOG_MAX_SIZE:-10m}
+        max-file: "${CREW_LOG_MAX_FILE:-5}"
+
+volumes:
+  crew-data:
+  # Same volume name the local file resolves to, so an existing installation
+  # keeps its data when it moves from docker-compose.yml to this file.
+  crew-workspaces:
+    name: ${COMPOSE_PROJECT_NAME:-crew}-workspaces
+  sandbox-auth:
+
+networks:
+  sandbox-private:
+    internal: true

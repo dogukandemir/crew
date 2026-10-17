@@ -60,6 +60,7 @@ from crew.core.security import (
     decide_approval,
     list_capability_allows,
     policy,
+    redactor,
     revoke_capability_allow,
     vault,
     verify_audit_chain,
@@ -339,7 +340,10 @@ class LoginBody(APIModel):
 
 # ── helpers ─────────────────────────────────────────────────────────────────────────
 def _problem(status: int, title: str, detail: str = "") -> HTTPException:
-    return HTTPException(status_code=status, detail=f"{title}: {detail}" if detail else title)
+    # Details interpolate validator and exception text, which can quote a key or a machine
+    # path (16 October finding): the redactor runs over this sink like every other one.
+    body = f"{title}: {redactor.redact(str(detail))[0]}" if detail else title
+    return HTTPException(status_code=status, detail=body)
 
 
 async def _project_or_404(project_id: str) -> Project:

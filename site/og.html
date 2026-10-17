@@ -9,41 +9,56 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     color: #eef2f8;
-    display: flex;
-    flex-direction: column;
     position: relative;
-    padding: 4.6% 5.2% 4.2%;
   }
   .bg { position: absolute; inset: 0; background:
-    radial-gradient(70% 60% at 82% 16%, rgba(52, 211, 153, 0.10), transparent 62%),
-    radial-gradient(55% 50% at 8% 96%, rgba(94, 116, 210, 0.10), transparent 60%),
+    radial-gradient(72% 62% at 84% 12%, rgba(52, 211, 153, 0.16), transparent 64%),
+    radial-gradient(55% 50% at 6% 98%, rgba(94, 116, 210, 0.12), transparent 60%),
     #0b0e14; }
-  .wrap { position: relative; display: flex; flex-direction: column; height: 100%; }
-  .brand { display: flex; align-items: center; gap: 0.9rem; }
-  .mark { width: 3rem; height: 3rem; border-radius: 0.7rem; box-shadow: 0 0 0 1px rgba(148,163,184,0.3); }
-  h1 { font-size: 3.3rem; letter-spacing: -0.02em; }
-  .sub { margin-top: 1rem; font-size: 1.4rem; line-height: 1.4; color: #b6c0cf; max-width: 46%; }
-  .shot { position: absolute; right: 5.2%; bottom: 4.2%; width: 46%; border-radius: 0.7rem;
-          border: 1px solid rgba(148,163,184,0.3); box-shadow: 0 24px 48px rgba(0,0,0,0.5); }
-  .foot { position: absolute; left: 5.2%; bottom: 5%; display: flex; gap: 0.75rem; align-items: center;
-          color: #7d8798; font-size: 1rem; }
-  .pill { border: 1px solid rgba(148,163,184,0.3); border-radius: 999px; padding: 0.42rem 0.9rem; color: #b6c0cf; }
+  /* Two columns centred on one axis: the words left, the product right. Everything is
+     sized in viewport units so the 1280x640 card and the 1200x630 card come out of the
+     same file with the same proportions and no dead middle. */
+  .wrap {
+    position: relative;
+    height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 47%;
+    align-items: center;
+    gap: 3.2vw;
+    padding: 4.6% 5.5%;
+  }
+  .lede { display: flex; flex-direction: column; gap: 2.4vh; }
+  .brand { display: flex; align-items: center; gap: 0.8vw; }
+  .mark { width: 4.5vw; height: 4.5vw; border-radius: 1vw;
+          box-shadow: 0 0 0 1px rgba(148,163,184,0.3); }
+  h1 { font-size: 4.9vw; letter-spacing: -0.02em; line-height: 1; }
+  .sub { font-size: 1.82vw; line-height: 1.42; color: #c3ccd9; max-width: 34ch; }
+  .foot { display: flex; gap: 0.7vw; align-items: center; flex-wrap: wrap; }
+  .pill { border: 1px solid rgba(148,163,184,0.32); border-radius: 999px;
+          padding: 0.7vh 1.1vw; color: #c3ccd9; font-size: 1.24vw; }
+  .where { color: #7d8798; font-size: 1.06vw; letter-spacing: 0.01em; }
+  .shot { width: 100%; display: block; border-radius: 0.8vw;
+          border: 1px solid rgba(148,163,184,0.3);
+          box-shadow: 0 28px 56px rgba(0,0,0,0.55); }
 </style>
 </head>
 <body>
   <div class="bg"></div>
   <div class="wrap">
-    <div class="brand">
-      <img class="mark" src="assets/icon-256.png" alt="">
-      <h1>Crew</h1>
+    <div class="lede">
+      <div class="brand">
+        <img class="mark" src="assets/icon-256.png" alt="">
+        <h1>Crew</h1>
+      </div>
+      <p class="sub">A control room for a real AI agent company. Goals in, verified files and approvals out.</p>
+      <div class="foot">
+        <span class="pill">CrewAI execution</span>
+        <span class="pill">Local-first</span>
+        <span class="pill">MIT</span>
+      </div>
+      <div class="where">github.com/dogukandemir/crew</div>
     </div>
-    <p class="sub">A control room for a real AI agent company. Goals in, verified files and approvals out.</p>
-    <div class="foot">
-      <span class="pill">CrewAI execution</span>
-      <span class="pill">Local-first</span>
-      <span class="pill">MIT</span>
-    </div>
+    <img class="shot" src="assets/office.png" alt="">
   </div>
-  <img class="shot" src="assets/office.png" alt="">
 </body>
 </html>

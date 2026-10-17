@@ -166,9 +166,9 @@ This release supports **one server process and one shared workspace**. Viewer ac
 
 ## Project status
 
-As of 2026-10-17: backend 434 tests collected (one live test deselected), frontend 360 tests across
-53 files, the converter example's 10 tests pass, and CI is green on every push. What still needs
-evidence is listed in the [support matrix](docs/SUPPORT-MATRIX.md).
+As of 2026-10-17: backend 367 of 368 tests collected (one live test deselected), frontend 353 tests
+across 51 files, the converter example's 10 tests pass, and CI is green on every push. What still
+needs evidence is listed in the [support matrix](docs/SUPPORT-MATRIX.md).
 
 ## Contribute
 

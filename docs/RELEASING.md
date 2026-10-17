@@ -34,6 +34,8 @@ One version number lives in three places and must agree everywhere:
    gh release create vX.Y.Z --title "vX.Y.Z — <one line>" --notes-file <notes>
    ```
    Take the notes from the CHANGELOG section; they are the same facts in two places on purpose.
+   Re-derive the counts quoted in SUPPORT-MATRIX and README from the suite itself
+   (`uv run pytest --collect-only`, `npx vitest run`) — a number is true for one commit only.
 6. **Post-release:** the Pages site under `site/` deploys on the next push that touches it. If the
    site did not change, run `gh workflow run pages.yml` explicitly, then verify
    <https://dogukandemir.github.io/crew/> and the social card.

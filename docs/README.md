@@ -64,6 +64,17 @@ Decisions that were expensive to make and would be expensive to reverse:
 - [0018, Full autonomy (YOLO) and a council that acts](adr/0018-full-autonomy-and-a-council-that-acts.md)
 - [0019, A cap stops the job, the envelope stops the run](adr/0019-a-cap-stops-the-job-the-envelope-stops-the-run.md)
 
+## Operating guides
+
+- **[INSTALLATION](INSTALLATION.md)** — local development and evaluation, upgrades, storage and recovery.
+- **[DEPLOYING](DEPLOYING.md)** — one host that other people reach: token auth, TLS reverse proxy, backups.
+- **[FIRST-PROJECT](FIRST-PROJECT.md)** — the first small, checkable Live goal.
+- **[SUPPORT-MATRIX](SUPPORT-MATRIX.md)** — what is tested where, and what still needs evidence.
+- **[DEPENDENCIES](DEPENDENCIES.md)** — the version and advisory ledger.
+- **[SECURITY](../SECURITY.md)** — the trust boundary, the sandbox and the Docker socket.
+- **[Reviews](reviews/)** — the dated audit rounds (2026-10-10, 2026-10-13).
+- **[Releasing](RELEASING.md)** — version sources, gates, tag/release and the public-flip checklist.
+
 ## Conventions
 
 - Every mutation of meaningful state emits exactly one **domain event** (docs/07) and one

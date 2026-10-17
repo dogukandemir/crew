@@ -72,6 +72,14 @@ jobs:
         # Docker Desktop exposes the socket world-writable.
         run: echo "DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)" >> "$GITHUB_ENV"
       - run: docker compose config --quiet
+      - name: Render the production compose file
+        # The prod file is what a host runs. Prove it interpolates and that every
+        # ${VAR:?} reference is satisfiable before anyone deploys it.
+        run: |
+          CREW_JWT_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(48))") \
+          CREW_CORS_ORIGINS=https://crew.example.com \
+          CREW_PUBLIC_ORIGIN=https://crew.example.com \
+          docker compose -f docker-compose.prod.yml config --quiet
       - run: docker compose build
       - run: docker compose up -d --wait --wait-timeout 180
       - name: Check API and frontend

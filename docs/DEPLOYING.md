@@ -176,6 +176,25 @@ server {
 }
 ```
 
+Add request-rate limits at the proxy as well. The application limits login and run creation
+in-process, but that limiter lives in one worker and resets on restart; the proxy bound is what a
+hostile client actually hits first. Put the zones in the `http {}` block and the `limit_req` lines
+on the matching locations (tune `burst` to your own traffic):
+
+```nginx
+limit_req_zone $binary_remote_addr zone=crew_auth:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=crew_api:10m  rate=120r/m;
+
+location = /api/auth/login {
+    limit_req zone=crew_auth burst=5 nodelay;
+    # ...the same proxy_pass and headers as the /api/ block above
+}
+location /api/ {
+    limit_req zone=crew_api burst=60 nodelay;
+    # ...the same proxy_pass and headers as above
+}
+```
+
 Notes that come from the code, not from taste:
 
 - The WebSocket endpoint is `/ws/projects/{id}` on the API port, not under `/api/`. Route `/ws/` to the backend or the office floor never goes live.

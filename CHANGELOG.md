@@ -1,6 +1,11 @@
 # Changelog
 
-## 17 October 2026: the published surface
+## v0.1.0 — 17 October 2026 (first public release)
+
+The first public release: a local-first control room where a CrewAI agent company plans, hires,
+runs sandboxed tools, verifies its files and asks for approvals — all visible as one event stream.
+This entry records what changed, not a certification of maturity; the open evidence lives in
+[docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md).
 
 - **The health route is public and smaller.** `GET /api/health` moved to the unauthenticated
   router (a container healthcheck, the login screen and a stranger's first curl all need it) and
@@ -28,7 +33,7 @@
 - **`structlog` is gone.** The dependency is removed from the lockfile; the project logs through
   the standard library with its own redacting formatter.
 
-## Unreleased: public-readiness work
+### Public-readiness work (merged into v0.1.0)
 
 - **Faster waves**: `CREW_MAX_CONCURRENT_CREWS` now defaults to 4 (was 2), so the
   independent tasks of a plan run four at a time. The second live launch pack queued its
@@ -94,4 +99,4 @@
 - Stop the dependency workflow from being red by construction: the four open Chroma advisories are now a reviewed exception listed by ID, the gated audit still fails on any other finding, a guard expires the exception the moment the locked inventory stops pinning `chromadb==1.5.9`, and the raw unfiltered scan is preserved as an artifact beside the gated one.
 - Hold the promises an end-to-end review found broken (14 Oct 2026): the command desk enforces the same budget ceilings as `PATCH /projects/{id}` and the audit view is project-scoped (the whole chain stays behind admin at `GET /api/audit`); admin gating sits on the routes themselves; brain/task/hire writes refuse foreign ids; the command review gates python and inline destruction; the vault refuses cross-scope overwrites, audits every lease and re-learns stored secrets into the redactor on boot; approvals honour the caller's `ttl_minutes`; pagination takes `ge=1` bounds; login/run/command rate limits exist; the WS handshake accepts `?token=` and `Authorization`; dev CORS allows any loopback port; every response carries `X-Crew-Contract`; and `tests/security/test_routes_guarded.py` finally enforces the documented default-deny. Frontend: the leaderboard join is fixed (the roster's Success column and the Rewards drawer work again), one zero-success rule shows `n/a` instead of a fabricated 0%, one grade map matches the backend enum, artifact rows keep a single interactive element, and money/time formatting is unified. The docs sweep brings docs/01–13 back in line with the as-built system.
 
-Verification and outstanding release gates are recorded in the implementation tracker. This entry is not a release certification.
+Verification and outstanding release gates are recorded in the implementation tracker and the support matrix.

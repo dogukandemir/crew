@@ -7,6 +7,9 @@ Give a company a goal. Watch its agents organize, use tools, produce files, and 
 
 **Experimental, local-first software.** Crew combines a game-like interface with a real [CrewAI](https://github.com/crewAIInc/crewAI) execution harness. It is for developers and builders exploring supervised agent companies. Agent output still needs human review. It is not a hosted multi-tenant service or a guarantee of autonomous business success.
 
+**Short on time?** The screenshot above, the [What is real?](#what-is-real) table and one
+`docker compose up --build` are the whole story.
+
 ### At a glance
 
 - **Execution engine:** CrewAI: planning, hiring, tasks and tool calls are real records; the office is a view of the same events.
@@ -57,6 +60,34 @@ See [a verified DeepSeek example](examples/temperature-converter/PROVENANCE.md):
   <img src="docs/assets/portfolio.png" width="32%" alt="The portfolio: products with health verdicts, budget envelopes and directives">
 </p>
 
+## How it works
+
+```
+ goal ─▶ plan ─▶ staff ─▶ execute ─▶ verify ─▶ reward ─▶ files in the workspace
+                  │           │
+                  │           └─ approval + budget gates, one human decision per gate
+                  └─ hiring goes through HR: interviews, rejections, a bounded ladder
+
+ every step is a persisted event ─▶ the office renders that same stream
+```
+
+Nothing on the floor is invented for the camera: the plan, each hire, every tool call, each
+approval, the verifier's verdict and the reward are records first and pixels second. Files written
+into the project workspace are recorded as artifacts with their hash, and the verifier reads those
+artifacts rather than the agent's own summary.
+
+## Repository layout
+
+| Path | What lives there |
+|---|---|
+| `backend/` | FastAPI API, orchestrator, CrewAI execution and the sandbox broker (Python 3.13) |
+| `frontend/` | React 19 + TypeScript control room and the 2.5D office |
+| `docs/` | 18 numbered specs, 19 ADRs, deployment, support and review notes |
+| `dev/mock/` | A standalone demo backend for UI work — no provider, no cost |
+| `examples/` | One verified end-to-end run, with provenance and its tests |
+| `scripts/` | `backup.sh` and `restore.sh` for a host installation |
+| `site/` | The project page, deployed to GitHub Pages |
+
 ## Providers and installation
 
 <p>
@@ -99,10 +130,50 @@ This release supports **one server process and one shared workspace**. Viewer ac
 - One bounded DeepSeek workflow passed Live acceptance. Other providers and clean installations on additional platforms still need release validation. The [implementation tracker](docs/reviews/2026-10-10/IMPLEMENTATION.md) distinguishes changes from verified results.
 - CrewAI still brings Chroma transitively. Its outstanding advisory assessment is recorded in [dependency notes](docs/DEPENDENCIES.md); no Chroma server is shipped.
 
+## Documentation
+
+| Start here | |
+|---|---|
+| [Installation](docs/INSTALLATION.md) | Local development and evaluation, upgrades, storage, recovery |
+| [Deploying](docs/DEPLOYING.md) | One host that other people reach: token auth, TLS, backups |
+| [First project](docs/FIRST-PROJECT.md) | The first small, checkable Live goal |
+| [Support matrix](docs/SUPPORT-MATRIX.md) | What is tested where, and what still needs evidence |
+| [Security](SECURITY.md) | The trust boundary, the sandbox and the Docker socket |
+| [Specification](docs/README.md) | The 18 specs and 19 ADRs, in reading order |
+
+## FAQ
+
+- **Does it need an API key?** Not for the demo: Demo mode runs deterministic simulated agents and
+  spends nothing. Live work needs one provider key (DeepSeek is the shipped default), entered in the
+  UI and encrypted locally.
+- **What does it cost?** The software is MIT. Demo spends nothing; Live bills your own provider.
+  Crew estimates spend from token usage against a price table and enforces per-project caps and a
+  hard ceiling — set provider-side billing limits as well.
+- **Is it multi-tenant?** No. One trusted workspace per installation, with viewer / operator /
+  admin roles. Do not host mutually untrusted tenants on it.
+- **Which providers are proven?** One bounded DeepSeek workflow passed real-provider acceptance.
+  OpenAI, Anthropic, OpenRouter and local Ollama are implemented but experimental; the
+  [support matrix](docs/SUPPORT-MATRIX.md) says exactly what was tested.
+- **Do agents run code on my machine?** Shell and Python run only inside Docker containers with no
+  network, a read-only root and one writable project folder. The private broker is the only
+  component that receives the Docker socket.
+- **Can an agent act without asking?** Approvals gate tools, risky commands and gated web content.
+  "Always allow" can stand in for one agent and capability, and a project can opt into Full
+  autonomy, which records every such call in the audit log. Capability ceilings, the workspace
+  jail, the sandbox and budget breakers still bind.
+- **How is this different from a chat UI?** The unit is a company — departments, squads, grades,
+  budgets — and the output is verified files, not a transcript.
+
+## Project status
+
+As of 2026-10-17: backend 434 tests collected (one live test deselected), frontend 360 tests across
+53 files, the converter example's 10 tests pass, and CI is green on every push. What still needs
+evidence is listed in the [support matrix](docs/SUPPORT-MATRIX.md).
+
 ## Contribute
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development loop and [the code of conduct](CODE_OF_CONDUCT.md). Small, reproducible examples are especially useful: a goal, expected deliverable, observed result, and redacted logs. Use private reporting for security concerns.
 
-The public-readiness [review](docs/reviews/2026-10-10/REPORT.md) and [action plan](docs/reviews/2026-10-10/ACTION-PLAN.md) explain the work underway. The specification is 18 numbered documents plus 19 ADRs under `docs/`; it describes both implemented behavior and earlier proposals, so the code and current installation guide take precedence.
+The public-readiness [review](docs/reviews/2026-10-10/REPORT.md), its [action plan](docs/reviews/2026-10-10/ACTION-PLAN.md) and the [UI/UX review](docs/reviews/2026-10-13/UI-UX.md) explain the work and the open evidence. The specification is 18 numbered documents plus 19 ADRs under `docs/`; it describes both implemented behavior and earlier proposals, so the code and current installation guide take precedence.
 
-Crew's application code is [MIT licensed](LICENSE). Dependencies keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+Project page: <https://dogukandemir.github.io/crew>. Crew's application code is [MIT licensed](LICENSE). Dependencies keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

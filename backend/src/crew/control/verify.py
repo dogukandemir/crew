@@ -41,6 +41,11 @@ class VerificationOutcome:
     quality: float = 0.5
     verifier_agent_id: str | None = None
     contradiction: bool = False
+    # Why this verdict happened, in the record's own words: the failed criterion or
+    # cheap check plus what it observed, and the evaluator's words when it gave any.
+    # A failing verdict always carries at least one reason (F20: "retry 2" told an
+    # operator nothing about the cause).
+    reasons: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -226,6 +231,62 @@ async def _judging_context(task: Task) -> dict:
     return {"publication_manifest": manifest, "execution_receipts": receipts}
 
 
+def _criteria_of(task: Task) -> list[str]:
+    return [str(c) for c in (task.acceptance_criteria or [])]
+
+
+def verification_reasons(task: Task, checks: list[dict], judge: dict | None, *,
+                         verdict: Verdict, quality: float) -> list[str]:
+    """The machine-readable why: every failed criterion or cheap check, in order.
+
+    Each reason names the check and what it observed (`criterion_2: keyword coverage
+    0.12`), the evaluator's own words ride along when it gave any, and a failing
+    verdict never leaves this list empty.
+    """
+    criteria = _criteria_of(task)
+    reasons: list[str] = []
+    for check in checks:
+        if check.get("ok"):
+            continue
+        name = str(check.get("name") or "check").strip() or "check"
+        detail = str(check.get("detail") or "").strip()
+        if name == "evaluator_rubric":
+            continue  # expanded from the judge below, its detail is raw JSON
+        if name.startswith("criterion_"):
+            try:
+                criterion = criteria[int(name.split("_", 1)[1]) - 1]
+            except (ValueError, IndexError):
+                criterion = ""
+            label = f"criterion not met: {criterion[:160]}" if criterion else name
+            reasons.append(f"{label} ({detail})" if detail else label)
+        else:
+            reasons.append(f"{name}: {detail}" if detail else name)
+    if judge:
+        for item in judge.get("criteria") or []:
+            if not isinstance(item, dict) or item.get("met") is not False:
+                continue
+            criterion = str(item.get("criterion") or "a stated criterion").strip()
+            evidence = str(item.get("evidence") or item.get("note") or "").strip()
+            reasons.append(f"evaluator: not met: {criterion[:160]}"
+                           + (f" ({evidence[:300]})" if evidence else ""))
+        notes = str(judge.get("notes") or "").strip()
+        if notes and verdict is not Verdict.PASS:
+            # A plain pass has nothing to explain; caveats and failures do.
+            reasons.append(f"evaluator notes: {notes[:300]}")
+    if verdict not in (Verdict.PASS, Verdict.PASS_WITH_NOTES) and quality < 0.4:
+        reasons.append(f"quality {quality:.2f} is below the 0.40 floor")
+    if not reasons and verdict not in (Verdict.PASS, Verdict.PASS_WITH_NOTES):
+        # Honest floor: a failure must name something, even when no check did.
+        reasons.append(f"verdict {verdict.value}: no check named a cause, "
+                       f"quality {quality:.2f}, {len(checks)} check(s) recorded")
+    unique: list[str] = []
+    for reason in reasons:
+        text = " ".join(reason.split())
+        if text and text not in unique:
+            unique.append(text)
+    return unique[:8]
+
+
 class Verifier:
     async def pick_verifier(self, *, project_id: str, producer: Agent | None) -> Agent | None:
         """Independence: never a member of the producer's squad; prefer critic/evaluator roles."""
@@ -297,12 +358,14 @@ class Verifier:
 
         contradiction = verdict is Verdict.PASS and any(c["name"] == "non_empty" and not c["ok"] for c in checks)
         evidence = [c["detail"] for c in checks]
+        reasons = verification_reasons(task, checks, judge, verdict=verdict, quality=quality)
         outcome = VerificationOutcome(verdict=verdict, method=method, checks=checks,
                                      rubric={"deterministic_score": det_score, "simulated": settings.offline_llm,
-                                             "evaluator": judge or {}, "failed": [c["name"] for c in failed]},
+                                             "evaluator": judge or {}, "failed": [c["name"] for c in failed],
+                                             "reasons": reasons},
                                      evidence=evidence, confidence=confidence, quality=quality,
                                      verifier_agent_id=verifier.id if verifier else None,
-                                     contradiction=contradiction)
+                                     contradiction=contradiction, reasons=reasons)
         async with session_scope() as s:
             s.add(VerificationResult(project_id=project_id, task_id=task.id, verdict=verdict.value,
                                      method=method.value, checks=checks, rubric=outcome.rubric,
@@ -312,9 +375,11 @@ class Verifier:
                       agent_id=verifier.id if verifier else None,
                       severity="info" if outcome.passed else "warning",
                       title=f"verdict {verdict.value}: {task.title[:50]}",
-                      summary=f"quality={quality:.2f} method={method.value}",
+                      summary=(f"quality={quality:.2f} method={method.value}"
+                               + ("" if outcome.passed or not reasons else f"; {reasons[0][:140]}")),
                       payload={"task_id": task.id, "verdict": verdict.value, "quality": quality,
                                "confidence": confidence, "method": method.value,
+                               "reasons": reasons,
                                "failed_checks": [c["name"] for c in failed]},
                       actor=f"agent:{verifier.id}" if verifier else "system:verifier")
         return outcome

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { ProjectSettings } from '../../api/types';
@@ -16,6 +16,9 @@ import { useUi } from '../../stores/ui';
 
 const DEFAULT_SETTINGS: ProjectSettings = {
   autonomous_intake: false,
+  // Full autonomy starts off, but the stored value is the truth: a project that
+  // already runs with yolo true must open with the switch on.
+  yolo: false,
   require_goal_confirmation: true,
   require_human_verification: false,
   max_agents: 24,
@@ -60,9 +63,18 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveWord, setArchiveWord] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  // Once the owner touches a control the form is theirs: a background refetch of
+  // the project record hydrates an untouched form only, so a poll can no longer
+  // undo a change the user just made.
+  const edited = useRef(false);
+
+  const update = useCallback((next: (s: ProjectSettings) => ProjectSettings) => {
+    edited.current = true;
+    setSettings(next);
+  }, []);
 
   useEffect(() => {
-    if (!project.data) return;
+    if (!project.data || edited.current) return;
     setBudgetUsd(String(microsToUsd(project.data.budget_cap_micros)));
     // API responses also contain server-owned workspace and lifecycle fields.
     // Only copy the controls this form edits into its mutation payload.
@@ -94,6 +106,8 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
     },
     onSuccess: () => {
       setFormError(null);
+      // The saved record is now the truth: let the refetch hydrate the form.
+      edited.current = false;
       setToast({ kind: 'success', message: 'Settings saved.' });
       void qc.invalidateQueries({ queryKey: ['project', projectId] });
       void qc.invalidateQueries({ queryKey: ['projects'] });
@@ -158,7 +172,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
       >
         <div className="grid gap-2 sm:grid-cols-2">
           <Field label="Project budget cap (USD)">
-            <Input type="number" min="0" step="0.5" value={budgetUsd} onChange={(e) => setBudgetUsd(e.target.value)} />
+            <Input type="number" min="0" step="0.5" value={budgetUsd} onChange={(e) => { edited.current = true; setBudgetUsd(e.target.value); }} />
           </Field>
           <Field label="Warning threshold (fraction of cap)" hint="Raises a budget.warning event above this level.">
             <Input
@@ -168,7 +182,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
               step="0.05"
               value={String(settings.budget_warning_pct ?? 0.8)}
               onChange={(e) =>
-                setSettings((s) => ({ ...s, budget_warning_pct: Number.parseFloat(e.target.value) || 0 }))
+                update((s) => ({ ...s, budget_warning_pct: Number.parseFloat(e.target.value) || 0 }))
               }
             />
           </Field>
@@ -179,25 +193,25 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             label="Autonomous intake"
             hint="agent picks up new work without a confirmation gate"
             checked={settings.autonomous_intake}
-            onChange={(v) => setSettings((s) => ({ ...s, autonomous_intake: v }))}
+            onChange={(v) => update((s) => ({ ...s, autonomous_intake: v }))}
           />
           <Toggle
             label="Full autonomy (YOLO)"
             hint="skip every human approval: tools run as requested, and each auto-granted call is audited"
             checked={settings.yolo ?? false}
-            onChange={(v) => setSettings((s) => ({ ...s, yolo: v }))}
+            onChange={(v) => update((s) => ({ ...s, yolo: v }))}
           />
           <Toggle
             label="Require goal confirmation"
             hint="the orchestrator's interpretation is shown for your approval before planning"
             checked={settings.require_goal_confirmation}
-            onChange={(v) => setSettings((s) => ({ ...s, require_goal_confirmation: v }))}
+            onChange={(v) => update((s) => ({ ...s, require_goal_confirmation: v }))}
           />
           <Toggle
             label="Require human verification"
             hint="a verdict of pass is not enough, a human must sign off"
             checked={settings.require_human_verification}
-            onChange={(v) => setSettings((s) => ({ ...s, require_human_verification: v }))}
+            onChange={(v) => update((s) => ({ ...s, require_human_verification: v }))}
           />
         </Section>
 
@@ -209,7 +223,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             label="Continue automatically"
             hint="when a run completes, start the next pass without waiting for you"
             checked={!!settings.cadence_enabled}
-            onChange={(v) => setSettings((s) => ({ ...s, cadence_enabled: v }))}
+            onChange={(v) => update((s) => ({ ...s, cadence_enabled: v }))}
           />
           <div className="mt-1 max-w-xs">
             <Field
@@ -222,7 +236,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                 max="10"
                 value={settings.cadence_max_runs ?? 3}
                 onChange={(e) =>
-                  setSettings((s) => ({
+                  update((s) => ({
                     ...s,
                     cadence_max_runs: Math.max(1, Math.min(10, Number.parseInt(e.target.value, 10) || 1)),
                   }))
@@ -239,7 +253,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                 type="number"
                 min="1"
                 value={settings.max_agents}
-                onChange={(e) => setSettings((s) => ({ ...s, max_agents: Number.parseInt(e.target.value, 10) || 0 }))}
+                onChange={(e) => update((s) => ({ ...s, max_agents: Number.parseInt(e.target.value, 10) || 0 }))}
               />
             </Field>
             <Field label="Max departments">
@@ -248,7 +262,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                 min="1"
                 value={settings.max_departments}
                 onChange={(e) =>
-                  setSettings((s) => ({ ...s, max_departments: Number.parseInt(e.target.value, 10) || 0 }))
+                  update((s) => ({ ...s, max_departments: Number.parseInt(e.target.value, 10) || 0 }))
                 }
               />
             </Field>
@@ -260,7 +274,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                 step="0.05"
                 value={settings.max_senior_ratio}
                 onChange={(e) =>
-                  setSettings((s) => ({ ...s, max_senior_ratio: Number.parseFloat(e.target.value) || 0 }))
+                  update((s) => ({ ...s, max_senior_ratio: Number.parseFloat(e.target.value) || 0 }))
                 }
               />
             </Field>
@@ -269,7 +283,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             label="Auto-hire"
             hint="let the orchestrator hire when a capability gap blocks work"
             checked={settings.auto_hire}
-            onChange={(v) => setSettings((s) => ({ ...s, auto_hire: v }))}
+            onChange={(v) => update((s) => ({ ...s, auto_hire: v }))}
           />
           <div className="mt-1 max-w-xs">
             <Field label="Layoff after idle days">
@@ -278,7 +292,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                 min="0"
                 value={settings.layoff_idle_days}
                 onChange={(e) =>
-                  setSettings((s) => ({ ...s, layoff_idle_days: Number.parseInt(e.target.value, 10) || 0 }))
+                  update((s) => ({ ...s, layoff_idle_days: Number.parseInt(e.target.value, 10) || 0 }))
                 }
               />
             </Field>
@@ -291,7 +305,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
         >
           <Textarea
             value={egressText}
-            onChange={(e) => setEgressText(e.target.value)}
+            onChange={(e) => { edited.current = true; setEgressText(e.target.value); }}
             placeholder={'api.example.com\nfiles.pythonhosted.org'}
             aria-label="Egress allowlist hosts"
             className="font-mono text-xs"
@@ -321,7 +335,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
                   value={tiers[tier] ?? ''}
                   placeholder="deepseek/deepseek-flash"
                   onChange={(e) =>
-                    setSettings((s) => ({
+                    update((s) => ({
                       ...s,
                       model_tiers: { ...(s.model_tiers ?? {}), [tier]: e.target.value },
                     }))

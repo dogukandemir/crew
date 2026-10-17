@@ -24,6 +24,15 @@ STANDING RULES (non-negotiable)
    Read existing inputs with tools and run requested checks with sandbox tools before claiming success.
 """
 
+# The owner's punctuation rule (F1): agent-authored deliverables shipped 16 and 26 em
+# dashes in single files. The rule names the character in words, so the prompt itself
+# never carries one, and it sits in the WORK ORDER's voice: short, imperative, concrete.
+WORDS_RULES = """\
+WORDS (the owner's rule for everything you write)
+Write deliverables in English. Never use em dashes. Where one would go, use a comma,
+a colon, parentheses or a full stop, whichever says the sentence plainly.
+"""
+
 
 @dataclass
 class PromptBundle:
@@ -106,6 +115,7 @@ def build_system_prompt(
         "method": f"{method}\n{skills_line}",
         "context": context,
         "rules": STANDING_RULES,
+        "words": WORDS_RULES,
     })
     system = "\n\n".join(f"## {k.replace('_', ' ').upper()}\n{v}" for k, v in sections.items())
     return PromptBundle(system=system, user="", sections=sections)
@@ -136,6 +146,9 @@ def build_task_prompt(
                   "step after that should improve the file on disk: a task that ends with no file "
                   "fails its acceptance criteria whatever you learned, and everything that depends "
                   "on it never runs."]
+        parts += ["WORDS: write the deliverable in English with no em dashes. Where one would go, "
+                  "use a comma, a colon, parentheses or a full stop, whichever says the sentence "
+                  "plainly."]
     if acceptance_criteria:
         parts += ["", "ACCEPTANCE CRITERIA (address each explicitly in your final answer):"]
         parts += [f"  {i + 1}. {c}" for i, c in enumerate(acceptance_criteria)]

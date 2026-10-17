@@ -390,14 +390,14 @@ async def hire_agent(*, project_id: str, spec: RoleSpec, department_id: str | No
         async with session_scope() as s0:
             idx = int(await s0.scalar(select(func.count(Agent.id)).where(
                 Agent.project_id == project_id)) or 0) + 1
-            used = set((await s0.scalars(select(Agent.name).where(
-                Agent.project_id == project_id))).all())
-        for attempt in range(5):
-            candidate_soul = soul_mod.compose_soul(
-                role=spec.role.value, grade=int(grade_pre),
-                seed=f"{project_id}:{spec.role.value}:{idx + attempt}")
-            if candidate_soul["name"] not in used:
-                break
+            # Names are unique across the whole installation, not just this project:
+            # the seed is per project, so two projects used to compose the same person
+            # and put two identical names on one roster (F15). The walk steps past
+            # every name already taken anywhere, keeping the seeding deterministic.
+            used = set((await s0.scalars(select(Agent.name))).all())
+        candidate_soul = soul_mod.compose_soul(
+            role=spec.role.value, grade=int(grade_pre),
+            seed=f"{project_id}:{spec.role.value}:{idx}", used=used)
         soul = await _polish_soul(candidate_soul, project_id=project_id) or candidate_soul
     chosen_name = (name or str(soul.get("name") or "")).strip()
     if not chosen_name:

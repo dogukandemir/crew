@@ -115,7 +115,7 @@ export function TasksPanel({ projectId, tabId }: { projectId: string; tabId: str
       },
       {
         key: 'cost',
-        header: 'Est. cost',
+        header: 'Cost',
         width: '5.5rem',
         align: 'right',
         render: (t) => (

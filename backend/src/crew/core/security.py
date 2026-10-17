@@ -55,7 +55,10 @@ SUPERVISED_FORBIDDEN: set[Capability] = {
 # private-IP block which lives in the proxy.
 BASELINE_EGRESS: tuple[str, ...] = (
     "api.deepseek.com", "api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com",
-    "openrouter.ai", "duckduckgo.com", "html.duckduckgo.com", "google.com", "wikipedia.org",
+    # Search runs on the lite endpoint (F2: the html endpoint answers a datacenter GET
+    # with an anti-bot challenge). Both names are DuckDuckGo hosts, nothing widened.
+    "openrouter.ai", "duckduckgo.com", "html.duckduckgo.com", "lite.duckduckgo.com",
+    "google.com", "wikipedia.org",
     "github.com", "raw.githubusercontent.com", "pypi.org", "files.pythonhosted.org",
     "registry.npmjs.org", "arxiv.org", "stackoverflow.com", "localhost:11434",
 )

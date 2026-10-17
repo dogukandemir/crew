@@ -22,6 +22,31 @@ def test_a_deliverable_task_is_told_to_write_the_file_before_it_keeps_researchin
     assert "WORK ORDER" not in no_file
 
 
+def test_the_owner_punctuation_rule_rides_both_prompts():
+    """F1: agent-authored deliverables shipped em dashes; the rule is stated in words.
+
+    The prompt must say it on the system prompt (every task) and on the task prompt
+    (the one built separately), and neither prompt may carry the character itself.
+    """
+    from crew.execution.prompt import build_system_prompt, build_task_prompt
+
+    bundle = build_system_prompt(name="Maya Carter", role="worker", grade=1,
+                                 mission="ship the price sheet", autonomy="supervised")
+    assert "## WORDS" in bundle.system
+    assert "Never use em dashes" in bundle.system
+    assert "a comma," in bundle.system and "a full stop" in bundle.system
+
+    task = build_task_prompt(title="Price sheet", description="compare the rivals",
+                             deliverable="price-sheet.md",
+                             acceptance_criteria=["Three rivals compared."])
+    assert "WORDS" in task and "no em dashes" in task
+    assert "full stop" in task
+
+    em_dash = "\N{EM DASH}"
+    assert em_dash not in bundle.system, "the prompt teaches the rule without breaking it"
+    assert em_dash not in task
+
+
 def test_a_repo_scale_audit_gets_more_steps_than_a_short_writer():
     from crew.execution.runner import steps_budget
 

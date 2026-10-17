@@ -13,7 +13,7 @@ import {
   namespaceOf,
   SEVERITY_RANK,
 } from '../../lib/events';
-import { formatClock, formatMicros, formatRelativeTime } from '../../lib/format';
+import { formatClockUtc, formatMicros, formatRelativeTime } from '../../lib/format';
 import { clearSinceSeq, type ConnectionState } from '../../lib/socket';
 import { selectEventLog, useEventLog } from '../../stores/eventLog';
 import { selectConnection, useConnection } from '../../stores/connection';
@@ -198,7 +198,17 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
 
       {/* List + payload viewer */}
       <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[1fr_22rem]">
-        <div className="min-h-0 overflow-hidden rounded-lg border border-slate-700/60">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-700/60">
+          {/* The record is written in UTC: label the clock so a reader never
+              mistakes it for their own wall clock. The age beside it is the
+              reader-facing "how long ago". */}
+          <div className="flex shrink-0 items-center gap-2 border-b border-slate-800/70 bg-slate-900/40 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">
+            <span className="w-16 shrink-0" title="Recorded in UTC, not the host clock">time UTC</span>
+            <span className="w-14 shrink-0 text-right">seq</span>
+            <span className="w-16 shrink-0">level</span>
+            <span className="w-40 shrink-0">type</span>
+            <span className="min-w-0 flex-1">event</span>
+          </div>
           <VirtualList
             items={rows}
             rowHeight={ROW_HEIGHT}
@@ -219,7 +229,9 @@ export function EventsPanel({ projectId }: { projectId: string; tabId: string })
                   selectedId === e.id && 'bg-slate-800/70',
                 )}
               >
-                <span className="shrink-0 font-mono text-slate-500">{formatClock(e.ts)}</span>
+                <span className="w-16 shrink-0 font-mono tabular-nums text-slate-500" title={`${e.ts} recorded in UTC`}>
+                  {formatClockUtc(e.ts)}
+                </span>
                 <span className="w-14 shrink-0 text-right font-mono tabular-nums text-slate-600">{e.seq}</span>
                 <span className="w-16 shrink-0">
                   <Badge tone={severityTone(e.severity)}>{e.severity}</Badge>

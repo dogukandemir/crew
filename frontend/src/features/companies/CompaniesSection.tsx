@@ -124,14 +124,23 @@ export function CompaniesSection() {
                 </Button>
                 <select
                   aria-label={`Attach a project to ${c.name}`}
-                  className="rounded-md border border-slate-700/60 bg-slate-900/60 px-2 py-1 text-xs text-slate-300"
+                  title={
+                    attachable.length
+                      ? 'Move an unattached project under this company'
+                      : 'Every project already reports to a company'
+                  }
+                  disabled={attachable.length === 0}
+                  className="rounded-md border border-slate-700/60 bg-slate-900/60 px-2 py-1 text-xs text-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                   defaultValue=""
                   onChange={(e) => {
                     if (e.target.value) attach.mutate({ companyId: c.id, projectId: e.target.value });
                   }}
                 >
+                  {/* The label names the action, not the empty state: a control that
+                      attaches a project reads "Attach a project" even when there is
+                      nothing left to attach. */}
                   <option value="" disabled>
-                    {attachable.length ? 'Attach a project…' : 'No unattached projects'}
+                    Attach a project
                   </option>
                   {attachable.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -139,6 +148,9 @@ export function CompaniesSection() {
                     </option>
                   ))}
                 </select>
+                {attachable.length === 0 && (
+                  <span className="text-[11px] text-slate-500">all projects are attached</span>
+                )}
               </div>
             </li>
           ))}

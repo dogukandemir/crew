@@ -162,6 +162,16 @@ def _serp(n: int) -> str:
     return f"<html><body>{rows}</body></html>"
 
 
+# A real zero-result page says so in its markup; a challenge or a silently unparseable
+# page must NOT be reported as "no results" (F2: the price sheet was told there were
+# none when the fetch had actually been blocked).
+_NO_RESULTS = ('<html><body><div class=\'no-results__container\'>'
+               '<div class="no-results__message"><h1>No results found for '
+               '<strong>alpha</strong></h1></div></div></body></html>')
+_CHALLENGE = ('<html><body><form class="challenge-form" action="/anomaly.js?sv=lite">'
+              '<button class="js-anomaly-modal-submit">Submit</button></form></body></html>')
+
+
 @pytest.mark.asyncio
 async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, tmp_path, monkeypatch):
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Seeker")
@@ -171,16 +181,36 @@ async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, 
     r = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
     assert r["ok"] is True and r["untrusted"] is True
     assert r["review"]["verdict"] == "clean" and r["review"]["method"] == "deterministic"
-    assert r["meta"]["provider"] == "duckduckgo"
+    assert r["meta"]["provider"] == "duckduckgo" and r["meta"]["outcome"] == "results"
     assert len(r["data"]) == 5, "at most five hits"
     assert r["data"][0] == {"url": "https://s0.example", "title": "Hit 0, title"}
 
-    monkeypatch.setattr(tools_mod, "_search_page", lambda q: "<html>no results</html>")
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q: _NO_RESULTS)
     r2 = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
     assert r2["ok"] is True and r2["data"] == []
+    assert r2["meta"]["outcome"] == "empty"
+    assert "genuine empty answer" in r2["note"], "an empty answer says why it is empty"
 
     bad = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": ""})
     assert bad["ok"] is False and "query is required" in bad["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_says_a_blocked_or_unreadable_fetch_is_not_zero_results(
+        tool_context, bound_loop, project, tmp_path, monkeypatch):
+    agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Sifting")
+    ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-b", workspace=tmp_path)
+
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q: _CHALLENGE)
+    blocked = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
+    assert blocked["ok"] is False
+    assert blocked["meta"]["outcome"] == "blocked"
+    assert "NOT a zero-result answer" in blocked["error"], blocked
+
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q: "<html>maintenance</html>")
+    broken = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
+    assert broken["ok"] is False and broken["meta"]["outcome"] == "unparsed"
+    assert "NOT a zero-result answer" in broken["error"], broken
 
 
 @pytest.mark.asyncio

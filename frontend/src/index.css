@@ -82,3 +82,25 @@ body {
   to { box-shadow: inset 0 0 0 2px rgba(251, 191, 36, 0); }
 }
 .crew-flash { animation: crew-flash 0.9s ease-out 1; }
+
+/* React Flow ships a light chrome (white control buttons). The org view is part of
+   the dark control room, so the zoom and fit controls take the slate tokens the
+   rest of the interface uses. */
+.org-flow .react-flow {
+  --xy-controls-button-background-color: #0f172a; /* slate-900 */
+  --xy-controls-button-background-color-hover: #1e293b; /* slate-800 */
+  --xy-controls-button-color: #cbd5e1; /* slate-300 */
+  --xy-controls-button-color-hover: #e2e8f0; /* slate-200 */
+  --xy-controls-button-border-color: #334155; /* slate-700 */
+  --xy-controls-box-shadow: none;
+}
+.org-flow .react-flow__controls {
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.org-flow .react-flow__controls-button {
+  width: 26px;
+  height: 24px;
+}
+.org-flow .react-flow__controls-button:last-child { border-bottom: 0; }

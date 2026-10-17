@@ -47,6 +47,30 @@ class RunAborted(RuntimeError):
     pass
 
 
+def _escalation_note(headline: str, reasons: list[str] | None, limit: int = 300) -> str:
+    """`headline` plus the first causes, so the task record says WHY it failed.
+
+    F20: a failed task used to carry `verification fail` and then `retry 2`, telling
+    an operator nothing about the cause. The verifier's reasons ride here now, capped
+    so a long evaluator note cannot crowd out the headline.
+    """
+    causes = [str(r).strip() for r in (reasons or []) if str(r).strip()]
+    if not causes:
+        return headline
+    tail = "; ".join(causes[:3])
+    room = max(0, limit - len(headline) - 2)
+    return f"{headline}: {tail[:room].rstrip()}" if room > 20 else headline
+
+
+def _carry_reason(previous: str, note: str, limit: int = 300) -> str:
+    """Keep the earlier cause and append the ladder's note (never overwrite the why)."""
+    base = (previous or "").strip()
+    if not base:
+        return note
+    room = max(0, limit - len(note) - 2)
+    return f"{base[:room].rstrip()}; {note}" if room > 20 else note
+
+
 async def _emit_stage(run: Run, stage: RunStage, project_id: str, extra: dict | None = None) -> None:
     await ev.emit("run.stage.changed", project_id=project_id, run_id=run.id, severity="notice",
                   title=f"stage: {stage.value}", payload={"run_id": run.id, "stage": stage.value,
@@ -357,7 +381,7 @@ class Orchestrator:
             for t in failed:
                 if t.attempts < MAX_TASK_ATTEMPTS and t.state == TaskState.FAILED.value:
                     t.state = TaskState.ASSIGNED.value
-                    t.escalation_reason = f"retry {t.attempts}"
+                    t.escalation_reason = _carry_reason(t.escalation_reason, f"retry {t.attempts}")
                     # the ladder's first rung (docs/03 §5): the FIRST failure goes back to
                     # the producer's Lead, who re-plans it, rather than watching the same
                     # worker fail the same way again.
@@ -385,7 +409,8 @@ class Orchestrator:
                             h = await s.get(Agent, helper_id)
                             t.assignee_agent_id = helper_id
                             t.assignee_squad_id = h.squad_id if h else None
-                            t.escalation_reason = f"retry {t.attempts}, helper takes over"
+                            t.escalation_reason = _carry_reason(t.escalation_reason,
+                                                               "helper takes over")
                             await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
                                           task_id=t.id, agent_id=helper_id, severity="warning",
                                           title=f"helper takes over: {t.title[:50]}",
@@ -399,7 +424,8 @@ class Orchestrator:
                                     and lead.state not in ("archived", "suspended")):
                                 t.assignee_agent_id = lead.id
                                 t.assignee_squad_id = lead.squad_id
-                                t.escalation_reason = f"retry {t.attempts}, lead re-plans"
+                                t.escalation_reason = _carry_reason(t.escalation_reason,
+                                                                   "lead re-plans")
                                 await ev.emit("task.escalated", project_id=run.project_id, run_id=run.id,
                                               task_id=t.id, agent_id=lead.id, severity="warning",
                                               title=f"lead re-plans: {t.title[:50]}",
@@ -834,7 +860,8 @@ class Orchestrator:
                 row.ended_at = datetime.now(UTC)
             else:
                 row.state = TaskState.FAILED.value
-                row.escalation_reason = f"verification {outcome.verdict.value}"
+                row.escalation_reason = _escalation_note(
+                    f"verification {outcome.verdict.value}", outcome.reasons)
                 row.ended_at = datetime.now(UTC)
             s.add(row)
 
@@ -876,7 +903,10 @@ class Orchestrator:
                 await ev.emit("task.escalated", project_id=project.id, run_id=run.id, task_id=task_id,
                               severity="warning", title=f"retry scheduled for {task.title[:50]}",
                               payload={"task_id": task_id,
-                                       "reason": f"verification {outcome.verdict.value}; retry {attempts_n}",
+                                       "reason": _escalation_note(
+                                           f"verification {outcome.verdict.value}", outcome.reasons)
+                                                 + f"; retry {attempts_n}",
+                                       "reasons": outcome.reasons,
                                        "ladder": "lead→head→orchestrator"},
                               actor="system:orchestrator")
 

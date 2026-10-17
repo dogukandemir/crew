@@ -82,25 +82,41 @@ function GoalEditor({ project }: { project: Project }) {
 
   if (!editing) {
     return (
-      <p className="flex min-w-0 items-start gap-2 text-xs text-slate-300">
-        <span className={cn('min-w-0', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')} title={project.goal}>
-          {project.goal || 'no goal set'}
-        </span>
-        {project.goal.length > 110 && <button type="button" className="shrink-0 text-xs text-slate-300 underline"
-          onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? 'Less' : 'Read goal'}</button>}
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="shrink-0 text-[10px] text-slate-500 underline decoration-dotted hover:text-emerald-300"
+      <div className="flex min-w-0 flex-1 items-start gap-2 text-xs text-slate-300">
+        {/* Two columns, never one stacked on the other: the paragraph owns the
+            flexible column and truncates inside it, the controls get their own
+            shrink-0 column at the right edge. */}
+        <p
+          className={cn('min-w-0 flex-1', expanded ? 'whitespace-pre-wrap break-words' : 'truncate')}
+          title={project.goal}
         >
-          Edit goal
-        </button>
-      </p>
+          {project.goal || 'no goal set'}
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          {project.goal.length > 110 && (
+            <button
+              type="button"
+              className="shrink-0 whitespace-nowrap text-xs text-slate-300 underline"
+              onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+            >
+              {expanded ? 'Less' : 'Read goal'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="shrink-0 whitespace-nowrap text-[10px] text-slate-500 underline decoration-dotted hover:text-emerald-300"
+          >
+            Edit goal
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-1 items-start gap-2">
+    <div className="flex min-w-0 flex-1 items-start gap-2">
       <Textarea aria-label="Project goal" rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} className="text-sm" autoFocus />
       <Button size="xs" variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
         Save
@@ -272,8 +288,8 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
           </Button>
         </div>
       </div>
-      <div className="mt-1 flex items-center gap-2">
-        <Badge tone="muted">{isCompany ? 'mission' : 'goal'}</Badge>
+      <div className="mt-1 flex min-w-0 items-center gap-2">
+        <Badge tone="muted" className="shrink-0">{isCompany ? 'mission' : 'goal'}</Badge>
         <GoalEditor project={p} />
       </div>
     </div>

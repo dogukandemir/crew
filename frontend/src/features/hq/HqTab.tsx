@@ -54,7 +54,8 @@ export function HqTab({ companyId }: { companyId: string }) {
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span className="text-sm font-medium text-slate-100">{d.company.name}</span>
-        <span className="hidden text-[11px] text-slate-500 sm:inline">{d.company.mission}</span>
+        {/* The mission is printed once, in the header above (with its own read and
+            edit controls). Repeating a truncated copy here was the duplicate. */}
         <span className="text-[11px] tabular-nums text-slate-400">
           {formatUsd(d.company.spend_usd)} / {formatUsd(d.company.budget_usd)}
         </span>

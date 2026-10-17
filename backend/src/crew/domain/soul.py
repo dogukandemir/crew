@@ -254,16 +254,57 @@ def role_archetype(role: str) -> str:
     return _ROLE_PROFILE.get(role, ("craft", "product"))[0]
 
 
+def _shuffled(rng: random.Random, rows: list[tuple[str, str, str, str]]) -> list[tuple[str, str, str, str]]:
+    """Deterministic for a given rng seed: the same hire walks the same order."""
+    rng.shuffle(rows)
+    return rows
+
+
+def _pool_candidates(rng: random.Random) -> list[tuple[str, str, str, str]]:
+    """Every in-pool name once, in a seed-deterministic, origin-weighted walk order.
+
+    The old code redrew at random and gave up after 40 tries, so a per-project seed
+    handed the SAME person to two projects (F15: two people in one list, one name).
+    Now a hire walks further into this list instead: same seed, same first candidate,
+    and uniqueness is a property of the walk rather than of luck.
+    """
+    weighted: list[tuple[str, str, str, str]] = []
+    for origin, firsts, lasts, weight in _NAME_POOLS:
+        rows = [(origin, first, last, f"{first} {last}") for first in firsts for last in lasts]
+        weighted.extend(rows * max(1, int(round(weight or 1))))
+    seen: set[str] = set()
+    ordered = []
+    for row in _shuffled(rng, weighted):
+        if row[3] in seen:
+            continue  # the weight only biases position, a name is offered once
+        seen.add(row[3])
+        ordered.append(row)
+    return ordered
+
+
+def _mixed_candidates(rng: random.Random) -> list[tuple[str, str, str, str]]:
+    """Cross-origin names, the next layer of the pool once every pool pair is taken."""
+    firsts = [(origin, first) for origin, fs, _ls, _w in _NAME_POOLS for first in fs]
+    lasts = [(origin, last) for origin, _fs, ls, _w in _NAME_POOLS for last in ls]
+    rows = [(fo, first, last, f"{first} {last}")
+            for fo, first in firsts for lo, last in lasts if lo != fo]
+    return _shuffled(rng, rows)
+
+
 def pick_name(rng: random.Random, used: set[str] | None = None) -> tuple[str, str, str, str]:
-    """(origin, first, last, full), unique against `used` when possible."""
-    weights = [p[3] for p in _NAME_POOLS]
-    for _ in range(40):
-        origin, firsts, lasts, _w = rng.choices(_NAME_POOLS, weights=weights, k=1)[0]
-        first, last = rng.choice(firsts), rng.choice(lasts)
-        full = f"{first} {last}"
-        if used is None or full not in used:
-            return origin, first, last, full
-    return origin, first, last, f"{first} {last}"
+    """(origin, first, last, full), unique against `used` for the whole installation."""
+    taken = used or set()
+    for row in _pool_candidates(rng):
+        if row[3] not in taken:
+            return row
+    for row in _mixed_candidates(rng):
+        if row[3] not in taken:
+            return row
+    origin, first, last, _full = _pool_candidates(rng)[0]
+    suffix = 2
+    while f"{first} {last} {suffix}" in taken:
+        suffix += 1
+    return origin, first, last, f"{first} {last} {suffix}"
 
 
 def _sample(rng: random.Random, pool: list[str], n: int) -> list[str]:
@@ -271,11 +312,13 @@ def _sample(rng: random.Random, pool: list[str], n: int) -> list[str]:
 
 
 def compose_soul(*, role: str, grade: int, seed: str,
-                 name: str | None = None) -> dict[str, Any]:
+                 name: str | None = None, used: set[str] | None = None) -> dict[str, Any]:
     """A whole person, deterministically. Same seed → same soul, forever.
 
     `name` wins when a caller already has one (HR candidates arrive named); `grade`
-    nudges nothing, character is grade-independent on purpose."""
+    nudges nothing, character is grade-independent on purpose. `used` holds every name
+    already taken in the installation: the walk steps past them, so two projects can
+    never hire the same person (F15)."""
     rng = random.Random(f"crew-soul:{seed}")
     arche, field = _ROLE_PROFILE.get(role, ("craft", "product"))
     bank = _BANKS[arche]
@@ -285,7 +328,7 @@ def compose_soul(*, role: str, grade: int, seed: str,
         origin = ""
         full = name
     else:
-        origin, first, _last, full = pick_name(rng)
+        origin, first, _last, full = pick_name(rng, used)
 
     background = rng.choice(bank["backgrounds"]).format(field=field)
     return {

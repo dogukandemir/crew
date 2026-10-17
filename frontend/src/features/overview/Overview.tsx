@@ -10,7 +10,8 @@ import { Modal } from '../../components/ui/Drawer';
 import { Field, Select, Textarea } from '../../components/ui/Field';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
-import { formatClock, formatMicros, formatPercent, formatRelativeTime } from '../../lib/format';
+import { formatClockUtc, formatMicros, formatPercent, formatRelativeTime } from '../../lib/format';
+import { useNow } from '../../lib/useNow';
 import {
   useApprovals,
   useOrg,
@@ -34,6 +35,8 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
   const approvals = useApprovals(projectId, 'pending');
   const log = useEventLog(selectEventLog(projectId));
   const openDrawer = useUi((s) => s.openDrawer);
+  // The feed is pushed, not polled: the age label needs its own ticking clock.
+  const now = useNow();
 
   const units = useMemo(() => flattenOrg(org.data?.root), [org.data]);
   const counts = useMemo(() => orgCounts(units), [units]);
@@ -174,7 +177,16 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                     else if (e.task_id) openDrawer(tabId, { kind: 'task', id: e.task_id });
                   }}
                 >
-                  <span className="shrink-0 font-mono text-[10px] text-slate-500">{formatClock(e.ts)}</span>
+                  {/* The record is UTC. The clock is printed in UTC with its label
+                      on every row, and the age beside it stays this machine's
+                      "how long ago". */}
+                  <span
+                    className="shrink-0 whitespace-nowrap font-mono text-[10px] tabular-nums text-slate-500"
+                    title={`${e.ts} recorded in UTC`}
+                  >
+                    {formatClockUtc(e.ts)}
+                    <span className="ml-0.5 text-[9px] uppercase tracking-wide text-slate-600">UTC</span>
+                  </span>
                   <Badge tone={severityTone(e.severity)}>{e.type}</Badge>
                   <span className="min-w-0 flex-1 truncate text-slate-300">{e.title}</span>
                   {e.actor && <span className="shrink-0 text-[10px] text-slate-500">{e.actor}</span>}
@@ -183,7 +195,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                       {formatMicros(e.cost_micros)}
                     </span>
                   )}
-                  <span className="shrink-0 text-[10px] text-slate-600">{formatRelativeTime(e.ts)}</span>
+                  <span className="shrink-0 text-[10px] text-slate-600">{formatRelativeTime(e.ts, now)}</span>
                 </button>
               </li>
             ))}

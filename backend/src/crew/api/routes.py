@@ -354,6 +354,24 @@ async def _project_or_404(project_id: str) -> Project:
     return p
 
 
+def _verification_reasons(v: VerificationResult) -> list[str]:
+    """Why the verifier decided what it decided, machine-readable (F20).
+
+    Stored on the verification's rubric; a failing verdict never serves an empty list,
+    so an operator reads a cause instead of a bare verdict.
+    """
+    rubric = v.rubric if isinstance(v.rubric, dict) else {}
+    reasons = [str(r).strip() for r in (rubric.get("reasons") or []) if str(r).strip()]
+    if reasons:
+        return reasons
+    if v.verdict in ("fail", "inconclusive"):
+        failed = [str(c.get("name")) for c in (v.checks or []) if isinstance(c, dict) and not c.get("ok")]
+        if failed:
+            return [f"failed check: {name}" for name in failed[:8]]
+        return [f"verdict {v.verdict} with no recorded cause (pre-dates reason capture)"]
+    return []
+
+
 def task_dict(t: Task) -> dict:
     return {
         "id": t.id, "run_id": t.run_id, "project_id": t.project_id, "title": t.title,
@@ -1317,7 +1335,9 @@ async def list_tasks(project_id: str, state: str | None = None, department_id: s
             row = task_dict(task)
             verification = latest_verification.get(task.id)
             row["verification"] = ({"verdict": verification.verdict, "method": verification.method,
-                                    "confidence": verification.confidence} if verification else None)
+                                    "confidence": verification.confidence,
+                                    "reasons": _verification_reasons(verification)}
+                                   if verification else None)
             items.append(row)
     return {"items": items}
 
@@ -1360,12 +1380,13 @@ async def get_task(task_id: str) -> dict:
         out["result_text"] = t.result_text
         out["verification"] = ([{"verdict": v.verdict, "method": v.method, "checks": v.checks,
                                  "rubric": v.rubric, "confidence": v.confidence,
+                                 "reasons": _verification_reasons(v),
                                  "created_at": ev.utc_iso(v.created_at)} for v in ver] or [None])[0]
         out["rewards"] = [{"id": r.id, "agent_id": r.agent_id, "role": r.role_in_task,
                            "reward": r.reward, "verdict": r.verdict, "components": r.components}
                           for r in rewards]
         out["artifacts"] = [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256,
-                            "kind": a.kind} for a in arts]
+                            "kind": a.kind, "available": _artifact_available(a)} for a in arts]
     return out
 
 
@@ -1373,7 +1394,8 @@ async def get_task(task_id: str) -> dict:
 async def task_artifacts(task_id: str) -> dict:
     async with session_scope() as s:
         arts = (await s.scalars(select(Artifact).where(Artifact.task_id == task_id))).all()
-    return {"items": [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256} for a in arts]}
+    return {"items": [{"id": a.id, "path": a.path, "bytes": a.bytes, "sha256": a.sha256,
+                       "available": _artifact_available(a)} for a in arts]}
 
 
 def _artifact_display_name(a: Artifact) -> str:
@@ -1382,6 +1404,26 @@ def _artifact_display_name(a: Artifact) -> str:
     if not name:
         name = (a.path or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
     return name or a.id
+
+
+def _artifact_availability(a: Artifact) -> tuple[bool, str | None]:
+    """Whether the file can be read now, and why not when it cannot.
+
+    One stat per row, the same two rules and the same words the content route uses
+    (existence, and inside the data root). Superseded copies lose their file, so a
+    list that offers them as openable is a lie the client only finds by clicking (F5).
+    """
+    root = settings.data_dir if settings.data_dir.is_absolute() else (Path.cwd() / settings.data_dir)
+    try:
+        rp = Path(a.path).resolve()
+        inside = rp.is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        rp, inside = None, False
+    if not inside:
+        return False, "the file is not stored under the server's data directory"
+    if rp is None or not rp.is_file():
+        return False, "the file has been moved or deleted"
+    return True, None
 
 
 async def _artifact_context(s, project_ids: list[str],
@@ -1406,6 +1448,7 @@ def _artifact_row(a: Artifact, agents: dict, depts: dict, tasks: dict, projects:
     pr = projects.get(a.project_id or "")
     dept_id = (tk.department_id if tk else None) or (ag.department_id if ag else None)
     dept = depts.get(dept_id or "")
+    available, unavailable_reason = _artifact_availability(a)
     return {
         "id": a.id,
         "name": _artifact_display_name(a),
@@ -1414,6 +1457,10 @@ def _artifact_row(a: Artifact, agents: dict, depts: dict, tasks: dict, projects:
         "kind": a.kind,
         "bytes": a.bytes,
         "sha256": a.sha256,
+        # The same word and the same reason strings the content route answers with, so
+        # the client can grey out a row before clicking it (F5).
+        "available": available,
+        "unavailable_reason": unavailable_reason,
         "created_at": ev.utc_iso(a.created_at),
         "agent_id": a.agent_id,
         "agent_name": ag.name if ag else None,
@@ -1529,6 +1576,11 @@ def _artifact_file(a: Artifact) -> Path | None:
     except (OSError, ValueError):
         pass
     return None
+
+
+def _artifact_available(a: Artifact) -> bool:
+    """Whether the content route would serve this row (the reason is not needed here)."""
+    return _artifact_availability(a)[0]
 
 
 def _zip_deliverables(rows: list[Artifact], project_slugs: dict[str, str],

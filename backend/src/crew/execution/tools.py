@@ -7,9 +7,11 @@ Every tool call goes through ToolInvoker: policy check → approval gate → san
 from __future__ import annotations
 
 import asyncio
+import html as html_mod
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -129,13 +131,75 @@ def _truncate(data: Any) -> Any:
 
 
 # ── handlers ─────────────────────────────────────────────────────────────────────────
-def _search_page(query: str) -> str:
-    """The raw DuckDuckGo SERP. Factored out so tests can fake the network (ADR 0017)."""
-    from urllib.parse import urlencode
+# DuckDuckGo answering shapes. The html endpoint (GET) answered a 202 anti-bot
+# challenge from this egress; the lite endpoint as a form POST answers 200 with the
+# real SERP. The parser knows both result anchor shapes, so a change of page is a
+# parse question, never a silent empty result (F2).
+SEARCH_HOST = "lite.duckduckgo.com"
+SEARCH_URL = f"https://{SEARCH_HOST}/lite/"
+_ANCHOR_RE = re.compile(r"<a\b([^>]*)>(.*?)</a>", re.S | re.I)
+_CLASS_RE = re.compile(r"class=['\"]([^'\"]+)['\"]", re.I)
+_HREF_RE = re.compile(r"href=['\"]([^'\"]+)['\"]", re.I)
+_HIT_CLASSES = frozenset({"result__a", "result-link"})
+_CHALLENGE_MARKERS = ("anomaly-modal", "challenge-form", "anomaly.js?sv=")
+_NO_RESULTS_MARKERS = ("no-results__message", "No results found for")
 
+
+def _search_page(query: str) -> str:
+    """The raw DuckDuckGo lite SERP. Factored out so tests can fake the network (ADR 0017)."""
     from crew.execution.http import fetch_public
 
-    return fetch_public("https://html.duckduckgo.com/html/?" + urlencode({"q": query}))[1]
+    return fetch_public(SEARCH_URL, form={"q": query})[1]
+
+
+def _result_url(href: str) -> str:
+    """A result link, unwrapped from DuckDuckGo's /l/?uddg= redirect when it uses one."""
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    href = html_mod.unescape(href).strip()
+    parts = urlsplit(href)
+    if parts.path.rstrip("/").endswith("/l") or parts.path.rstrip("/") == "/l":
+        target = parse_qs(parts.query).get("uddg")
+        if target and target[0]:
+            return unquote(target[0])
+    return href
+
+
+def parse_search_hits(page: str, limit: int = 5) -> list[dict]:
+    """Result rows out of a DuckDuckGo page, whatever anchor shape it uses.
+
+    Returns [] for a page without results, empty or not: the caller separates a genuine
+    empty answer from a broken fetch by looking at the page, never at this list alone.
+    """
+    hits: list[dict] = []
+    for match in _ANCHOR_RE.finditer(page or ""):
+        attrs, inner = match.group(1), match.group(2)
+        classes = _CLASS_RE.search(attrs)
+        if not classes or not _HIT_CLASSES.intersection(classes.group(1).split()):
+            continue
+        href = _HREF_RE.search(attrs)
+        if not href:
+            continue
+        url = _result_url(href.group(1))
+        title = html_mod.unescape(re.sub(r"<[^>]+>", "", inner)).strip()
+        title = " ".join(title.split())
+        if url and title:
+            hits.append({"url": url, "title": title})
+        if len(hits) >= limit:
+            break
+    return hits
+
+
+def classify_search_page(page: str) -> str:
+    """`results`, `empty`, `blocked` or `unparsed`: what the fetched page actually is."""
+    if parse_search_hits(page or "", limit=1):
+        return "results"
+    text = page or ""
+    if any(marker in text for marker in _CHALLENGE_MARKERS):
+        return "blocked"
+    if any(marker in text for marker in _NO_RESULTS_MARKERS):
+        return "empty"
+    return "unparsed"
 
 
 def _fetch_url(url: str, project: Project | None = None) -> tuple[int, str, str]:
@@ -201,24 +265,43 @@ def h_web_search(ctx: ToolContext, args: dict) -> dict:
     if not query:
         return {"ok": False, "error": "query is required"}
     # Search is internet access too, it obeys egress, same as http_get (ADR 0017).
-    decision = policy.check_egress("html.duckduckgo.com", ctx.project)
+    decision = policy.check_egress(SEARCH_HOST, ctx.project)
     if not decision.allowed:
         run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
                             severity="warning", title="egress blocked: web search",
-                            payload={"url": "https://html.duckduckgo.com/html/",
-                                     "host": "html.duckduckgo.com", "reason": decision.reason},
+                            payload={"url": SEARCH_URL,
+                                     "host": SEARCH_HOST, "reason": decision.reason},
                             agent_id=ctx.agent.id if ctx.agent else None))
         return {"ok": False, "error": f"egress_denied: {decision.reason}"}
     try:
         page = _search_page(query)
     except Exception as e:  # network is optional; report honestly
         return {"ok": False, "error": f"search failed: {type(e).__name__}: {e}"}
-    hits = []
-    import re
-    for m in re.finditer(r'<a rel="nofollow" class="result__a" href="([^"]+)">(.*?)</a>', page, re.S):
-        hits.append({"url": m.group(1), "title": re.sub(r"<[^>]+>", "", m.group(2)).strip()})
-        if len(hits) >= 5:
-            break
+    hits = parse_search_hits(page)
+    if not hits:
+        outcome = classify_search_page(page)
+        if outcome == "empty":
+            return {"ok": True, "data": [], "untrusted": True,
+                    "note": (f"the search engine ran the query and found no results for "
+                             f"{query!r}. That is a genuine empty answer, not a failed fetch."),
+                    "review": {"verdict": "clean", "method": "deterministic", "score": 0.0},
+                    "meta": {"provider": "duckduckgo", "outcome": "empty"}}
+        run_on_loop(ev.emit("search.failed", project_id=ctx.project_id,
+                            severity="warning", title=f"search {outcome}: {query[:60]}",
+                            payload={"query": query, "outcome": outcome, "chars": len(page),
+                                     "host": SEARCH_HOST},
+                            agent_id=ctx.agent.id if ctx.agent else None))
+        if outcome == "blocked":
+            return {"ok": False, "meta": {"provider": "duckduckgo", "outcome": "blocked",
+                                          "host": SEARCH_HOST},
+                    "error": ("search fetch was blocked: the engine answered an anti-bot challenge "
+                              "instead of results. This is NOT a zero-result answer, the query never "
+                              "ran; retry later or say the search was unavailable.")}
+        return {"ok": False, "meta": {"provider": "duckduckgo", "outcome": "unparsed",
+                                      "host": SEARCH_HOST, "chars": len(page)},
+                "error": ("search fetch returned a page with no parseable results: the engine's "
+                          "page shape changed or the response was cut short. This is NOT a "
+                          "zero-result answer; report the search as broken, not as no results.")}
     scr = _screen_fetched(ctx, url=f"search:{query}", kind="search",
                           text=json.dumps(hits, ensure_ascii=False))
     if scr["outcome"] == "gated":
@@ -230,11 +313,11 @@ def h_web_search(ctx: ToolContext, args: dict) -> dict:
             released_hits = hits
         return {"ok": True, "data": released_hits, "untrusted": True, "released": "approved",
                 "review": {"verdict": "review", "method": "human", "score": scr["review"].score},
-                "meta": {"provider": "duckduckgo"}}
+                "meta": {"provider": "duckduckgo", "outcome": "results"}}
     return {"ok": True, "data": hits, "untrusted": True,
             "review": {"verdict": "clean", "method": scr["review"].method,
                        "score": scr["review"].score},
-            "meta": {"provider": "duckduckgo"}}
+            "meta": {"provider": "duckduckgo", "outcome": "results"}}
 
 
 def h_http_get(ctx: ToolContext, args: dict) -> dict:

@@ -243,8 +243,9 @@ async def hr_hire(project: Project, *, spec: RoleSpec, run_id: str, actor: str,
                   actor=desk_actor)
 
     async with session_scope() as s:
-        existing = set((await s.scalars(select(Agent.name).where(
-            Agent.project_id == project.id))).all())
+        # Every name in the installation, not just this project's roster: a person
+        # exists once, so the same name must never appear twice in a company list (F15).
+        existing = set((await s.scalars(select(Agent.name))).all())
         # A rejected candidate is a person on the record, not a free name: a later
         # opening must never re-draw someone this project already interviewed.
         # (CI caught the collision: only agent names were excluded, so a rejected

@@ -694,6 +694,12 @@ export interface DeliverableRow {
   task_title: string | null;
   project_id: string;
   project_name: string | null;
+  /**
+   * Whether the file is still on disk. Superseded copies stay in the record and
+   * report false; older payloads omit the field, which means stored.
+   */
+  available?: boolean;
+  unavailable_reason?: string;
 }
 
 /** Bounded content read of one deliverable (GET /api/artifacts/{id}/content). */

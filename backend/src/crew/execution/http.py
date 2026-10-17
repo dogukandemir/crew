@@ -30,7 +30,18 @@ class PinnedConnection(http.client.HTTPConnection):
             self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host)
 
 
-def fetch_public(url: str, project=None) -> tuple[int, str, str]:
+def fetch_public(url: str, project=None, *, form: dict[str, str] | None = None) -> tuple[int, str, str]:
+    """One bounded public HTTP exchange. `form` turns the request into a form POST.
+
+    A GET is not always enough: DuckDuckGo's HTML endpoints answer a GET from a
+    datacenter address with an anti-bot challenge page, while the same query as a form
+    POST to the lite endpoint returns real results (F2).
+    """
+    body: bytes | None = None
+    if form is not None:
+        from urllib.parse import urlencode
+
+        body = urlencode(form).encode()
     for _hop in range(6):
         parts = urlsplit(url)
         if parts.scheme not in ("http", "https") or parts.username or parts.password or not parts.hostname:
@@ -48,18 +59,23 @@ def fetch_public(url: str, project=None) -> tuple[int, str, str]:
             target = parts.path or "/"
             if parts.query:
                 target += "?" + parts.query
-            connection.request("GET", target, headers={"User-Agent": "crew-agent/0.1", "Accept-Encoding": "identity"})
+            headers = {"User-Agent": "crew-agent/0.1", "Accept-Encoding": "identity"}
+            if body is not None:
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+            connection.request("POST" if body is not None else "GET", target,
+                               body=body, headers=headers)
             response = connection.getresponse()
             if response.status in (301, 302, 303, 307, 308):
                 location = response.getheader("Location")
                 if not location:
                     raise ValueError("redirect has no location")
                 url = urljoin(url, location)
+                body = None  # a redirect is followed with a GET, never a replay
                 continue
-            body = response.read(MAX_RESPONSE_BYTES + 1)
-            if len(body) > MAX_RESPONSE_BYTES:
+            raw = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
                 raise ValueError("response exceeds 64000-byte limit")
-            return response.status, body.decode("utf-8", errors="replace"), url
+            return response.status, raw.decode("utf-8", errors="replace"), url
         finally:
             connection.close()
     raise PermissionError("too many redirects")

@@ -139,6 +139,21 @@ export function formatClock(iso: string | null | undefined): string {
   return d.toLocaleTimeString('en-GB', { hour12: false });
 }
 
+/**
+ * UTC wall-clock HH:MM:SS from an ISO timestamp.
+ *
+ * The record is written in UTC, so a feed that prints the host's local clock
+ * shows a time the API never recorded and gives the reader no way to tell which
+ * clock they are looking at. Callers label the column, this keeps the text the
+ * one instant every other surface agrees on.
+ */
+export function formatClockUtc(iso: string | null | undefined): string {
+  if (!iso) return UNKNOWN;
+  const ts = parseTs(iso);
+  if (Number.isNaN(ts)) return UNKNOWN;
+  return new Date(ts).toISOString().slice(11, 19);
+}
+
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return UNKNOWN;
   const d = new Date(parseTs(iso));

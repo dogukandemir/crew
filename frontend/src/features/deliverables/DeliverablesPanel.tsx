@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import type { DeliverableRow } from '../../api/types';
 import { DownloadButton } from '../../components/ui/DownloadButton';
 import { Chip } from '../../components/ui/Chip';
+import { Markdown, isMarkdown } from '../../components/ui/Markdown';
 import { Input, Select } from '../../components/ui/Field';
 import { Modal } from '../../components/ui/Drawer';
 import { EmptyState, SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { formatDateTime, formatRelativeTime } from '../../lib/format';
+import { useNow } from '../../lib/useNow';
+import { cn } from '../../lib/cn';
 import {
   useArtifactContent,
   useCompanyArtifacts,
@@ -79,6 +82,9 @@ export function DeliverablesPanel({
   const [versions, setVersions] = useState('latest');
   const [runScope, setRunScope] = useState('current');
   const [preview, setPreview] = useState<DeliverableRow | null>(null);
+  // Ages are computed against a clock that ticks: the list itself is fetched
+  // once, so a label painted at fetch time would freeze there for the session.
+  const now = useNow();
 
   const org = useOrg(isCompany ? null : id);
   const project = useProject(isCompany ? null : id);
@@ -212,6 +218,7 @@ export function DeliverablesPanel({
               key={r.id}
               row={r}
               isCompany={isCompany}
+              now={now}
               onOpen={() => setPreview(r)}
               onAgent={
                 !isCompany && tabId && r.agent_id
@@ -228,35 +235,55 @@ export function DeliverablesPanel({
   );
 }
 
-function DeliverableItem({
+export function DeliverableItem({
   row,
   isCompany,
+  now,
   onOpen,
   onAgent,
 }: {
   row: DeliverableRow;
   isCompany: boolean;
+  now?: number;
   onOpen: () => void;
   onAgent?: () => void;
 }) {
+  // A row can outlive its file: a superseded copy stays in the record but is no
+  // longer stored, so it is history, not something to open. Rows that do not
+  // carry the field behave exactly as before.
+  const stored = row.available !== false;
+  const openTitle = stored
+    ? row.task_title
+      ? `From the task: ${row.task_title}`
+      : row.path
+    : `Superseded copy, ${row.unavailable_reason ?? 'the file is no longer stored'}.`;
   return (
     <li>
       <div
-        className="flex items-center gap-3 px-3 py-2 hover:bg-slate-900/60"
-        title={row.task_title ? `From the task: ${row.task_title}` : row.path}
+        className={cn('flex items-center gap-3 px-3 py-2', stored && 'hover:bg-slate-900/60')}
+        title={openTitle}
       >
         {/* One interactive element per row: the open button (nested buttons inside a
             role=button row break screen readers, review 2026-10-14). */}
         <button
           type="button"
-          onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={stored ? onOpen : undefined}
+          disabled={!stored}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-3 text-left',
+            !stored && 'cursor-not-allowed opacity-60',
+          )}
         >
           <span className="w-9 shrink-0 rounded bg-slate-800/80 px-1 py-0.5 text-center text-[10px] font-semibold tracking-wide text-slate-400">
             {typeTag(row.name, row.mime)}
           </span>
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-slate-200">{row.name}</span>
         </button>
+        {!stored && (
+          <span className="shrink-0 rounded border border-slate-700/60 bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-400">
+            no longer stored
+          </span>
+        )}
         {isCompany && row.project_name && (
           <Chip tone="neutral" title="Project" className="hidden sm:inline-flex">
             {row.project_name}
@@ -288,16 +315,20 @@ function DeliverableItem({
           className="hidden w-20 shrink-0 text-right text-[11px] text-slate-500 sm:inline"
           title={formatDateTime(row.created_at)}
         >
-          {formatRelativeTime(row.created_at)}
+          {formatRelativeTime(row.created_at, now)}
         </span>
-        <DownloadButton
-          path={fileDownloadUrl(row.id)}
-          filename={row.name}
-          className="shrink-0 rounded px-1 py-0.5 text-[12px] text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
-          title="Download this file"
-        >
-          ↓
-        </DownloadButton>
+        {stored ? (
+          <DownloadButton
+            path={fileDownloadUrl(row.id)}
+            filename={row.name}
+            className="shrink-0 rounded px-1 py-0.5 text-[12px] text-slate-500 hover:bg-slate-800/70 hover:text-slate-200"
+            title="Download this file"
+          >
+            ↓
+          </DownloadButton>
+        ) : (
+          <span className="w-4 shrink-0" aria-hidden />
+        )}
       </div>
     </li>
   );
@@ -363,9 +394,17 @@ export function DeliverablePreviewModal({ row, onClose }: { row: DeliverableRow 
                   Showing the first 256 KB of this file.
                 </div>
               )}
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-slate-800/70 bg-slate-950/60 p-3 font-mono text-[11px] leading-relaxed text-slate-300">
-                {content.data.text}
-              </pre>
+              {isMarkdown(row.name, row.mime) ? (
+                /* A delivered markdown file is read as prose: headings, tables and
+                   lists the agent wrote, not their punctuation. */
+                <div className="max-h-96 overflow-auto rounded border border-slate-800/70 bg-slate-950/40 px-3 py-2">
+                  <Markdown source={content.data.text ?? ''} />
+                </div>
+              ) : (
+                <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded border border-slate-800/70 bg-slate-950/60 p-3 font-mono text-[11px] leading-relaxed text-slate-300">
+                  {content.data.text}
+                </pre>
+              )}
             </>
           ) : (
             <div className="rounded border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200/90">

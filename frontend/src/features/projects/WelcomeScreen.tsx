@@ -91,22 +91,13 @@ export function WelcomeScreen() {
 
       <div className="mt-5 flex items-center justify-between">
         <h2 className="text-sm font-medium text-slate-300">Projects</h2>
-        {hasCompanies ? (
-          <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm" onClick={() => setWizardOpen(true)}>
-              ⌂ Found another company
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
-              ＋ New project
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="sm" onClick={() => setNewProjectOpen(true)}>
-              ＋ Standalone project
-            </Button>
-          </div>
-        )}
+        {/* One founding path only: the button lives in the Companies header above,
+            a second copy in this header read as two different actions. */}
+        <div className="flex items-center gap-1.5">
+          <Button variant="primary" size="sm" onClick={() => setNewProjectOpen(true)}>
+            {hasCompanies ? '＋ New project' : '＋ Standalone project'}
+          </Button>
+        </div>
       </div>
 
       <div className="mt-3">

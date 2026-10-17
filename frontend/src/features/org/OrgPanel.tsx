@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   type NodeMouseHandler,
 } from '@xyflow/react';
@@ -105,7 +104,7 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
         </span>
       </div>
 
-      <div className="h-[62vh] overflow-hidden rounded-lg border border-slate-700/60 bg-slate-950/60">
+      <div className="org-flow h-[62vh] overflow-hidden rounded-lg border border-slate-700/60 bg-slate-950/60">
         <ReactFlow
           nodes={graph.nodes}
           edges={graph.edges}
@@ -113,12 +112,15 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
           onNodeClick={onNodeClick}
           fitView
           minZoom={0.15}
+          colorMode="dark"
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}
         >
           <Background color="#1e293b" gap={22} />
-          <MiniMap pannable zoomable className="!bg-slate-900" maskColor="rgba(2,6,23,0.7)" />
+          {/* The zoom and fit controls stay, styled with the app tokens in
+              index.css. The minimap is gone: on a static chart it was an empty
+              panel parked against the right edge. */}
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>

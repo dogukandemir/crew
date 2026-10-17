@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   budgetFraction,
   formatClock,
+  formatClockUtc,
   formatDuration,
   formatMicros,
   formatMoney,
@@ -116,6 +117,21 @@ describe('percent, duration, relative time', () => {
     expect(formatRelativeTime(naive, now)).toBe(formatRelativeTime(zoned, now));
     expect(formatClock(naive)).toBe(formatClock(zoned));
     expect(parseTs(naive)).toBe(Date.parse(zoned));
+  });
+
+  it('prints the record clock in UTC whatever the host timezone is', () => {
+    expect(formatClockUtc('2026-10-17T02:03:04+00:00')).toBe('02:03:04');
+    expect(formatClockUtc('2026-10-17T02:03:04')).toBe('02:03:04');
+    expect(formatClockUtc('2026-10-17T04:03:04+02:00')).toBe('02:03:04');
+    expect(formatClockUtc(null)).toBe('n/a');
+    expect(formatClockUtc('not-a-date')).toBe('n/a');
+  });
+
+  it('says 22m ago for a file written 22 minutes before the clock it is read against', () => {
+    // The live report: a file written at 02:03 read at 02:25 said "6m ago".
+    const now = Date.parse('2026-10-17T02:25:00Z');
+    expect(formatRelativeTime('2026-10-17T02:03:00+00:00', now)).toBe('22m ago');
+    expect(formatRelativeTime('2026-10-17T02:03:00', now)).toBe('22m ago');
   });
 });
 

@@ -69,7 +69,8 @@ async def test_task_run_scope_exposes_exact_cost_and_latest_verification(client)
     rows = response.json()["items"]
     assert len(rows) == 1 and rows[0]["title"] == "Current result"
     assert rows[0]["cost_micros"] == 27100 and rows[0]["cost_usd"] == 0.0271
-    assert rows[0]["verification"] == {"verdict": "pass", "method": "judge", "confidence": 0.95}
+    assert rows[0]["verification"] == {"verdict": "pass", "method": "judge", "confidence": 0.95,
+                                      "reasons": []}
 
 
 async def test_project_lifecycle(client):
@@ -633,4 +634,113 @@ async def test_ui_contract_shapes_extended(client):
     detail = (await client.get(f"/api/agents/{agent_id}")).json()
     for key in ("soul", "soul_md", "success_rate", "tasks_done", "tasks_failed"):
         assert key in detail, f"agent detail lost `{key}`"
+
+
+async def test_deliverable_lists_say_which_rows_can_open(client):
+    """F5: a superseded copy lost its file, so both list routes must say so up front.
+
+    Every row carries `available`, the same word the content route answers with, and it
+    agrees with what the content route does: the newest copy opens, the superseded one
+    does not, and the client learns that without clicking.
+    """
+    import hashlib
+
+    from crew.core.db import session_scope
+    from crew.core.models import Artifact, Project
+    from crew.core.settings import settings
+
+    async with session_scope() as s:
+        company = Project(name="Holding", slug="holding", goal="hold the portfolio", kind="company",
+                          owner_id="local-user")
+        s.add(company)
+        await s.flush()
+        project = Project(name="Unit", slug="unit", goal="ship the price sheet",
+                          company_id=company.id, owner_id="local-user")
+        s.add(project)
+        await s.flush()
+        company_id, project_id = company.id, project.id
+
+    root = settings.artifacts_dir(project_id)
+    root.mkdir(parents=True, exist_ok=True)
+    old_file, new_file = root / "v1" / "price-sheet.md", root / "v2" / "price-sheet.md"
+    for path, body in ((old_file, "# Price sheet v1\n\nThe first draft of the sheet.\n"),
+                       (new_file, "# Price sheet v2\n\nThe sheet with the corrected numbers.\n")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body.encode())
+    async with session_scope() as s:
+        for attempt, path in ((1, old_file), (2, new_file)):
+            data = path.read_bytes()
+            s.add(Artifact(project_id=project_id, kind="file", path=str(path), mime="text/markdown",
+                           bytes=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                           meta={"name": "price-sheet.md", "attempt": attempt}))
+    # The superseded copy's file is gone, exactly as an overwritten deliverable leaves it.
+    old_file.unlink()
+
+    def rows(items: list[dict]) -> dict[str, dict]:
+        return {r["id"]: r for r in items}
+
+    listed = (await client.get(f"/api/projects/{project_id}/artifacts")).json()["items"]
+    assert listed and all(isinstance(r["available"], bool) for r in listed), listed
+    by_path = {r["path"]: r for r in listed}
+    assert by_path[str(new_file)]["available"] is True
+    assert by_path[str(old_file)]["available"] is False, "the superseded copy cannot open"
+
+    company_rows = (await client.get(f"/api/companies/{company_id}/artifacts")).json()["items"]
+    assert {r["id"] for r in company_rows} == {r["id"] for r in listed}
+    assert all("available" in r for r in company_rows)
+
+    # The content route agrees, reason included, and the newest copy still reads.
+    newest = by_path[str(new_file)]
+    old = by_path[str(old_file)]
+    opened = (await client.get(f"/api/artifacts/{newest['id']}/content")).json()
+    assert opened["available"] is True and "corrected numbers" in opened["text"]
+    refused = (await client.get(f"/api/artifacts/{old['id']}/content")).json()
+    assert refused["available"] is False and refused["reason"], refused
+    assert old["unavailable_reason"] == refused["reason"], \
+        "the list uses the content route's own words"
+    assert newest["unavailable_reason"] is None
+    assert rows(company_rows)[newest["id"]]["available"] is True
+    assert rows(company_rows)[old["id"]]["available"] is False
+
+
+async def test_failed_task_payload_carries_the_verification_reasons(client):
+    """F20: the served task says WHY a verification failed, on the detail and the list.
+
+    A row written before reasons were captured still names its failed checks, so the
+    payload never hands an operator an empty list behind a failing verdict.
+    """
+    from crew.core.db import session_scope
+    from crew.core.models import Task, VerificationResult
+
+    p = await _create_project(client, "Why it failed")
+    async with session_scope() as s:
+        current = Task(project_id=p["id"], run_id="run-why", title="Price sheet", state="failed")
+        legacy = Task(project_id=p["id"], run_id="run-why", title="Older failure", state="failed")
+        s.add(current)
+        s.add(legacy)
+        await s.flush()
+        s.add(VerificationResult(
+            project_id=p["id"], task_id=current.id, verdict="fail", method="deterministic",
+            checks=[{"name": "criterion_1", "ok": False, "detail": "keyword coverage 0.10"}],
+            rubric={"reasons": ["criterion not met: Prices for three rivals (keyword coverage 0.10)"]},
+            confidence=0.6))
+        s.add(VerificationResult(
+            project_id=p["id"], task_id=legacy.id, verdict="fail", method="deterministic",
+            checks=[{"name": "artifact_integrity", "ok": False, "detail": "artifact is missing"}],
+            rubric={}, confidence=0.6))
+        current_id, legacy_id = current.id, legacy.id
+
+    detail = (await client.get(f"/api/tasks/{current_id}")).json()
+    assert detail["verification"]["verdict"] == "fail"
+    assert detail["verification"]["reasons"] == [
+        "criterion not met: Prices for three rivals (keyword coverage 0.10)"]
+
+    old = (await client.get(f"/api/tasks/{legacy_id}")).json()
+    assert old["verification"]["reasons"], "a failing verdict never serves an empty list"
+    assert any("artifact_integrity" in r for r in old["verification"]["reasons"])
+
+    listed = (await client.get(f"/api/projects/{p['id']}/tasks")).json()["items"]
+    by_id = {t["id"]: t for t in listed}
+    assert by_id[current_id]["verification"]["reasons"]
+    assert by_id[legacy_id]["verification"]["reasons"]
 

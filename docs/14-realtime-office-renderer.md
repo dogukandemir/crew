@@ -30,9 +30,9 @@ org tree ──┘   (pose + note)      (where + why)       (one frame)        (
 | Activity | `sim/activity.ts` | agent, its task, its recent events | `Activity`, a pose kind, a bubble, a human sentence, and *where they should be* | yes |
 | Target | `sim/targets.ts` | activities + tasks + floor plan | `Target`, a concrete point plus the reason | yes |
 | Frame | `sim/scene.ts` | floor plan + activities + targets + tasks | `SceneState`, one serialisable frame | yes |
-| Characters | `features/characters/look.ts`, `sim`-free | agent id + role + grade | a stable appearance | yes |
+| Characters | `features/sprites/sprites.ts` (`lookIndex`) and `SpriteCharacter.tsx` | agent id + activity + motion | the atlas cell to draw | yes |
 | Department pulse | `sim/rooms.ts` | floor plan + activities + events | production, shipments and newness per room | yes |
-| Rig + render | `office3d/*`, `office/*` | the frame above | pixels | ⬜ deliberately thin |
+| Draw | `features/office/OfficeScene.tsx`, `props.tsx`, `sprites/Sprite.tsx` | the frame above | pixels | ⬜ deliberately thin |
 
 Precedence is explicit and documented in `ACTIVITY_ORDER`: something wrong (`blocked`, `waiting`)
 outranks something active (`typing`, `tool`, `talking`, `walking`), which outranks idle. Movement
@@ -48,11 +48,10 @@ version push a floor plan once and then stream small per-tick frames.
 ## 3. Layer boundaries: and what moves to the cloud
 
 ```
-src/sim/            pure, framework-free, deterministic          ← portable as-is
-src/app/useSceneFrame.ts   the one seam: domain → scene frame    ← becomes a subscription
-src/features/office3d/     three.js renderer                     ← unchanged
-src/features/office/       the 2.5D floor: projection, props, bubbles ← unchanged
-src/features/characters/   the cast that both renderers draw        ← unchanged
+src/sim/                    pure, framework-free, deterministic        ← portable as-is
+src/app/useSceneFrame.ts    the one seam: domain → scene frame         ← becomes a subscription
+src/features/office/        the isometric SVG floor: projection, props, bubbles
+src/features/sprites/       the generated pixel-art atlas and its consumers
 ```
 
 `useSceneFrame` composes the pure stages in the browser today. In the cloud it is replaced by a
@@ -85,66 +84,48 @@ whole point is that it is meant to cross a wire.
 - Isolation: one worker per project, no shared mutable state; the projector touches only that
   project's org, tasks and events.
 
-## 4. Characters: procedural, deterministic, unencumbered
+## 4. Characters: one generated atlas, drawn as pixels
 
-`office3d/characters.ts` generates a person from their agent id, skin tone, hair style and colour,
-build, clothing, dress code, glasses, headsets, caps, lanyard.
+The whole cast, and every prop on the floor, comes out of one sheet: `features/sprites/atlas.png`,
+built by the project's in-house atlas generator. `atlas.gen.ts` is its manifest, one entry per
+cell (`x`, `y`, `w`, `h`) plus the anchor, the pixel that touches the floor.
 
 Why generated rather than downloaded: **no licensed assets and no hundreds of megabytes of binaries
-in a public repository**, infinite variation, and no dependency on a CDN at runtime. Everything,
-including every texture, is drawn in code (`scenery.tsx`) or built from shared primitives
-(`assets.ts`).
+in a public repository**, and no dependency on a CDN at runtime. Nothing on the floor is an
+imported image except the sheet itself.
 
-Determinism is the point: the same agent looks the same on every reload and on every machine, which
-is what turns a crowd into *your* team. Appearance variation is deliberately **decorrelated from
-role**, so the org chart does not turn into a set of stereotypes. Only genuinely occupational things
-follow the role, a lab coat for QA, hi-vis for facilities, a headset for support, a dress code that
-steps up with seniority, which is what a real company actually looks like.
+Determinism is the point: `lookIndex(name)` maps an agent's name to one of the atlas's 64 looks, so
+the same agent looks the same on every reload and on every machine, which is what turns a crowd into
+*your* team. Which cell is shown is one rule, `figureCell` in `SpriteCharacter.tsx`: only an agent
+working at their own desk (typing or running a tool) is drawn from behind; everybody else sits
+facing the room, and every walker faces the camera. The two-frame walk cycle is played by one rAF
+loop that writes the cell and the mirror straight to the SVG attributes, so a floor of people
+animates without React re-rendering.
 
-### One cast, two renderers
-
-The identity above is shared: `features/characters/look.ts` is read by both the
-WebGL office and the 2.5D floor, and the pose table is shared as well, so the
-person at a desk in one view is the person in the other, walking the same way.
-
-The 2.5D floor draws each of them as **SVG** (`features/characters/SvgCharacter.tsx`):
-chibi proportions with a big head and stubby limbs, one soft outline for the whole
-cast, big eyes, a small smile and a blush. Those choices are what make a figure
-likeable at 70 pixels tall. Cuteness is treated as a constraint rather than a hope,
-the head is a tested fraction of the body, variation between people is deliberately
-damped so a floor reads as one cast, and the seated fold is *derived* so the sole
-always lands on the floor line.
-
-This is the default view: it needs no GPU, it is crisp at any zoom, and it is the
-surface that has to sell the product at a glance. The WebGL office is one click
-away.
+Appearance variation is deliberately **decorrelated from role**: it follows the name, not the job,
+so the org chart does not turn into a set of stereotypes.
 
 ## 5. Rendering
 
-three.js via `@react-three/fiber`, with `@react-three/drei` for the orbit camera. Rules that keep a
-floor of ~24 animated people at frame rate:
+One scene, drawn as flat SVG: the projection is `features/office/iso.ts` (§10), the props are
+`props.tsx` and `sprites/Sprite.tsx`, and the scene is `OfficeScene.tsx`. Rules that keep a floor of
+~24 animated people at frame rate:
 
-- **Shared geometry and cached materials.** One `BoxGeometry`, one capsule per body part, and
-  materials cached by colour+roughness, so a hundred garments collapse into a couple of dozen
-  materials rather than one GPU buffer per mesh.
-- **Animation never re-renders React.** One `useFrame` per character writes limb rotations and the
-  walk cycle straight onto the object graph. React re-renders only when *state* changes.
-- One shadow-casting directional light; shadow-casting is off for accessories; `dpr` is capped at
-  1.75 and antialiasing is left to the browser.
-- The renderer is **lazy-loaded** (`OfficeTab`), so three.js never lands in the initial bundle,
-  it is a separate ~264 KB gzip chunk fetched when the office first opens.
+- **Everything solid is a volume.** `boxFaces()` returns a lit top face and two shaded sides for
+  any box, and the contrast between the faces is what makes a monitor read as a monitor.
+- **Shared sprite geometry.** A prop or a person is one atlas cell placed with the anchor it
+  carries; `spriteScaleFactor()` scales both axes by one number, so nothing shears.
+- **Animation never re-renders React.** One rAF loop per character writes the atlas cell and the
+  mirror; the walk loop writes the walker's transform and keeps the depth layer in order. React
+  re-renders only when *state* changes.
+- **Depth by position.** Furniture and people are one list sorted by `world x + y`, so a desk and
+  the person behind it are compared with each other rather than drawn in groups.
+- Tags and bubbles are dropped when the camera is far away, with hysteresis so they do not blink at
+  the cut-off.
 
-### WebGL is not guaranteed
+There is no second renderer: the floor is SVG, so a machine without a GPU, a headless browser or a
+driver that refuses a WebGL context draws the same scene.
 
-`OfficeTab` probes for a usable context before rendering and falls back to the 2D floor plan
-(`features/office/`), which needs no GPU and shows the same simulation. The choice is remembered and
-switchable both ways from the HUD. A machine without a GPU, a headless browser, or a driver that
-refuses a context would otherwise get a blank rectangle.
-
-### Fallback of last resort
-
-Both renderers consume the same `SceneState`, so a third one (a text list, a server-rendered SVG)
-is a small addition rather than a new subsystem.
 
 ## 6. Testing
 
@@ -166,7 +147,6 @@ zooming in made them swallow the scene.
 - **No pathfinding.** Walkers follow waypoint routes (door → corridor → door). They will clip
   furniture that is not a wall. Replacing this is a local change to `sim/paths.ts`.
 - **No collision avoidance.** Two people heading the same way overlap.
-- **`THREE.Clock` deprecation warning** comes from `@react-three/fiber` itself, not this code.
 - The council/meeting-room behaviour from `docs/03` is not yet driven from the floor; today only
   two agents ever share a destination (escalation and review).
 
@@ -207,7 +187,8 @@ where a simulation is most tempted to fake it:
   a conversation, so an agent on their way to the orchestrator is not shown
   cheerfully chatting.
 
-`resolvePeer`, `pairAnchor` and the inward-facing rings are pure and tested in `src/sim/social.test.ts`.
+`resolvePeer` (in `sim/targets.ts`) and the inward-facing rings are pure and tested in
+`src/sim/social.test.ts`.
 
 ## 10. Why the floor is drawn isometrically
 
@@ -249,14 +230,14 @@ Three things are drawn on top of the simulation, and each one is a fact from the
 | "new" | an `org.department.created` event, or a room that the session has not seen before | on the department board |
 | Walk to the boss | the org tree's own `manager_id`, a real command chain, not a guess | a character walking to a real desk |
 
-Speech bubbles are the clearest example of the honesty rule. The colour and the badge come from what
+Speech bubbles are the clearest example of that same rule. The colour and the badge come from what
 the message *is*: an escalation is red with a `!`, a report upward is green with a `↑`, a directive
 coming down is violet with a `↓`, a hand-off is blue with a `→`, work talk is white, and chat between
 colleagues who are not working on anything is amber with a `☕`. The words are always the event's own
 text, `textOf()` reads `payload.text` and nothing else, and when there is no text there is no bubble
 rather than a plausible-looking one.
 
-What a "squad" is, and why pairing needs one, is in §9. What this system cannot honestly claim is also
+What a "squad" is, and why pairing needs one, is in §9. What this system cannot claim is also
 in §9: it never invents a recipient, never invents collaboration, and never invents conversation.
 
 ## 12. Furniture is derived from the pose table, not eyeballed

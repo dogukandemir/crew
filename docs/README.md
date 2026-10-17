@@ -17,7 +17,7 @@ disagrees with a doc, the doc and an ADR get updated in the same commit as the c
    registry, tools, model tiers.
 6. **[05, Reward & Performance](05-reward-and-performance.md)**. Reward signals, scoring,
    grades, anti-gaming.
-7. **[06, Memory & Brains](06-memory-and-brains.md)**. The three brain levels, scoping,
+7. **[06, Memory & Brains](06-memory-and-brains.md)**. The four brain levels, scoping,
    retrieval, insight promotion.
 8. **[07, Observability](07-observability.md)**. Event model, tracing, the three live
    views, replay, metrics.

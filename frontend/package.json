@@ -5,6 +5,9 @@
   "license": "MIT",
   "type": "module",
   "description": "Crew control room, React tabbed frontend for the autonomous agent organization platform.",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

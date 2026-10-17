@@ -68,11 +68,11 @@
     {
       "@type": "Question",
       "name": "Do agents act on their own?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log. A project can switch on full autonomy (YOLO), which turns those human gates off on purpose and records every call it would have asked about (ADR 0018)." }
     },
     {
       "@type": "Question",
-      "name": "How does the office stay honest?",
+      "name": "Does the office invent anything?",
       "acceptedAnswer": { "@type": "Answer", "text": "It draws only what the records say. Bubble text comes from message payloads, a surfaced concern needs at least three distinct mouths, and the simulation never invents what was said." }
     },
     {
@@ -179,7 +179,7 @@
     <div class="container">
       <div class="section-head center">
         <h2>What you get</h2>
-        <p>The pieces that make the company legible, and the ones that keep it honest.</p>
+        <p>The pieces that make the company legible, and the ones that hold it to account.</p>
       </div>
       <div class="cards">
         <div class="card">
@@ -208,7 +208,7 @@
         </div>
         <div class="card">
           <h3>Approvals</h3>
-          <p>Privileged tools pause the run until a human grants once or sets a standing allow. Hard gates (net.post, fs.delete, git.push) always ask.</p>
+          <p>Privileged tools pause the run until a human grants once or sets a standing allow. Hard gates (net.post, fs.delete, git.push) ask every time. A project can switch on full autonomy (YOLO), which turns those human gates off on purpose and records each call it would have asked about (ADR 0018).</p>
         </div>
         <div class="card">
           <h3>Security review</h3>
@@ -216,7 +216,7 @@
         </div>
         <div class="card">
           <h3>Memory and brains</h3>
-          <p>Three scoped levels on SQLite, per squad, per department and per project. Verified work is what earns a brain entry, not promises.</p>
+          <p>Four scoped levels on SQLite: per agent, per department, per project and per company. Verified work is what earns a brain entry, not promises.</p>
         </div>
       </div>
     </div>
@@ -258,12 +258,12 @@ docker compose up --build</code></pre>
       <div role="tabpanel" id="panel-native" aria-labelledby="tab-native" class="tabpanel" hidden>
         <pre><code><span class="c"># backend</span>
 cd backend
-uv sync
+uv sync --frozen
 uv run python -m crew serve
 
 <span class="c"># frontend</span>
 cd frontend
-npm install
+npm ci
 npm run dev</code></pre>
         <p class="engine-note">Tested with Python 3.13 and Node 26. The native path still needs Docker for agent command execution.</p>
       </div>
@@ -313,10 +313,10 @@ CREW_OFFLINE_LLM=true uv run python -m crew serve</code></pre>
         </div>
         <div class="faq-item">
           <h3>Do agents act on their own?</h3>
-          <p>Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log.</p>
+          <p>Supervised by default. The policy engine decides what even reaches an approval gate, privileged tools wait for a human, and every action lands in the hash-chained audit log. A project can switch on full autonomy (YOLO), which turns those human gates off on purpose and records every call it would have asked about (ADR 0018).</p>
         </div>
         <div class="faq-item">
-          <h3>How does the office stay honest?</h3>
+          <h3>Does the office invent anything?</h3>
           <p>It draws only what the records say. Bubble text comes from message payloads, a surfaced concern needs at least three distinct mouths, and the simulation never invents what was said.</p>
         </div>
         <div class="faq-item">
@@ -340,7 +340,7 @@ CREW_OFFLINE_LLM=true uv run python -m crew serve</code></pre>
         </div>
         <div class="docs-item">
           <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/docs/README.md">Specification</a>
-          <span class="desc">18 documents plus 17 ADRs, from vision to the office renderer.</span>
+          <span class="desc">18 documents plus 19 ADRs, from vision to the office renderer.</span>
         </div>
         <div class="docs-item">
           <a class="doc-link" href="https://github.com/dogukandemir/crew/blob/main/docs/INSTALLATION.md">Installation</a>

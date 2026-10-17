@@ -4,8 +4,8 @@
    The scene is one SVG. There is no 3D plane and nothing is rotated: `iso.ts`
    projects world coordinates with a 2:1 axis ratio, which keeps verticals
    vertical, so walls have real height and people stand up. Props are volumes (a
-   lit top face, two shaded sides), and every character is the same SVG figure
-   the WebGL office draws from the same identity.
+   lit top face, two shaded sides), and every character is one cell of the sprite
+   atlas, placed by its own anchor like every prop.
 
    Motion is written straight to `transform` attributes by one rAF loop, so the
    CSS below must never animate `transform` on a positioned element, only

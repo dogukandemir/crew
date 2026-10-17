@@ -25,7 +25,7 @@ backend/src/crew/
                          injection scanner · approval helpers · egress allowlist + SSRF guard
     reward.py            compute_reward() (pure) · RewardEngine.settle_task/apply/maybe_transition ·
                          skill proficiency updates · leaderboard
-    brains.py            three-level memory: ensure_brain, scoped read/write rights, explainable
+    brains.py            four-level memory: ensure_brain, scoped read/write rights, explainable
                          retrieval scoring, promote, supersede, context pack rendering
   execution/
     models.py            ModelRouter: grade → tier → model id, price table (micro-USD/token),

@@ -67,7 +67,7 @@ says what it turned out to be and, when it was broken, what fixed it.
   says "worker fails → Lead re-plans → Head re-staffs"; a failed task used to simply retry
   with the same assignee at a higher tier. **FIXED (batch 2)**, the first failure returns
   to the producer's lead ("lead re-plans"); the top rung (council) already existed.
-- **Context assembly** ✓, three-level brain context pack, council decision constraints,
+- **Context assembly** ✓, four-level brain context pack, council decision constraints,
   steering notes (event-sourced) and the capability list are all in the prompt.
 
 ## 5. Management (docs/02 §2: managers manage)
@@ -106,7 +106,7 @@ says what it turned out to be and, when it was broken, what fixed it.
 
 ## 9. Memory (docs/06)
 
-- **Three levels** ✓, personal/department/project brains; `brain_search`/`brain_write`
+- **Four levels** ✓, company/project/department/agent brains; `brain_search`/`brain_write`
   tools guarded by capability; context pack scores trust and recency.
 
 ## 10. Observability (docs/07)

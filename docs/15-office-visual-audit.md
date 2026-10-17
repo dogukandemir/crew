@@ -6,8 +6,12 @@ left that anybody can point at.
 
 The scene is the product's face. It is also the one part of this repo that no test
 can see by itself, which is why every item here is written as *evidence first*: a
-measurement in the running app, a number read out of the atlas, or a pixel dump.
+measurement in the running app, a number read out of the manifest, or a pixel dump.
 "The code looks right" is what produced all of these.
+
+The floor is one renderer: flat SVG drawn from the generated sprite atlas
+(`features/sprites/`), projected isometrically by `features/office/iso.ts`. Nothing
+below describes a second implementation, because there is none.
 
 Rounds are appended; a defect is only crossed off when something measurably stops
 being wrong.
@@ -63,14 +67,15 @@ was never the floor plan: it was the furniture.
 **Fix.** Desk 1.4 × 0.7 m, chair 0.6 × 0.6 m, plant 0.7 × 0.7 m, lab bench 2 × 0.7 m,
 real sizes, so a bay now holds a desk, a chair and legroom without negotiation.
 
-### S4 · `tileCentre` assumed a 1×1 footprint ✔ fixed
+### S4 · A 1×1 footprint was assumed for props drawn around their centre ✔ fixed
 
 **Evidence.** `tileCentre(oy) = oy + TH / 2` is the centre of a footprint whose depth
 is exactly one tile. The chair is now 0.6 tiles, so its seat was drawn
 `(1 − 0.6) × TH / 2 = 4.8 px`, 20 cm, south of where the simulation seats the body.
 
-**Fix.** `footprintCentre(oy, a, b)`, used by every prop that is drawn around its own
-centre rather than its corner: chair, round table, stool, plant, centrifuge.
+**Fix.** A prop drawn around its own centre rather than its corner reads its
+half-footprint out of the manifest: `spriteCentreOffset(name)`, used by the chair, round
+table, stool, plant and centrifuge, so no caller types a number.
 
 ### S5 · The simulation and the renderer each owned the desk seat ✔ fixed
 
@@ -113,8 +118,11 @@ drop below the anchor is `w / 2` px, because the cell's width *is* the footprint
 diamond. A harness with a wrong formula is worse than no harness: it teaches you to
 ignore it.
 
-**Fix.** `src/audit1.ts` measures the right thing, and reports what it actually saw
-(px, metres at both readings of a metre, art below the anchor) rather than a verdict.
+**Fix.** The measurement was redone against the manifest the renderer actually reads
+(`atlas.gen.ts`): a prop's drop below its anchor is `w / 2` px, because the cell's
+width *is* the footprint's diamond. That rule is asserted in `sprites.test.ts`, which
+checks every prop the floor names against the manifest instead of trusting a
+hand-typed formula.
 
 ---
 

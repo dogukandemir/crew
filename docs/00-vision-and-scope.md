@@ -25,9 +25,9 @@ ideas and questions.
 3. **Rewards with teeth.** Agents are scored on verified outcomes, cost efficiency and
    quality. Reputation is not decoration: it gates model tier, spend limits, autonomy level
    and promotion into senior roles (including the decider role).
-4. **Three-level cognition.** Project brain, department brain, agent brain, separate memory
-   scopes with controlled read/write and upward "insight promotion", so the org gets smarter
-   without every agent drowning in every other agent's context.
+4. **Four-level cognition.** Company brain, project brain, department brain and agent brain,
+   separate memory scopes with controlled read/write and upward "insight promotion", so the
+   org gets smarter without every agent drowning in every other agent's context.
 5. **Observability as a first-class feature.** Every thought, tool call, token and dollar is
    an event in an append-only log. You can watch live, filter by unit, and replay history
    like a video.
@@ -50,7 +50,7 @@ ideas and questions.
 ## 4. Scope boundary
 
 **In scope (v1):** multi-project management; dynamic org generation; CrewAI-backed
-execution; council deliberation + decision records; reward/grade system; three-level memory;
+execution; council deliberation + decision records; reward/grade system; four-level memory;
 event log with live WebSocket views and replay; local single-user auth with token mode;
 secret vault; capability-based tool policy; sandboxed code/shell execution; egress allowlist;
 budget guardrails; React tabbed control room.
@@ -89,6 +89,6 @@ are swaps, not rewrites, see ADR 0003/0004.
 | **Goal** | User-supplied objective at project level. |
 | **Task** | Unit of executable work; node in the task DAG; executed by an agent or a squad. |
 | **Reward event** | An immutable scored outcome attached to an agent/task. |
-| **Brain** | A scoped memory store (project/department/agent). |
+| **Brain** | A scoped memory store (company/project/department/agent). |
 | **Event** | Append-only domain record that drives UI, replay and audit. |
 | **Trace** | Span tree linking goal → plan → task → tool call → LLM call. |

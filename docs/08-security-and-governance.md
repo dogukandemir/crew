@@ -10,7 +10,7 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
 |------------------|--------|---------|
 | Malicious web content | Prompt injection via fetched page/search result | Untrusted-content marking, capability isolation, verifier independence, injection detector |
 | Compromised/looping agent | Runaway spend or infinite retries | Budget reservation + circuit breaker + step/token caps |
-| Credential exfiltration | Agent propagates a secret into a prompt/artifact | Vault lease injection, secret redaction in all sinks, egress allowlist |
+| Credential exfiltration | Agent propagates a secret into a prompt/artifact | Vault lease injection, secret redaction at the event and log sinks, egress allowlist |
 | Host compromise | Shell tool escapes workspace | Container sandbox, no host mounts, `--cap-drop ALL`, `--no-new-privileges`, resource limits, network policy |
 | Data exfiltration | Tool uploads project data | Default-deny egress; `net.post` needs approval; payload size caps; DLP patterns |
 | Cross-project leakage | Retrieval returns another project's memory | Project-scoped repositories + namespace checks + tests |
@@ -50,9 +50,12 @@ marked **MUST** is backed by code and a test; prompts are never the enforcement 
   `(secret, agent, capability, ttl)`. The vault injects the value into the *outbound HTTP
   call* (header/param), the value never enters an agent's context, an artifact, an event, or
   a log.
-- All sinks (events, logs, artifacts, agent prompts) pass through a **redactor** that scans for
-  known secret patterns and known values; a leak attempt emits `security.secret.redaction` and
-  fails the write.
+- **Redaction.** Events and logs are covered: `emit()` and `audit()` redact the title, summary
+  and payload before a row is written, the log formatter redacts the formatted record, and a
+  tool result that had to be masked emits `security.secret.redaction`. Artifacts are stored
+  byte-exact and hashed (`sha256`): the file an agent wrote is the file on disk, and its
+  recorded digest describes those bytes. Prompts carry memory, task context and tool results
+  that were already redacted at the event boundary; the prompt builder does not scrub again.
 - Provider API keys for models live in env/vault, not in agent reach; ModelRouter reads them
   via the vault so no agent ever holds a model key.
 
@@ -163,27 +166,38 @@ BudgetGuard.reserve(scope, reserve)  →  refuses if  spent + reserved + reserve
 ```
 
 - Caps exist at **three scopes**: project (hard), department (envelope), agent (per-run /
-  per-day). The effective cap is the minimum of the three.
-- Breaching a soft threshold (80%) emits `budget.warning`. A **refused reservation fails the
-  job** with a typed `BudgetExceeded`: an agent cap or a department envelope that is spent
-  stops that agent's work and leaves the rest of the run to its other agents.
-- Only an **exhausted project envelope (or its company's)** pauses the run: it moves to
-  `PAUSED_BUDGET` carrying the numbers and the way out ("raise the cap or wait for the budget
-  day to roll over, then resume the project") in `run.error`, and emits `budget.paused`. A
-  pause no wave can heal and that names no cause is a bug, not a safeguard (ADR 0019).
-- The **circuit breaker** guards that same envelope: it opens on (a) an exhausted project or
-  company envelope, (b) spend rate above `$/min` threshold, (c) repeated provider errors, and
-  a wave head that finds headroom again closes it instead of trusting the latch. One model
-  call costing more than its reservation is booked and emitted as `budget.overrun`, it does
-  not stop the project. When open, no new jobs dispatch and in-flight crews are stopped at
-  the next step boundary.
-- Ledger is append-only (`budget_ledger`), reconciled against `llm.*` events; a nightly job
-  asserts ledger == sum of events (an integrity test, not a hope).
+  per-day). Availability is the minimum of those, and of the parent company's envelope when the
+  project has one (`BudgetGuard._envelope_available`).
+- A **refused reservation fails the job** with a typed `BudgetExceeded`: an agent cap or a
+  department envelope that is spent stops that agent's work and leaves the rest of the run to
+  its other agents. It does not pause the run.
+- Only an **exhausted project envelope (or its company's)** latches the breaker and pauses the
+  run. `BudgetGuard.reserve` opens the breaker only when the project-or-company envelope itself
+  is what ran out (`_envelope_available(...) <= 0`); a refusal at an agent or department scope
+  does not. The run moves to `PAUSED_BUDGET` carrying the numbers and the way out ("raise the
+  cap or wait for the budget day to roll over, then resume the project") in `run.error`, and
+  emits `budget.paused`. A wave head that finds headroom again closes the breaker instead of
+  trusting the latch (`_budget_stop_stands`), so a raised cap or a new budget day takes effect
+  without a restart. A pause no wave can heal and that names no cause is a bug, not a safeguard
+  (ADR 0019).
+- While the breaker is open the next wave head pauses the run instead of dispatching new jobs.
+  One model call costing more than its reservation is booked and emitted as `budget.overrun`; it
+  does not stop the project.
+- The planner compares its own estimate with the remaining availability and emits
+  `budget.warning` when the plan costs more than what is left. (A `budget_warning_pct` project
+  setting is accepted and stored; nothing reads it.)
+- The ledger is append-only (`budget_ledger`) and reconciled against the project's spend
+  counter by `BudgetGuard.reconcile`, served at `GET /api/projects/{id}/budget/ledger`: the
+  settled rows must equal `spend_micros` and the held rows must equal `reserved_micros`. There
+  is no scheduled reconcile job; the check runs when it is asked for, and the budget tests
+  assert the same arithmetic.
 - Charges are the provider's own buckets (docs/04 §2a): a prefix-cache hit and an off-peak hour
   are billed at the provider's published rates, while a reservation stays at the peak
   cache-miss rate. A meter that overstates the invoice is a bug, not caution.
-- Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill`, sets
-  cancel flags + opens the breaker, returns the list of stopped jobs. The UI has one button.
+- Kill switch: `POST /api/projects/{id}/kill` and a global `POST /api/system/kill`. The
+  project route opens that project's breaker, aborts its non-terminal runs and tasks, cancels
+  their in-flight work and returns how many runs it aborted; it is audited as `system.kill`.
+  The global switch is the interface's own button; the per-project route is on the API client.
 
 ## 9. Audit trail
 

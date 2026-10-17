@@ -2,6 +2,8 @@
 
 > A playable control room for a real CrewAI agent company. Give a company a goal; its agents plan, hire, use sandboxed tools, produce verified files and ask for approvals. Watch it all in an animated office. Local-first, experimental, one trusted workspace.
 
+This file is the site copy of the repository's root [llms.txt](https://github.com/dogukandemir/crew/blob/main/llms.txt); the two stay consistent on the shared facts, and this copy carries the same text plus absolute links that resolve from the published Pages path.
+
 ## Quick start
 
 Requires Docker with Compose. No provider key is needed to evaluate: Demo uses deterministic simulated agents and spends nothing.
@@ -18,14 +20,14 @@ docker compose up --build
 - Execution engine: [CrewAI](https://github.com/crewAIInc/crewAI). Orchestration, budgets, verification and the audit trail are Crew's own; the office is a view of the same event records.
 - Providers: DeepSeek (shipped default), OpenAI, Anthropic, OpenRouter, local Ollama.
 - Runtime: Python 3.13 backend, React 19 / Node 26 frontend, Docker for agent command execution (no host fallback), SQLite for state and an encrypted local vault for keys.
-- Safeguards: a capability policy engine plus human approvals gate privileged actions; verification precedes reward; the audit log is hash-chained; a successful verifier result is not a human review.
+- Safeguards: a capability policy engine plus human approvals gate privileged actions; verification precedes reward; the audit log is hash-chained; a successful verifier result is not a human review. Full autonomy (YOLO) is a per-project switch that turns those human approval gates off on purpose; capability ceilings, the workspace jail, the sandbox and the budget breaker still bind (ADR 0018).
 - License: MIT. Status: experimental; one server process and one shared workspace per installation.
 
 ## Docs
 
-- [README](README.md): pitch, quick start, and what is real vs simulated.
-- [docs/README.md](docs/README.md): the specification index (18 documents + 17 ADRs).
-- [docs/INSTALLATION.md](docs/INSTALLATION.md): Docker, native development, upgrades, recovery.
-- [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md): tested providers and platforms, with evidence and limitations.
-- [SECURITY.md](SECURITY.md): trust boundaries and the sandbox model.
-- [examples/temperature-converter](examples/temperature-converter/PROVENANCE.md): a verified live run: real files, hashes, and cumulative cost.
+- [README](https://github.com/dogukandemir/crew/blob/main/README.md): pitch, quick start, and what is real vs simulated.
+- [docs/README.md](https://github.com/dogukandemir/crew/blob/main/docs/README.md): the specification index (18 documents + 19 ADRs).
+- [docs/INSTALLATION.md](https://github.com/dogukandemir/crew/blob/main/docs/INSTALLATION.md): Docker, native development, upgrades, recovery.
+- [docs/SUPPORT-MATRIX.md](https://github.com/dogukandemir/crew/blob/main/docs/SUPPORT-MATRIX.md): tested providers and platforms, with evidence and limitations.
+- [SECURITY.md](https://github.com/dogukandemir/crew/blob/main/SECURITY.md): trust boundaries and the sandbox model.
+- [examples/temperature-converter](https://github.com/dogukandemir/crew/blob/main/examples/temperature-converter/PROVENANCE.md): a verified live run: real files, hashes, and cumulative cost.

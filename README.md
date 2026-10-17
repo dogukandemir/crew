@@ -19,7 +19,7 @@ Give a company a goal. Watch its agents organize, use tools, produce files, and 
 
 ## Try it
 
-Install Docker Desktop with Linux containers, or Docker Engine 26+ with Compose. From this checkout:
+Install Docker Desktop with Linux containers, or Docker Engine 26+ with Compose. Run this from the repository root:
 
 ```sh
 docker compose up --build
@@ -67,7 +67,7 @@ The picker offers DeepSeek, OpenAI, Anthropic, OpenRouter, and local Ollama. The
 
 Keys are encrypted locally. Model requests send task context to the selected provider. Web tools can access approved public destinations even when the model itself is local. Read [privacy and security](SECURITY.md) before giving agents private work.
 
-For development, use Python 3.13, uv, Node 26, and Docker for command tools. In separate terminals:
+For development, use Python 3.13 with [uv](https://docs.astral.sh/uv/), Node 26, and Docker (running, for agent command tools). Run the two blocks below from the repository root, in separate terminals:
 
 ```sh
 cd backend
@@ -81,7 +81,7 @@ npm ci
 npm run dev
 ```
 
-Both commands also work in PowerShell. No environment file or provider key is needed for Demo. Optional settings are listed in [.env.example](.env.example). Keep the Vite port at 5173 or explicitly update the backend's allowed browser origins. See [installation and upgrades](docs/INSTALLATION.md) for authentication, storage, troubleshooting and recovery.
+These commands work in PowerShell and POSIX shells. No environment file or provider key is needed for Demo. Optional settings are listed in [.env.example](.env.example). Keep the Vite port at 5173 or explicitly update the backend's allowed browser origins. See [installation and upgrades](docs/INSTALLATION.md) for authentication, storage, troubleshooting and recovery.
 
 ## Architecture
 
@@ -103,6 +103,6 @@ This release supports **one server process and one shared workspace**. Viewer ac
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development loop and [the code of conduct](CODE_OF_CONDUCT.md). Small, reproducible examples are especially useful: a goal, expected deliverable, observed result, and redacted logs. Use private reporting for security concerns.
 
-The public-readiness [review](docs/reviews/2026-10-10/REPORT.md) and [action plan](docs/reviews/2026-10-10/ACTION-PLAN.md) explain the work underway. Design documents in `docs/` describe both implemented behavior and earlier proposals; the code and current installation guide take precedence.
+The public-readiness [review](docs/reviews/2026-10-10/REPORT.md) and [action plan](docs/reviews/2026-10-10/ACTION-PLAN.md) explain the work underway. The specification is 18 numbered documents plus 19 ADRs under `docs/`; it describes both implemented behavior and earlier proposals, so the code and current installation guide take precedence.
 
 Crew's application code is [MIT licensed](LICENSE). Dependencies keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,9 +1,37 @@
 # Changelog
 
+## 17 October 2026: the published surface
+
+- **The health route is public and smaller.** `GET /api/health` moved to the unauthenticated
+  router (a container healthcheck, the login screen and a stranger's first curl all need it) and
+  answers with exactly `status`, `version`, `contract`, `offline_llm` and `server_time`. `env`
+  and `auth_mode` were removed: the auth mode already has a public probe at
+  `GET /api/auth/config`, and the rest lives on the guarded `GET /api/system/status`.
+- **A deployment does not serve its own API docs.** With `CREW_ENV=prod`, `/docs`, `/redoc` and
+  `/openapi.json` are not mounted at all; development keeps them. The schema enumerates every
+  route and payload, which a published installation should not hand out.
+- **Two new settings.** `CREW_MAX_REQUEST_BYTES` (default 8000000) bounds a declared request body
+  before Starlette parses it: a larger `Content-Length` is refused with 413, and a POST, PUT or
+  PATCH with no `Content-Length` at all is refused with 411, because a chunked body has no cap.
+  `CREW_ALLOW_HOST_PICKER` (default false) is the opt-in for the host directory picker: outside
+  development the picker is refused unless it is true.
+- **A cap change is on the audit chain.** `PATCH /api/projects/{id}` writes a `budget.updated`
+  audit row when the cap changes, the row the command desk already wrote.
+- **A workspace may not be a system root.** A company's workspace path is refused when it
+  resolves to `/`, `/etc`, `/usr`, `/bin`, `/sbin`, `/boot`, `/dev`, `/proc`, `/sys`, `/var`,
+  `/opt`, `C:/`, `C:/Windows` or `C:/Program Files`, or when it is the home directory itself:
+  the sandbox mounts that folder read-write, so a root there would hand every shell tool the
+  machine.
+- **The rate limiter evicts instead of clearing.** At its key cap it now drops idle windows and
+  then the least recently active ones, so a hostile key space cannot reset every live window by
+  filling the store.
+- **`structlog` is gone.** The dependency is removed from the lockfile; the project logs through
+  the standard library with its own redacting formatter.
+
 ## Unreleased: public-readiness work
 
 - **Faster waves**: `CREW_MAX_CONCURRENT_CREWS` now defaults to 4 (was 2), so the
-  independent tasks of a plan run four at a time. The second live Launch pack queued its
+  independent tasks of a plan run four at a time. The second live launch pack queued its
   four deliverables two at a time; the provider-call gate shares the same number.
 - **A cap stops the job, the envelope stops the run**: a refused reservation fails that job
   with `BudgetExceeded`, and an agent's cap or a department envelope running dry no longer

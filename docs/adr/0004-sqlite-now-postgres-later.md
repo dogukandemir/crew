@@ -10,10 +10,10 @@ multi-worker deployment (multiple schedulers, Redis bus) without a rewrite.
 ## Decision
 - Dev/default: SQLite (WAL mode) + `sqlite-vec` for vectors + FTS5 for keyword search.
 - Prod/horizontal: Postgres + pgvector + Redis Streams.
-- Enforced by interfaces: repositories take a project scope and use SQLAlchemy 2.x constructs
-  that are portable; JSON columns and vector access live behind adapters
-  (`core/repo/vectors.py`); schema changes go through the forward-only migrator
-  (`core/migrations.py`) with no SQLite-only DDL.
+- Enforced by interfaces: every query takes a project scope and uses SQLAlchemy 2.x constructs
+  that are portable; retrieval scoring is a single function (`core/brains.py`, `score_entry`),
+  so a vector index can drop in behind it without touching callers; schema changes go through
+  the forward-only migrator (`core/migrations.py`) with no SQLite-only DDL.
 
 ## Consequences
 - Zero-setup local development; the whole product runs with one command.

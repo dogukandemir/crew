@@ -18,13 +18,13 @@ docker compose up --build
 - Execution engine: [CrewAI](https://github.com/crewAIInc/crewAI). Orchestration, budgets, verification and the audit trail are Crew's own; the office is a view of the same event records.
 - Providers: DeepSeek (shipped default), OpenAI, Anthropic, OpenRouter, local Ollama.
 - Runtime: Python 3.13 backend, React 19 / Node 26 frontend, Docker for agent command execution (no host fallback), SQLite for state and an encrypted local vault for keys.
-- Safeguards: a capability policy engine plus human approvals gate privileged actions; verification precedes reward; the audit log is hash-chained; a successful verifier result is not a human review.
+- Safeguards: a capability policy engine plus human approvals gate privileged actions; verification precedes reward; the audit log is hash-chained; a successful verifier result is not a human review. Full autonomy (YOLO) is a per-project switch that turns those human approval gates off on purpose; capability ceilings, the workspace jail, the sandbox and the budget breaker still bind (ADR 0018).
 - License: MIT. Status: experimental; one server process and one shared workspace per installation.
 
 ## Docs
 
 - [README](README.md): pitch, quick start, and what is real vs simulated.
-- [docs/README.md](docs/README.md): the specification index (18 documents + 17 ADRs).
+- [docs/README.md](docs/README.md): the specification index (18 documents + 19 ADRs).
 - [docs/INSTALLATION.md](docs/INSTALLATION.md): Docker, native development, upgrades, recovery.
 - [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md): tested providers and platforms, with evidence and limitations.
 - [SECURITY.md](SECURITY.md): trust boundaries and the sandbox model.

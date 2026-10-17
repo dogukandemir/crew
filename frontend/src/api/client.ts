@@ -257,7 +257,6 @@ export const api = {
       method: 'POST',
       body: { email, password },
     }),
-  refresh: () => request<{ access_token: string }>('/api/auth/refresh', { method: 'POST' }),
   logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
   me: () => request<CurrentUser>('/api/auth/me'),
 
@@ -573,13 +572,8 @@ export const api = {
       method: 'POST',
       body: { name, value, scope },
     }),
-  rotateSecret: (secretId: string, value: string) =>
-    request<null>(`/api/secrets/${secretId}/rotate`, { method: 'POST', body: { value } }),
   listTools: () => request<Paged<ToolCatalogueEntry>>('/api/tools'),
   getEgress: (id: string) => request<EgressView>(`/api/projects/${id}/egress`),
-  backup: () => request<{ path: string }>('/api/system/backup', { method: 'POST' }),
-  restore: (path: string) =>
-    request<null>('/api/system/restore', { method: 'POST', body: { path } }),
 
   // ── WS support ─────────────────────────────────────────────────────────────
   wsProtocols: () => AUTH_TOKEN ? ['crew.v1', `crew.auth.${AUTH_TOKEN}`] : ['crew.v1'],

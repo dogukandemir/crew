@@ -1,20 +1,18 @@
 import { animateFrames } from '../../app/animation';
 /**
- * A character, drawn as a sprite from the atlas on the office floor.
+ * A character, drawn as one cell of the atlas on the office floor.
  *
- * This is the sprite-drawing half of the pair with `SvgCharacter`: the same
- * activity, the same motion ref, the same local space (the feet at the origin, the
- * figure growing upward in negative y). What changes is that the figure is one
- * atlas cell instead of an articulated rig.
+ * The same activity, the same motion ref and the same local space as every other
+ * thing standing on the floor: the feet at the origin, the figure growing upward
+ * in negative y, and one atlas cell placed by the anchor that cell carries.
  *
- * Identity is by name-hash into the atlas's 64 looks. The vector `lookFor` can
- * express far more combinations than a fixed atlas can carry; the trade is that the
- * atlas cannot be arbitrary, so a look is a *member of a cast* rather than a
- * formula. It is still deterministic per agent, the same person every session.
+ * Identity is by name-hash into the atlas's 64 looks, so a look is a *member of a
+ * cast* rather than a formula. It is still deterministic per agent, the same
+ * person every session.
  *
- * The rAF loop writes the cell's x/y/width/height attributes directly, the same way
- * the SVG rig wrote limb rotations: React does not re-render for animation, and a
- * two-frame walk cycle is what four hand-drawn poses buy.
+ * The rAF loop writes the cell's x/y/width/height attributes directly, so React
+ * does not re-render for animation, and a two-frame walk cycle is what four
+ * hand-drawn poses buy.
  */
 import { useEffect, useId, useRef } from 'react';
 import type { ActivityKind } from '../../sim/activity';

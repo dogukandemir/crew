@@ -65,6 +65,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+      - name: Match the sandbox broker to this host's Docker socket group
+        # The broker runs non-root (uid 10001) and the daemon socket is root-owned,
+        # so it joins the socket's group. On the runner the group is read from the
+        # socket itself; on a developer host 999 is the usual Linux value and
+        # Docker Desktop exposes the socket world-writable.
+        run: echo "DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)" >> "$GITHUB_ENV"
       - run: docker compose config --quiet
       - run: docker compose build
       - run: docker compose up -d --wait --wait-timeout 180

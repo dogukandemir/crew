@@ -46,6 +46,13 @@ services:
       - crew-workspaces:/workspaces
       - sandbox-auth:/sandbox-auth
     networks: [sandbox-private]
+    group_add:
+      # The broker is non-root and the daemon socket is root-owned, so it needs
+      # the socket's group. Read the host's number with
+      #   stat -c '%g' /var/run/docker.sock
+      # and set DOCKER_SOCKET_GID in .env when it is not 999. Docker Desktop
+      # exposes the socket world-writable, so any value works there.
+      - "${DOCKER_SOCKET_GID:-999}"
     healthcheck:
       test: ["CMD", "python", "-c", "import pathlib,urllib.request; r=urllib.request.Request('http://127.0.0.1:8790/health',headers={'Authorization':'Bearer '+pathlib.Path('/sandbox-auth/token').read_text().strip()}); urllib.request.urlopen(r,timeout=5)"]
       interval: 10s

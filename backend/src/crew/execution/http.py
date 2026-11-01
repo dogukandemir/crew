@@ -6,7 +6,7 @@ import socket
 import ssl
 from urllib.parse import urljoin, urlsplit
 
-from crew.core.security import policy
+from crew.core.security import is_private_host, policy
 
 MAX_RESPONSE_BYTES = 64_000
 
@@ -30,12 +30,16 @@ class PinnedConnection(http.client.HTTPConnection):
             self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host)
 
 
-def fetch_public(url: str, project=None, *, form: dict[str, str] | None = None) -> tuple[int, str, str]:
+def fetch_public(url: str, project=None, *, form: dict[str, str] | None = None,
+                 granted_hosts: tuple[str, ...] = ()) -> tuple[int, str, str]:
     """One bounded public HTTP exchange. `form` turns the request into a form POST.
 
     A GET is not always enough: DuckDuckGo's HTML endpoints answer a GET from a
     datacenter address with an anti-bot challenge page, while the same query as a form
     POST to the lite endpoint returns real results (F2).
+
+    `granted_hosts` are hosts a human granted for the current task only (docs/08 §7).
+    A grant never widens the private/reserved refusal: that check runs first.
     """
     body: bytes | None = None
     if form is not None:
@@ -52,7 +56,9 @@ def fetch_public(url: str, project=None, *, form: dict[str, str] | None = None) 
             raise PermissionError("destination port is not allowed")
         decision = policy.check_egress(host, project)
         if not decision.allowed:
-            raise PermissionError(decision.reason)
+            one_shot = host in {h.strip().lower() for h in granted_hosts}
+            if not one_shot or is_private_host(host):
+                raise PermissionError(decision.reason)
         address = public_addresses(host, port)[0]
         connection = PinnedConnection(host, port, address, parts.scheme == "https")
         try:

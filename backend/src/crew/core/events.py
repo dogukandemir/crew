@@ -233,6 +233,11 @@ REQUIRED_PAYLOAD_KEYS: dict[str, tuple[str, ...]] = {
     "budget.overrun": ("model", "call_id", "reserved_micros", "charged_micros"),
     "security.injection.detected": ("where",),
     "security.egress.blocked": ("url", "host"),
+    # An allowlist that can be widened on the record (docs/08 §7): what was asked for,
+    # what was granted, and the host that a human added to the project's allowlist.
+    "security.egress.grant_requested": ("host", "url", "approval_id"),
+    "security.egress.allowed": ("host", "url", "via"),
+    "security.egress.allow.added": ("host", "url", "approval_id"),
     "security.secret.redaction": ("tool", "count"),
     "security.content.reviewed": ("url", "verdict"),
     "security.content.quarantined": ("url", "sha256"),

@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import select
 
 from crew.core.db import session_scope
-from crew.core.models import Agent, Event, Run, Task
+from crew.core.models import Agent, Approval, Event, Run, Task
 from crew.core.security import decide_approval
 from crew.domain.enums import Capability
 from crew.execution import tools as tools_mod
@@ -177,15 +177,19 @@ async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, 
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Seeker")
     ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-s", workspace=tmp_path)
 
-    monkeypatch.setattr(tools_mod, "_search_page", lambda q: _serp(6))
+    # The html provider is down, so the chain falls through to the lite provider.
+    monkeypatch.setattr(tools_mod, "_html_search_page",
+                        lambda q, grants=(): (_ for _ in ()).throw(ConnectionError("html down")))
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q, grants=(): _serp(6))
     r = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
     assert r["ok"] is True and r["untrusted"] is True
     assert r["review"]["verdict"] == "clean" and r["review"]["method"] == "deterministic"
-    assert r["meta"]["provider"] == "duckduckgo" and r["meta"]["outcome"] == "results"
+    assert r["meta"]["provider"] == "duckduckgo_lite" and r["meta"]["outcome"] == "results"
     assert len(r["data"]) == 5, "at most five hits"
-    assert r["data"][0] == {"url": "https://s0.example", "title": "Hit 0, title"}
+    assert r["data"][0] == {"url": "https://s0.example", "title": "Hit 0, title", "snippet": ""}
+    assert r["meta"]["attempts"][0]["outcome"] == "failed", "the dead provider is on the record"
 
-    monkeypatch.setattr(tools_mod, "_search_page", lambda q: _NO_RESULTS)
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q, grants=(): _NO_RESULTS)
     r2 = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
     assert r2["ok"] is True and r2["data"] == []
     assert r2["meta"]["outcome"] == "empty"
@@ -196,20 +200,23 @@ async def test_search_parses_strips_and_caps(tool_context, bound_loop, project, 
 
 
 @pytest.mark.asyncio
-async def test_search_says_a_blocked_or_unreadable_fetch_is_not_zero_results(
+async def test_search_says_a_blocked_or_unreadable_chain_is_not_zero_results(
         tool_context, bound_loop, project, tmp_path, monkeypatch):
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Sifting")
     ctx = await tool_context(project_id=project["id"], agent=agent, task_id="t-b", workspace=tmp_path)
 
-    monkeypatch.setattr(tools_mod, "_search_page", lambda q: _CHALLENGE)
+    monkeypatch.setattr(tools_mod, "_html_search_page", lambda q, grants=(): _CHALLENGE)
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q, grants=(): _CHALLENGE)
     blocked = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
-    assert blocked["ok"] is False
-    assert blocked["meta"]["outcome"] == "blocked"
+    assert blocked["ok"] is False and blocked["meta"]["outcome"] == "all_failed"
+    assert {a["outcome"] for a in blocked["meta"]["attempts"]} == {"blocked"}
     assert "NOT a zero-result answer" in blocked["error"], blocked
 
-    monkeypatch.setattr(tools_mod, "_search_page", lambda q: "<html>maintenance</html>")
+    monkeypatch.setattr(tools_mod, "_html_search_page", lambda q, grants=(): "<html>maintenance</html>")
+    monkeypatch.setattr(tools_mod, "_search_page", lambda q, grants=(): "<html>maintenance</html>")
     broken = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
-    assert broken["ok"] is False and broken["meta"]["outcome"] == "unparsed"
+    assert broken["ok"] is False and broken["meta"]["outcome"] == "all_failed"
+    assert {a["outcome"] for a in broken["meta"]["attempts"]} == {"unparsed"}
     assert "NOT a zero-result answer" in broken["error"], broken
 
 
@@ -217,7 +224,11 @@ async def test_search_says_a_blocked_or_unreadable_fetch_is_not_zero_results(
 async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(tool_context,
         bound_loop, project, tmp_path, monkeypatch):
     """Closes: the egress-denied return and the search-failure return, both must be
-    honest refusals, never an empty 'success'."""
+    honest refusals, never an empty 'success'.
+
+    Since docs/08 §7 a denied host files an `egress` approval (the allowlist can be
+    widened on the record) instead of a dead end; the refusal still says which host.
+    """
     from types import SimpleNamespace
 
     agent = await _mk_agent(project["id"], tools=[Capability.NET_SEARCH.value], name="Denied")
@@ -226,14 +237,22 @@ async def test_search_refuses_honestly_when_egress_is_denied_or_the_net_fails(to
     monkeypatch.setattr(tools_mod.policy, "check_egress",
                         lambda host, proj: SimpleNamespace(allowed=False, reason="blocked for test"))
     r = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
-    assert r["ok"] is False and r["error"] == "egress_denied: blocked for test"
+    assert r["ok"] is False and r["error"] == "approval_required", r
+    assert r["host"] == tools_mod.SEARCH_HOST
+    async with session_scope() as s:
+        request = (await s.get(Approval, r["approval_id"])).request
+    assert request["kind"] == "egress" and request["host"] == tools_mod.SEARCH_HOST
 
     monkeypatch.setattr(tools_mod.policy, "check_egress",
                         lambda host, proj: SimpleNamespace(allowed=True, reason=""))
+    monkeypatch.setattr(tools_mod, "_html_search_page",
+                        lambda q, grants=(): (_ for _ in ()).throw(ConnectionError("dns down")))
     monkeypatch.setattr(tools_mod, "_search_page",
-                        lambda q: (_ for _ in ()).throw(ConnectionError("dns down")))
+                        lambda q, grants=(): (_ for _ in ()).throw(ConnectionError("dns down")))
     r2 = await asyncio.to_thread(invoker.invoke, ctx, "web_search", {"query": "alpha"})
-    assert r2["ok"] is False and r2["error"] == "search failed: ConnectionError: dns down"
+    assert r2["ok"] is False and r2["error"].startswith("search_unavailable: every provider failed")
+    assert "ConnectionError: dns down" in r2["error"]
+    assert r2["meta"]["outcome"] == "all_failed"
 
 
 @pytest.mark.asyncio

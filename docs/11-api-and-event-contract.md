@@ -68,12 +68,12 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 |--------|------|---------|
 | GET | `/api/projects` | list (id, name, status, stage, spend, budget, badge) |
 | POST | `/api/projects` | create `{name, goal, budget_usd?, company_id?, settings?}`, with `company_id` the project is **born under** that company: report chain wired, `company.project.joined` told (ADR 0015) |
-| GET | `/api/projects/{id}` | detail + stage + rollups |
-| PATCH | `/api/projects/{id}` | rename, edit goal, settings patch |
+| GET | `/api/projects/{id}` | detail + stage + rollups, including `egress_presets: {available, selected}` (the curated preset map and the categories this project selected) |
+| PATCH | `/api/projects/{id}` | rename, edit goal, settings patch; `egress_allow` is at most 100 hosts, `egress_presets` must be a list of known preset names (`docs`, `research`, `news`, `shopping`, `code`), anything else is refused with 422 |
 | POST | `/api/projects/{id}/pause` \| `/resume` \| `/kill` | lifecycle controls |
 | DELETE | `/api/projects/{id}` | soft archive |
 | GET | `/api/projects/{id}/metrics` | rollups (see docs/07 §6) |
-| GET | `/api/projects/{id}/report` | final run report |
+| GET | `/api/projects/{id}/report` | final run report: `delivered`, `not_delivered`, `partial` (true when at least one task completed and at least one did not), `failed_tasks: [{title, reason}]`, cost, tokens, agents, lessons. A run with at least one completed task has status `completed`; only a run that delivered nothing is `failed` |
 | GET | `/api/projects/{id}/budget/ledger` | budget ledger + reconciliation against spend |
 
 ### Runs & goals
@@ -226,7 +226,7 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/projects/{id}/approvals` | pending/all |
-| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}`, `always: true` on a command review writes the always-allow entry; on a TOOL approval (request carries `tool`) it writes a standing capability allow for that agent + capability, hard gates (`net.post`/`fs.delete`/`git.push`) never receive one (both audited, revocable) |
+| POST | `/api/approvals/{id}/grant` \| `/deny` | `{reason, ttl_minutes?, always?}`. `always: true` writes a standing permission, audited and revocable: on a `command_review` the always-allow command entry; on an `egress` review the host appended to the project's `egress_allow` (`security.egress.allowed` audit row, `security.egress.allow.added` event, private and reserved addresses refused); on a TOOL approval (request carries `tool`) a standing capability allow for that agent + capability, hard gates (`net.post`/`fs.delete`/`git.push`) never receive one. Approval request kinds: `command_review`, `content_review`, `egress` (the last carries `host` and `url`; a one-shot egress grant covers that host for the rest of the task) |
 | GET | `/api/projects/{id}/command-allows` | the owner's always-allow list (ADR 0017) |
 | DELETE | `/api/command-allows/{id}` | revoke an allow entry (audited) |
 | GET | `/api/projects/{id}/capability-allows` | standing tool approvals (`capability` + `agent_id`; audited, revocable) |
@@ -237,7 +237,7 @@ Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint,
 | GET | `/api/secrets` | handles + metadata (never values) |
 | POST | `/api/secrets` | create `{name, value, scope}` (write-only) |
 | GET | `/api/tools` | capability catalog + which are enabled |
-| GET | `/api/projects/{id}/egress` | allowlist + blocked attempts |
+| GET | `/api/projects/{id}/egress` | `allowlist` (the effective list), `extra` (the project's `egress_allow`), `presets` (the curated map), `presets_selected` (the project's `egress_presets`), `blocked_attempts` |
 
 Not implemented in 0.1.0: token refresh, SSE fallback, secret rotation endpoint, backup/restore endpoints (backup is a documented file-copy procedure in INSTALLATION.md).
 

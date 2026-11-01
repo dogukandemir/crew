@@ -140,20 +140,56 @@ host-Docker mode the operator-chosen folder **is** the jail by design (ADR 0017)
 
 ## 7. Network egress
 
-- Default posture: **deny** all outbound except the model providers and a small allowlist.
+- Default posture: **deny** all outbound except the model providers and the hosts on the
+  effective allowlist.
+- The effective allowlist (`PolicyEngine.allowed_egress`) is the union of four things:
+  - the shipped **baseline** (model providers, the search hosts, the package registries and
+    common code hosts the product itself needs),
+  - `CREW_EGRESS_ALLOWLIST`, an installation-wide comma-separated extension,
+  - the project's selected **presets** (`settings.egress_presets`, default empty), and
+  - the project's explicit `settings.egress_allow` (supports `*.example.com` wildcards).
+- Presets are a small curated map of category to hosts, so a project widens egress by
+  category instead of typing hosts one at a time. An unknown preset name is refused when the
+  setting is written and again when the list is built, never silently ignored:
+
+  | preset | hosts |
+  | --- | --- |
+  | `docs` | python.org, developer.mozilla.org, docs.python.org, readthedocs.io |
+  | `research` | arxiv.org, wikipedia.org, nature.com |
+  | `news` | reuters.com, apnews.com, bbc.com, techcrunch.com |
+  | `shopping` | amazon.com, etsy.com, aliexpress.com |
+  | `code` | github.com, raw.githubusercontent.com, pypi.org, registry.npmjs.org, stackoverflow.com |
+
 - Egress goes through an in-process proxy (`net.fetch`) or the container's network policy:
   - scheme allowlist (http/https), port allowlist (80/443),
-  - domain allowlist per project (`settings.egress.allow`, supports wildcards) plus a shipped
-    baseline (search provider, package registries when enabled, common documentation hosts),
   - DNS resolution checked and result IPs validated against private/reserved ranges
     (SSRF: 127/8, 10/8, 172.16/12, 192.168/16, 169.254/16, ::1, fc00::/7, metadata IPs),
   - redirects re-validated hop by hop, max 5,
   - response size cap (64 KB in `execution/http.py`), timeout.
 - Blocked attempts emit `security.egress.blocked` with the full URL so you see what the org
   tried to reach.
-- `net.search` obeys the allowlist too (HTML search endpoint included, ADR 0017). Shell
-  containers have no network at all, so every outbound path in the product is exactly:
-  provider calls, and reviewed fetches.
+- **Widening a blocked host is an approval, not a dead end.** When `check_egress` denies a
+  host, the tool files an approval of kind `egress` whose request carries the host and the
+  url (the same request shape as `command_review` and `content_review`), emits
+  `security.egress.grant_requested` and returns `approval_required`. A human decides:
+  - a one-shot grant covers **that host for the rest of the task** that asked, so the agent
+    can fetch the site it was reaching for without a grant per request; it never covers
+    another task, and it stops when the run ends or the grant's TTL expires, whichever
+    comes first,
+  - a grant with **Always allow** appends the host to the project's `egress_allow`, writes an
+    audit row (`security.egress.allowed`) and emits `security.egress.allow.added`.
+- **Private and reserved addresses are refused unconditionally.** `is_private_host` runs
+  before any allowlist is consulted: localhost, 127/8, 10/8, 172.16/12, 192.168/16,
+  169.254/16, ::1, fc00::/7 and every other non-global address are denied even when a preset,
+  an `egress_allow` entry or a human grant names them, and no `egress` approval is filed for
+  one.
+- `net.search` obeys the same gate. The search provider chain is DuckDuckGo html, then
+  DuckDuckGo lite, then the Wikipedia search API for queries that look encyclopedic; a
+  provider that fails, is challenged or answers an unreadable page falls through to the next
+  instead of becoming an empty answer. `web_search(depth="read")` fetches the top three
+  results through this same gate and returns their text. Shell containers have no network at
+  all, so every outbound path in the product is exactly: provider calls, and reviewed
+  fetches.
 
 ## 8. Budget guardrails (the "cannot spend that" guarantee)
 

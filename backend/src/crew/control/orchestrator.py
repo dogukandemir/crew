@@ -1084,12 +1084,25 @@ class Orchestrator:
             r = await s.get(Run, run.id)
         done = [t for t in tasks if t.state == TaskState.COMPLETED.value]
         failed = [t for t in tasks if t.state in (TaskState.FAILED.value, TaskState.ABORTED.value)]
+        # F21: a run that landed real work is a completed run, not a failed one. One
+        # aborted task used to flip the whole run to `failed`, so a project whose
+        # deliverable was on disk and working read as failed on every list. The work
+        # that did not land is named in the report instead of erasing the work that did.
         success = bool(tasks) and len(done) == len(tasks)
+        partial = bool(done) and not success
+        # Every task that did not land, whatever left it behind: the operator needs the
+        # names, not just a count.
+        unfinished = [t for t in tasks if t.state != TaskState.COMPLETED.value]
+        failed_tasks = [{"title": t.title,
+                         "reason": t.escalation_reason or f"task ended {t.state}"}
+                        for t in unfinished]
         summary = {
             "goal": run.goal,
             "delivered": [{"task": t.title, "deliverable": t.deliverable,
                            "result": summarize_working_set(t.result_text, 600)} for t in done],
             "not_delivered": [{"task": t.title, "reason": t.escalation_reason} for t in failed],
+            "partial": partial,
+            "failed_tasks": failed_tasks,
             "cost_usd": round(r.cost_micros / 1e6, 4),
             "tokens": {"in": r.tokens_in, "out": r.tokens_out},
             "agents_used": [{"name": a.name, "role": a.role, "grade": int(a.grade),
@@ -1164,16 +1177,22 @@ class Orchestrator:
                 if r.status != RunStatus.RUNNING.value:
                     return RunStage(r.stage)
                 r.report = summary
-                r.status = RunStatus.COMPLETED.value if success else RunStatus.FAILED.value
+                # F21: at least one completed task means the run completed, with the
+                # unfinished work named in the report. Only a run that delivered nothing
+                # is failed.
+                r.status = RunStatus.COMPLETED.value if done else RunStatus.FAILED.value
                 r.stage = RunStage.DONE.value
                 r.ended_at = datetime.now(UTC)
             await expire_inactive_approvals(run_id=run.id)
+            outcome = ("completed, partially" if partial else "completed") if done else "failed"
             await ev.emit("run.completed", project_id=project.id, run_id=run.id,
-                          severity="notice" if success else "error",
-                          title=f"run {'completed' if success else 'failed'}: {len(done)}/{len(tasks)} tasks",
+                          severity="notice" if done else "error",
+                          title=f"run {outcome}: {len(done)}/{len(tasks)} tasks",
                           summary=f"${summary['cost_usd']:.4f} spent",
                           payload={"run_id": run.id, "tasks_done": len(done), "tasks_failed": len(failed),
-                                   "cost_usd": summary["cost_usd"], "lessons": len(summary["lessons"])},
+                                   "cost_usd": summary["cost_usd"], "lessons": len(summary["lessons"]),
+                                   "partial": partial,
+                                   "failed_tasks": failed_tasks},
                           actor="system:orchestrator")
             await audit(actor_kind="system", actor_id="orchestrator", action="run.completed",
                         resource_kind="run", resource_id=run.id,

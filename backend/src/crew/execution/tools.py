@@ -32,6 +32,7 @@ from crew.core.security import (
     approval_granted,
     audit,
     invocation_hash,
+    is_private_host,
     policy,
     redactor,
     request_approval,
@@ -137,19 +138,62 @@ def _truncate(data: Any) -> Any:
 # parse question, never a silent empty result (F2).
 SEARCH_HOST = "lite.duckduckgo.com"
 SEARCH_URL = f"https://{SEARCH_HOST}/lite/"
+HTML_SEARCH_HOST = "html.duckduckgo.com"
+HTML_SEARCH_URL = f"https://{HTML_SEARCH_HOST}/html/"
+WIKIPEDIA_HOST = "en.wikipedia.org"
+WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 _ANCHOR_RE = re.compile(r"<a\b([^>]*)>(.*?)</a>", re.S | re.I)
 _CLASS_RE = re.compile(r"class=['\"]([^'\"]+)['\"]", re.I)
 _HREF_RE = re.compile(r"href=['\"]([^'\"]+)['\"]", re.I)
 _HIT_CLASSES = frozenset({"result__a", "result-link"})
+_SNIPPET_RE = re.compile(
+    r"<(?:td|div|span|a)\b[^>]*class=['\"][^'\"]*(?:result-snippet|result__snippet)[^'\"]*['\"][^>]*>"
+    r"(.*?)</(?:td|div|span|a)>", re.S | re.I)
 _CHALLENGE_MARKERS = ("anomaly-modal", "challenge-form", "anomaly.js?sv=")
 _NO_RESULTS_MARKERS = ("no-results__message", "No results found for")
 
+# Provider chain (docs/04 §5): each provider returns a normalised list of
+# {title, url, snippet}. A provider that fails, is challenged or answers a shape we
+# cannot read falls through to the next instead of becoming an empty answer.
+SEARCH_PROVIDERS: tuple[str, ...] = ("duckduckgo_html", "duckduckgo_lite", "wikipedia")
+_SEARCH_OPERATORS = ('"', "site:", "filetype:", "http://", "https://", " or ", " -", "price", "buy ")
 
-def _search_page(query: str) -> str:
+
+def _search_page(query: str, grants: tuple[str, ...] = ()) -> str:
     """The raw DuckDuckGo lite SERP. Factored out so tests can fake the network (ADR 0017)."""
     from crew.execution.http import fetch_public
 
-    return fetch_public(SEARCH_URL, form={"q": query})[1]
+    return fetch_public(SEARCH_URL, form={"q": query}, granted_hosts=grants)[1]
+
+
+def _html_search_page(query: str, grants: tuple[str, ...] = ()) -> str:
+    """The first provider: DuckDuckGo's html endpoint, as a form POST."""
+    from crew.execution.http import fetch_public
+
+    return fetch_public(HTML_SEARCH_URL, form={"q": query}, granted_hosts=grants)[1]
+
+
+def _wikipedia_search_page(query: str, grants: tuple[str, ...] = ()) -> str:
+    """The encyclopedic provider: the Wikipedia search API, JSON."""
+    from urllib.parse import urlencode
+
+    from crew.execution.http import fetch_public
+
+    url = WIKIPEDIA_API + "?" + urlencode({"action": "query", "list": "search", "srsearch": query,
+                                           "srlimit": 5, "format": "json"})
+    return fetch_public(url, granted_hosts=grants)[1]
+
+
+def looks_encyclopedic(query: str) -> bool:
+    """A plain multi-word lookup, not a query with operators, quotes, a URL or a shopping intent.
+
+    Only these queries are sent to the Wikipedia API: a product hunt wants a search
+    engine, an encyclopedia article does not.
+    """
+    q = (query or "").strip().lower()
+    if not q or any(op in q for op in _SEARCH_OPERATORS):
+        return False
+    return 2 <= len(q.split()) <= 12
 
 
 def _result_url(href: str) -> str:
@@ -163,6 +207,30 @@ def _result_url(href: str) -> str:
         if target and target[0]:
             return unquote(target[0])
     return href
+
+
+def _text_of(markup: str) -> str:
+    return " ".join(html_mod.unescape(re.sub(r"<[^>]+>", "", markup or "")).split())
+
+
+_READABLE_STRIP_RE = re.compile(
+    r"<(script|style|noscript|template|svg|head)\b[^>]*>.*?</\1\s*>", re.S | re.I)
+_READABLE_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+_READABLE_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def extract_readable(page: str, limit: int = 4000) -> str:
+    """Readable text out of an HTML page: no scripts, styles or tags, one space between words.
+
+    The read depth of a search hands an agent content, not markup: scripts and styles
+    are what made a fetched page useless in a prompt, and the 4000-character cap keeps
+    one page from crowding out the rest of the working set.
+    """
+    text = _READABLE_STRIP_RE.sub(" ", page or "")
+    text = _READABLE_COMMENT_RE.sub(" ", text)
+    text = _READABLE_TAG_RE.sub(" ", text)
+    return " ".join(html_mod.unescape(text).split())[:max(0, limit)]
+
 
 
 def parse_search_hits(page: str, limit: int = 5) -> list[dict]:
@@ -181,12 +249,67 @@ def parse_search_hits(page: str, limit: int = 5) -> list[dict]:
         if not href:
             continue
         url = _result_url(href.group(1))
-        title = html_mod.unescape(re.sub(r"<[^>]+>", "", inner)).strip()
-        title = " ".join(title.split())
+        title = _text_of(inner)
         if url and title:
             hits.append({"url": url, "title": title})
         if len(hits) >= limit:
             break
+    return hits
+
+
+def parse_search_results(page: str, limit: int = 5) -> list[dict]:
+    """The normalised provider shape: {title, url, snippet} out of a DuckDuckGo page.
+
+    The snippet is the first snippet block between this result's anchor and the NEXT
+    result anchor, so both serving shapes work: `<td class="result-snippet">` on the
+    lite page and `<a class="result__snippet">` on the html page. A page whose snippet
+    block changed still yields rows with an empty snippet rather than a missing key.
+    """
+    page = page or ""
+    rows: list[tuple[int, str, str]] = []
+    for match in _ANCHOR_RE.finditer(page):
+        attrs, inner = match.group(1), match.group(2)
+        classes = _CLASS_RE.search(attrs)
+        if not classes or not _HIT_CLASSES.intersection(classes.group(1).split()):
+            continue
+        href = _HREF_RE.search(attrs)
+        if not href:
+            continue
+        url = _result_url(href.group(1))
+        title = _text_of(inner)
+        if url and title:
+            rows.append((match.start(), url, title))
+        if len(rows) >= limit:
+            break
+    hits: list[dict] = []
+    for index, (start, url, title) in enumerate(rows):
+        window_end = rows[index + 1][0] if index + 1 < len(rows) else len(page)
+        anchor = _ANCHOR_RE.search(page, start)
+        snippet = _SNIPPET_RE.search(page, anchor.end() if anchor else start, window_end)
+        hits.append({"title": title, "url": url,
+                     "snippet": _text_of(snippet.group(1)) if snippet else ""})
+    return hits
+
+
+def parse_wikipedia_results(payload: str, limit: int = 5) -> list[dict]:
+    """`{title, url, snippet}` out of the Wikipedia search API JSON."""
+    from urllib.parse import quote
+
+    try:
+        data = json.loads(payload or "")
+    except (TypeError, ValueError):
+        return []
+    items = ((data.get("query") or {}).get("search") or []) if isinstance(data, dict) else []
+    hits: list[dict] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        hits.append({"title": title,
+                     "url": f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'), safe='(),')}",
+                     "snippet": _text_of(str(item.get("snippet") or ""))})
     return hits
 
 
@@ -202,11 +325,81 @@ def classify_search_page(page: str) -> str:
     return "unparsed"
 
 
-def _fetch_url(url: str, project: Project | None = None) -> tuple[int, str, str]:
+def providers_for(query: str) -> tuple[str, ...]:
+    """The chain for this query: Wikipedia joins only when the query looks encyclopedic."""
+    if looks_encyclopedic(query):
+        return SEARCH_PROVIDERS
+    return tuple(p for p in SEARCH_PROVIDERS if p != "wikipedia")
+
+
+def run_search_provider(provider: str, query: str,
+                        grants: tuple[str, ...] = (),
+                        limit: int = 5) -> tuple[list[dict], str]:
+    """One provider: (hits, outcome) with outcome in results/empty/blocked/unparsed.
+
+    A provider that raises is the caller's business: the chain catches it and moves on.
+    """
+    if provider == "wikipedia":
+        payload = _wikipedia_search_page(query, grants)
+        hits = parse_wikipedia_results(payload, limit)
+        if hits:
+            return hits, "results"
+        try:
+            data = json.loads(payload or "")
+        except (TypeError, ValueError):
+            return [], "unparsed"
+        return [], "empty" if isinstance(data, dict) and "query" in data else "unparsed"
+    page = _search_page(query, grants) if provider == "duckduckgo_lite" else _html_search_page(query, grants)
+    hits = parse_search_results(page, limit)
+    return hits, "results" if hits else classify_search_page(page)
+
+
+def _fetch_url(url: str, project: Project | None = None,
+               granted_hosts: tuple[str, ...] = ()) -> tuple[int, str, str]:
     """One GET, no redirect tail-chasing beyond 5 hops. Factored out for tests."""
     from crew.execution.http import fetch_public
 
-    return fetch_public(url, project)
+    return fetch_public(url, project, granted_hosts=granted_hosts)
+
+
+def _granted_hosts(ctx: ToolContext) -> tuple[str, ...]:
+    """Hosts a human granted for this task only, honoured until the task ends."""
+    return tuple(ctx.extra.get("egress_grants") or ())
+
+
+def _egress_gate(ctx: ToolContext, *, url: str, host: str) -> dict | None:
+    """The egress gate for one fetch: None when the host may be reached.
+
+    Three outcomes (docs/08 §7): allowed, refused for a private or reserved address,
+    or a filed `egress` approval. The private refusal comes first and no preset, allow
+    entry or grant can lift it.
+    """
+    decision = policy.check_egress(host, ctx.project)
+    if decision.allowed:
+        return None
+    run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
+                        severity="warning", title=f"egress blocked: {host}",
+                        payload={"url": url, "host": host, "reason": decision.reason},
+                        agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+    if is_private_host(host):
+        return {"ok": False, "error": f"egress_denied: {decision.reason}", "host": host,
+                "note": ("a private or reserved address is refused unconditionally; neither a "
+                         "preset, an allowlist entry nor a grant can reach it")}
+    released = run_on_loop(sreview.release_for_egress(
+        ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, host=host,
+        task_id=ctx.task_id))
+    if released:
+        grants = ctx.extra.setdefault("egress_grants", [])
+        if host.lower() not in grants:
+            grants.append(host.lower())
+        run_on_loop(ev.emit("security.egress.allowed", project_id=ctx.project_id,
+                            severity="notice", title=f"egress allowed by grant: {host}",
+                            payload={"host": host, "url": url, "via": "grant"},
+                            agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id))
+        return None
+    return run_on_loop(sreview.gate_egress(
+        ctx.project_id, agent_id=ctx.agent.id if ctx.agent else None, task_id=ctx.task_id,
+        host=host, url=url, reason=decision.reason, run_id=ctx.run_id))
 
 
 def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict:
@@ -260,64 +453,118 @@ def _screen_fetched(ctx: ToolContext, *, url: str, kind: str, text: str) -> dict
     return {"outcome": "gated", "review": review, "body": None, "response": response}
 
 
+def _search_chain(query: str, grants: tuple[str, ...] = (),
+                  limit: int = 5) -> tuple[list[dict], str | None, list[dict], str | None]:
+    """Walk the provider chain: (hits, provider, attempts, empty_provider).
+
+    A provider that raises, is challenged or answers an unreadable page is recorded in
+    `attempts` and the chain moves on. `empty_provider` is set when a provider actually
+    ran the query and found nothing, which is an answer, not a failure.
+    """
+    attempts: list[dict] = []
+    empty_provider: str | None = None
+    for provider in providers_for(query):
+        try:
+            hits, outcome = run_search_provider(provider, query, grants, limit)
+        except Exception as exc:  # a dead provider must not end the search
+            attempts.append({"provider": provider, "outcome": "failed",
+                             "error": f"{type(exc).__name__}: {exc}"[:200]})
+            continue
+        attempts.append({"provider": provider, "outcome": outcome})
+        if hits:
+            return hits, provider, attempts, None
+        if outcome == "empty" and empty_provider is None:
+            empty_provider = provider
+    return [], None, attempts, empty_provider
+
+
+def _read_top(ctx: ToolContext, hits: list[dict], limit: int = 3) -> list[dict]:
+    """Fetch the top results through the same egress gate and return readable text."""
+    from urllib.parse import urlsplit
+
+    out: list[dict] = []
+    for hit in hits[:limit]:
+        url = str(hit.get("url") or "")
+        try:
+            host = urlsplit(url).hostname or ""
+        except ValueError:
+            host = ""
+        if not url or not host:
+            out.append({**hit, "text": "", "read_error": "no fetchable url"})
+            continue
+        gate = _egress_gate(ctx, url=url, host=host)
+        if gate is not None:
+            out.append({**hit, "text": "", "read_error": str(gate.get("error") or "egress_denied")})
+            continue
+        try:
+            _status, raw, _final = _fetch_url(url, ctx.project, _granted_hosts(ctx))
+        except Exception as exc:
+            out.append({**hit, "text": "", "read_error": f"{type(exc).__name__}: {exc}"[:200]})
+            continue
+        body = (raw or "")[:MAX_BYTES]
+        scr = _screen_fetched(ctx, url=url, kind="page", text=body)
+        if scr["outcome"] == "gated":
+            out.append({**hit, "text": "", "read_error": "held for security review"})
+            continue
+        text = extract_readable(scr["body"] if scr["outcome"] == "released" and scr["body"] else body)
+        out.append({**hit, "text": text, "chars": len(text)})
+    return out
+
+
 def h_web_search(ctx: ToolContext, args: dict) -> dict:
     query = str(args.get("query", ""))[:300]
     if not query:
         return {"ok": False, "error": "query is required"}
+    depth = str(args.get("depth") or "quick").strip().lower()
+    if depth not in ("quick", "read"):
+        return {"ok": False, "error": "depth must be 'quick' (snippets) or 'read' (also fetch the top three)"}
     # Search is internet access too, it obeys egress, same as http_get (ADR 0017).
-    decision = policy.check_egress(SEARCH_HOST, ctx.project)
-    if not decision.allowed:
-        run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
-                            severity="warning", title="egress blocked: web search",
-                            payload={"url": SEARCH_URL,
-                                     "host": SEARCH_HOST, "reason": decision.reason},
-                            agent_id=ctx.agent.id if ctx.agent else None))
-        return {"ok": False, "error": f"egress_denied: {decision.reason}"}
-    try:
-        page = _search_page(query)
-    except Exception as e:  # network is optional; report honestly
-        return {"ok": False, "error": f"search failed: {type(e).__name__}: {e}"}
-    hits = parse_search_hits(page)
+    gate = _egress_gate(ctx, url=SEARCH_URL, host=SEARCH_HOST)
+    if gate is not None:
+        return gate
+    hits, provider, attempts, empty_provider = _search_chain(query, _granted_hosts(ctx))
     if not hits:
-        outcome = classify_search_page(page)
-        if outcome == "empty":
+        if empty_provider:
             return {"ok": True, "data": [], "untrusted": True,
-                    "note": (f"the search engine ran the query and found no results for "
+                    "note": (f"the provider {empty_provider} ran the query and found no results for "
                              f"{query!r}. That is a genuine empty answer, not a failed fetch."),
                     "review": {"verdict": "clean", "method": "deterministic", "score": 0.0},
-                    "meta": {"provider": "duckduckgo", "outcome": "empty"}}
+                    "meta": {"provider": empty_provider, "outcome": "empty", "attempts": attempts,
+                             "depth": depth}}
         run_on_loop(ev.emit("search.failed", project_id=ctx.project_id,
-                            severity="warning", title=f"search {outcome}: {query[:60]}",
-                            payload={"query": query, "outcome": outcome, "chars": len(page),
+                            severity="warning", title=f"search unavailable: {query[:60]}",
+                            payload={"query": query, "outcome": "all_failed", "attempts": attempts,
                                      "host": SEARCH_HOST},
                             agent_id=ctx.agent.id if ctx.agent else None))
-        if outcome == "blocked":
-            return {"ok": False, "meta": {"provider": "duckduckgo", "outcome": "blocked",
-                                          "host": SEARCH_HOST},
-                    "error": ("search fetch was blocked: the engine answered an anti-bot challenge "
-                              "instead of results. This is NOT a zero-result answer, the query never "
-                              "ran; retry later or say the search was unavailable.")}
-        return {"ok": False, "meta": {"provider": "duckduckgo", "outcome": "unparsed",
-                                      "host": SEARCH_HOST, "chars": len(page)},
-                "error": ("search fetch returned a page with no parseable results: the engine's "
-                          "page shape changed or the response was cut short. This is NOT a "
-                          "zero-result answer; report the search as broken, not as no results.")}
+        tried = "; ".join(f"{a['provider']}={a['outcome']}"
+                          + (f" ({a['error']})" if a.get("error") else "") for a in attempts)
+        return {"ok": False, "meta": {"provider": None, "outcome": "all_failed", "attempts": attempts},
+                "error": (f"search_unavailable: every provider failed ({tried}). This is NOT a "
+                          f"zero-result answer: the query never ran, so report the search as "
+                          f"unavailable rather than as no results.")}
     scr = _screen_fetched(ctx, url=f"search:{query}", kind="search",
                           text=json.dumps(hits, ensure_ascii=False))
     if scr["outcome"] == "gated":
         return scr["response"]
     if scr["outcome"] == "released":
         try:
-            released_hits = json.loads(scr["body"])
-        except json.JSONDecodeError:
-            released_hits = hits
-        return {"ok": True, "data": released_hits, "untrusted": True, "released": "approved",
-                "review": {"verdict": "review", "method": "human", "score": scr["review"].score},
-                "meta": {"provider": "duckduckgo", "outcome": "results"}}
-    return {"ok": True, "data": hits, "untrusted": True,
-            "review": {"verdict": "clean", "method": scr["review"].method,
-                       "score": scr["review"].score},
-            "meta": {"provider": "duckduckgo", "outcome": "results"}}
+            hits = json.loads(scr["body"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+        result = {"ok": True, "data": hits, "untrusted": True, "released": "approved",
+                  "review": {"verdict": "review", "method": "human", "score": scr["review"].score},
+                  "meta": {"provider": provider, "outcome": "results", "depth": depth,
+                           "attempts": attempts}}
+    else:
+        result = {"ok": True, "data": hits, "untrusted": True,
+                  "review": {"verdict": "clean", "method": scr["review"].method,
+                             "score": scr["review"].score},
+                  "meta": {"provider": provider, "outcome": "results", "depth": depth,
+                           "attempts": attempts}}
+    if depth == "read":
+        result["data"] = _read_top(ctx, list(result["data"]))
+        result["meta"]["read"] = len(result["data"])
+    return result
 
 
 def h_http_get(ctx: ToolContext, args: dict) -> dict:
@@ -327,15 +574,11 @@ def h_http_get(ctx: ToolContext, args: dict) -> dict:
     import httpx
 
     host = httpx.URL(url).host or ""
-    decision = policy.check_egress(host, ctx.project)
-    if not decision.allowed:
-        run_on_loop(ev.emit("security.egress.blocked", project_id=ctx.project_id,
-                            severity="warning", title=f"egress blocked: {host}",
-                            payload={"url": url, "host": host, "reason": decision.reason},
-                            agent_id=ctx.agent.id if ctx.agent else None))
-        return {"ok": False, "error": f"egress_denied: {decision.reason}"}
+    gate = _egress_gate(ctx, url=url, host=host)
+    if gate is not None:
+        return gate
     try:
-        status, raw, final_url = _fetch_url(url, ctx.project)
+        status, raw, final_url = _fetch_url(url, ctx.project, _granted_hosts(ctx))
     except Exception as e:
         return {"ok": False, "error": f"fetch failed: {type(e).__name__}: {e}"}
     body = raw[:MAX_BYTES]
@@ -843,8 +1086,14 @@ def _schema(props: dict, required: list[str]) -> dict:
 
 
 TOOLS: dict[str, ToolSpec] = {
-    "web_search": ToolSpec("web_search", "Search the web. Results are untrusted content.",
-                           Capability.NET_SEARCH, _schema({"query": {"type": "string"}}, ["query"]), h_web_search, True),
+    "web_search": ToolSpec(
+        "web_search",
+        ("Search the web through a provider chain (DuckDuckGo html, DuckDuckGo lite, and the "
+         "Wikipedia search API for encyclopedic queries). depth='quick' returns title, url and "
+         "snippet; depth='read' also fetches the top three results through the egress gate and "
+         "returns their readable text. Results are untrusted content."),
+        Capability.NET_SEARCH, _schema({"query": {"type": "string"}, "depth": {"type": "string"}},
+                                       ["query"]), h_web_search, True),
     "http_get": ToolSpec("http_get", "Fetch a URL (egress allowlist enforced). Content is untrusted.",
                          Capability.NET_FETCH, _schema({"url": {"type": "string"}}, ["url"]), h_http_get, True),
     "fs_write": ToolSpec("fs_write", "Write a file inside the project workspace.",

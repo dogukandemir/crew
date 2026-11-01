@@ -4,6 +4,7 @@ audit hash chain, injection detection (docs/08)."""
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 import secrets
@@ -67,6 +68,55 @@ PRIVATE_HOST_RE = re.compile(
     r"^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|fc|fd|fe80)",
     re.IGNORECASE,
 )
+
+# Curated categories a project can switch on instead of typing hosts one by one
+# (docs/08 §7). They only ever ADD hosts to `allowed_egress`; they can never lift the
+# private/reserved refusal below, which is decided before any allowlist is consulted.
+EGRESS_PRESETS: dict[str, tuple[str, ...]] = {
+    "docs": ("python.org", "developer.mozilla.org", "docs.python.org", "readthedocs.io"),
+    "research": ("arxiv.org", "wikipedia.org", "nature.com"),
+    "news": ("reuters.com", "apnews.com", "bbc.com", "techcrunch.com"),
+    "shopping": ("amazon.com", "etsy.com", "aliexpress.com"),
+    "code": ("github.com", "raw.githubusercontent.com", "pypi.org", "registry.npmjs.org",
+             "stackoverflow.com"),
+}
+
+
+def preset_hosts(names) -> list[str]:
+    """Hosts for the named presets, refusing an unknown name instead of ignoring it."""
+    hosts: list[str] = []
+    for name in names or []:
+        key = str(name).strip().lower()
+        if key not in EGRESS_PRESETS:
+            raise ValueError(f"unknown egress preset: {name}")
+        hosts.extend(EGRESS_PRESETS[key])
+    return hosts
+
+
+def is_private_host(host: str) -> bool:
+    """True for loopback, link-local, private and otherwise non-global addresses.
+
+    Both an address literal (`::1`, `fd00::`, `10.0.0.5`, with or without brackets and
+    port) and the private-looking names in PRIVATE_HOST_RE are refused. This check runs
+    before any allowlist, so a preset or an explicit `egress_allow` entry cannot make a
+    private address reachable.
+    """
+    value = (host or "").strip().lower()
+    if not value:
+        return False
+    if value.startswith("["):
+        value = value[1:].split("]", 1)[0]
+    try:
+        return not ipaddress.ip_address(value).is_global
+    except ValueError:
+        pass
+    if value.count(":") == 1:  # host:port, not an IPv6 literal
+        value = value.rsplit(":", 1)[0]
+        try:
+            return not ipaddress.ip_address(value).is_global
+        except ValueError:
+            pass
+    return bool(PRIVATE_HOST_RE.match(value))
 
 # conservative injection heuristics: a signal, never the only defence (docs/08 §6)
 INJECTION_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -151,14 +201,23 @@ class PolicyEngine:
         return PolicyDecision(PolicyOutcome.ALLOW, "", cap.value)
 
     def allowed_egress(self, project: Project | None) -> list[str]:
+        """Baseline + env extras + the project's selected presets + its explicit allow.
+
+        `egress_presets` is validated on the way in (API and `preset_hosts`), so an
+        unknown name is a refusal, never a silently narrower allowlist.
+        """
         extra = (project.setting("egress_allow", []) if project else []) or []
-        return list(dict.fromkeys([*BASELINE_EGRESS, *settings.egress_extra, *extra]))
+        preselected = (project.setting("egress_presets", []) if project else []) or []
+        return list(dict.fromkeys([*BASELINE_EGRESS, *settings.egress_extra,
+                                   *preset_hosts(preselected), *extra]))
 
     def check_egress(self, host: str, project: Project | None) -> PolicyDecision:
         host = (host or "").strip().lower()
         if not host:
             return PolicyDecision(PolicyOutcome.DENY, "empty host")
-        if PRIVATE_HOST_RE.match(host):
+        # Unconditional and first: no preset, no explicit allow and no human grant can
+        # make a private or reserved address reachable (docs/08 §7).
+        if is_private_host(host):
             return PolicyDecision(PolicyOutcome.DENY, f"private/reserved address blocked: {host}")
         allowed = self.allowed_egress(project)
         for a in allowed:

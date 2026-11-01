@@ -54,6 +54,7 @@ from crew.core.models import (
 )
 from crew.core.reward import DEFAULT_WEIGHTS, leaderboard, reward_engine
 from crew.core.security import (
+    EGRESS_PRESETS,
     allow_capability,
     audit,
     budget,
@@ -122,6 +123,15 @@ class ProjectSettingsInput(APIModel):
             domains = value["egress_allow"]
             if not isinstance(domains, list) or len(domains) > 100 or any(not isinstance(d, str) or not d or len(d) > 253 for d in domains):
                 raise ValueError("egress_allow must contain at most 100 domain names")
+        if "egress_presets" in value:
+            presets = value["egress_presets"]
+            unknown = ([str(p) for p in presets if str(p) not in EGRESS_PRESETS]
+                       if isinstance(presets, list) else [str(presets)])
+            if not isinstance(presets, list) or unknown:
+                raise ValueError("egress_presets must be a list of known presets: "
+                                 + ", ".join(sorted(EGRESS_PRESETS)))
+            if len(set(presets)) != len(presets) or len(presets) > len(EGRESS_PRESETS):
+                raise ValueError("egress_presets must not repeat a preset")
         return value
 
 
@@ -312,8 +322,9 @@ class OverrideBody(APIModel):
 class ApprovalDecision(APIModel):
     reason: str = ""
     ttl_minutes: int = 120
-    # Command approvals only (ADR 0017): "always allow" writes the normalized command
-    # to the project's allowlist so it never asks again, recorded and revocable.
+    # Command and egress approvals: "always allow" writes the normalized command, or
+    # the granted host, into the project's allowlist so it never asks again, recorded
+    # and revocable.
     always: bool = False
 
 
@@ -2146,7 +2157,17 @@ async def grant_approval(approval_id: str, body: ApprovalDecision, user: dict = 
                   payload={"capability": row.capability, "approval_id": approval_id}, actor=user["id"])
     allow_id: str | None = None
     req = row.request or {}
-    if body.always and req.get("kind") == "command_review" and req.get("norm"):
+    if body.always and req.get("kind") == "egress" and req.get("host"):
+        # Egress that can be widened on the record (docs/08 §7): a human granting a
+        # blocked host "always" appends it to the project's allowlist, audited and
+        # announced. Private and reserved addresses are refused here as well.
+        try:
+            allow_id = await security_review.allow_egress_host(
+                row.project_id, host=str(req["host"]), url=str(req.get("url") or ""),
+                reason=body.reason, decided_by=user["id"], source_approval_id=approval_id)
+        except ValueError as exc:
+            raise _problem(409, "egress grant refused", str(exc)) from exc
+    elif body.always and req.get("kind") == "command_review" and req.get("norm"):
         # "Always allow" (ADR 0017): a standing human permission, audited, listed,
         # revocable. Only a human grant can ever write here; agents cannot.
         allow_id = await security_review.allow_command(
@@ -2271,6 +2292,8 @@ async def get_egress(project_id: str) -> dict:
                                    .order_by(desc(Event.seq)).limit(50))).all()
     return {"allowlist": policy.allowed_egress(p),
             "extra": p.setting("egress_allow", []),
+            "presets": {name: list(hosts) for name, hosts in sorted(EGRESS_PRESETS.items())},
+            "presets_selected": list(p.setting("egress_presets", []) or []),
             "blocked_attempts": [{"ts": ev.utc_iso(e.ts), "payload": e.payload} for e in blocked]}
 
 

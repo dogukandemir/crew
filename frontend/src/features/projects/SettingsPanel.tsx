@@ -10,6 +10,9 @@ import { Modal } from '../../components/ui/Drawer';
 import { SkeletonRows } from '../../components/ui/EmptyState';
 import { PanelError } from '../../components/PanelError';
 import { flattenOrg } from '../org/orgUtils';
+import { cn } from '../../lib/cn';
+import { buildPresetCatalog, presetNames, publishedSelection } from './egressPresets';
+import type { EgressPreset } from './egressPresets';
 import { usdToMicros, microsToUsd } from '../../lib/format';
 import { useOrg, useProject } from '../../app/hooks';
 import { useUi } from '../../stores/ui';
@@ -28,6 +31,7 @@ const DEFAULT_SETTINGS: ProjectSettings = {
   layoff_idle_days: 14,
   budget_warning_pct: 0.8,
   egress_allow: [],
+  egress_presets: [],
   model_tiers: {},
   cadence_enabled: false,
   cadence_max_runs: 3,
@@ -83,11 +87,24 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
       .filter(key => stored[key as keyof ProjectSettings] !== undefined)
       .map(key => [key, stored[key as keyof ProjectSettings]]));
     const s = { ...DEFAULT_SETTINGS, ...editable };
+    // A stored selection is only ever a list of category names; anything else
+    // (an older backend, a hand-edited row) reads as "nothing selected". When the
+    // settings row has no key at all, the selection the payload publishes with the
+    // catalogue is still the truth.
+    s.egress_presets = stored.egress_presets === undefined
+      ? presetNames(publishedSelection(project.data))
+      : presetNames(s.egress_presets);
     setSettings(s);
     setEgressText((s.egress_allow ?? []).join('\n'));
   }, [project.data]);
 
   const tiers = useMemo(() => settings.model_tiers ?? {}, [settings.model_tiers]);
+  // The catalogue is the backend's: merge it with the current selection so the
+  // control renders even when the payload carries no catalogue at all.
+  const presets = useMemo(
+    () => buildPresetCatalog(project.data, settings.egress_presets ?? []),
+    [project.data, settings.egress_presets],
+  );
 
   const save = useMutation({
     mutationFn: () => {
@@ -101,6 +118,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             .split('\n')
             .map((l) => l.trim())
             .filter(Boolean),
+          egress_presets: presetNames(settings.egress_presets),
         },
       });
     },
@@ -300,6 +318,30 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
         </Section>
 
         <Section
+          title="Egress presets"
+          description="Curated host lists for common work, switch on the ones this project needs."
+        >
+          <EgressPresetPicker
+            presets={presets}
+            selected={settings.egress_presets ?? []}
+            onToggle={(name) =>
+              update((s) => {
+                const current = presetNames(s.egress_presets);
+                return {
+                  ...s,
+                  egress_presets: current.includes(name)
+                    ? current.filter((n) => n !== name)
+                    : [...current, name],
+                };
+              })
+            }
+          />
+          <p className="text-[11px] text-slate-500">
+            Presets cover common sites; a host that is still blocked can be granted from the approvals tray.
+          </p>
+        </Section>
+
+        <Section
           title="Egress allowlist"
           description="Default-deny. One host per line. Blocked attempts are logged as security.egress.blocked."
         >
@@ -402,6 +444,58 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           <Input value={archiveWord} onChange={(e) => setArchiveWord(e.target.value)} autoFocus />
         </label>
       </Modal>
+    </div>
+  );
+}
+
+/** One chip per advertised preset, name plus what it opens. The host list is on the
+ * chip's tooltip and spelled out under the row once the preset is switched on, so the
+ * operator can see exactly what they are opening. */
+function EgressPresetPicker({
+  presets,
+  selected,
+  onToggle,
+}: {
+  presets: EgressPreset[];
+  selected: string[];
+  onToggle: (name: string) => void;
+}) {
+  const isOn = (name: string) => selected.some((n) => n.toLowerCase() === name.toLowerCase());
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Egress presets">
+        {presets.map((p) => {
+          const checked = isOn(p.name);
+          return (
+            <button
+              key={p.name}
+              type="button"
+              aria-pressed={checked}
+              aria-label={p.name}
+              title={p.hosts.length > 0 ? p.hosts.join('\n') : 'host list not published by this backend'}
+              onClick={() => onToggle(p.name)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-left text-[11px] transition-colors',
+                checked
+                  ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-100'
+                  : 'border-slate-600/70 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-slate-100',
+              )}
+            >
+              <span className="font-mono">{p.name}</span>
+              {p.description && <span className="ml-1.5 text-slate-400">{p.description}</span>}
+              {!p.advertised && <span className="ml-1.5 text-[10px] text-slate-500">not advertised</span>}
+            </button>
+          );
+        })}
+      </div>
+      {presets.filter((p) => isOn(p.name)).map((p) => (
+        <p key={p.name} className="text-[11px] text-slate-500">
+          <span className="font-mono text-slate-400">{p.name}</span>{' '}
+          {p.hosts.length > 0
+            ? `opens ${p.hosts.join(', ')}`
+            : 'expands server side; this backend does not publish the host list'}
+        </p>
+      ))}
     </div>
   );
 }

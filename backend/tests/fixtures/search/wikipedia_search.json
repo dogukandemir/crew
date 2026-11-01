@@ -1,0 +1,25 @@
+{
+  "batchcomplete": "",
+  "continue": {"sroffset": 5, "continue": "-||"},
+  "query": {
+    "searchinfo": {"totalhits": 4213},
+    "search": [
+      {
+        "ns": 0,
+        "title": "Vector database",
+        "pageid": 61123456,
+        "size": 24119,
+        "wordcount": 2711,
+        "snippet": "A <span class=\"searchmatch\">vector</span> <span class=\"searchmatch\">database</span> is a database that stores and retrieves vectors."
+      },
+      {
+        "ns": 0,
+        "title": "Approximate nearest neighbor search",
+        "pageid": 55123456,
+        "size": 12000,
+        "wordcount": 1400,
+        "snippet": "ANN search is an optimisation used by <span class=\"searchmatch\">vector</span> indexes."
+      }
+    ]
+  }
+}

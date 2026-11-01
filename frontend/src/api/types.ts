@@ -343,6 +343,10 @@ export interface Project {
   tags?: string[];
   /** Additive: the detail endpoint returns the 1:1 settings row (docs/10 §2). */
   settings?: ProjectSettings;
+  /** Additive: the curated egress preset catalogue served with the project. Its
+   * shape is read defensively (see features/projects/egressPresets.ts), an older
+   * backend simply omits it. */
+  egress_presets?: unknown;
   /** Additive rollups the list endpoint returns for the tab strip. */
   org_size?: number;
   tasks_done?: number;
@@ -369,6 +373,9 @@ export interface ProjectSettings {
   reward_weights?: Record<string, number>;
   council_policy?: Record<string, unknown>;
   egress_allow?: string[];
+  /** Curated egress presets switched on for this project (category names such as
+   * docs, research, code). Each one expands server-side into its host list. */
+  egress_presets?: string[];
   tool_policy?: Record<string, unknown>;
   model_tiers?: Record<string, string>;
   retention?: Record<string, unknown>;

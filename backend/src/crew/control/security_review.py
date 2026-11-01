@@ -30,8 +30,8 @@ from sqlalchemy import desc, select
 
 from crew.core import events as ev
 from crew.core.db import session_scope
-from crew.core.models import Approval, CommandAllow
-from crew.core.security import audit, request_approval, scan_injection
+from crew.core.models import Approval, CommandAllow, Project
+from crew.core.security import audit, is_private_host, request_approval, scan_injection
 from crew.core.settings import settings
 from crew.domain.enums import ModelTier
 
@@ -288,6 +288,98 @@ async def release_for_command(project_id: str, *, agent_id: str | None, norm: st
             r.state = "consumed"
             return {"approval_id": r.id}
     return None
+
+
+# ── egress grants (docs/08 §7: an allowlist that can be widened on the record) ──────
+
+async def gate_egress(project_id: str, *, agent_id: str | None, task_id: str | None,
+                      host: str, url: str, reason: str,
+                      run_id: str | None = None) -> dict:
+    """File the egress approval for a host the allowlist does not cover.
+
+    Same shape as `command_review` and `content_review`: the request carries the host
+    and the url the agent was reaching for, so the human decides on the actual
+    destination. A private or reserved address never reaches this function (the policy
+    refuses it outright), so no grant can be filed for one.
+    """
+    host = (host or "").strip().lower()
+    aid = await request_approval(
+        project_id, capability="net.fetch", agent_id=agent_id, task_id=task_id,
+        request={"kind": "egress", "host": host, "url": url, "run_id": run_id,
+                 "reason": reason, "use": "once"})
+    await ev.emit("security.egress.grant_requested", project_id=project_id, severity="warning",
+                  title=f"egress grant requested: {host}",
+                  payload={"host": host, "url": url, "approval_id": aid},
+                  agent_id=agent_id, task_id=task_id)
+    await ev.emit("policy.approval.requested", project_id=project_id, severity="warning",
+                  title="approval needed: egress",
+                  payload={"capability": "net.fetch", "approval_id": aid, "kind": "egress"},
+                  agent_id=agent_id, task_id=task_id)
+    return {"ok": False, "error": "approval_required", "approval_id": aid, "host": host,
+            "url": url,
+            "detail": (f"{host} is not on the egress allowlist. A human can grant it for this "
+                       f"task, or grant it always to add it to the project's allowlist.")}
+
+
+async def release_for_egress(project_id: str, *, agent_id: str | None, host: str,
+                             task_id: str | None) -> str | None:
+    """A granted `egress` approval for this host covering this task, or None.
+
+    A one-shot grant lasts for the rest of the task it was requested for rather than
+    being consumed by one request: the agent asked to reach a site, not to send a single
+    packet. It never covers another task, and it stops when the run's terminal transition
+    expires it or its TTL runs out, whichever comes first.
+    """
+    host = (host or "").strip().lower()
+    if not host or is_private_host(host):
+        return None
+    async with session_scope() as s:
+        q = select(Approval).where(Approval.project_id == project_id,
+                                   Approval.capability == "net.fetch",
+                                   Approval.state == "granted",
+                                   Approval.expires_at > datetime.now(UTC))
+        if agent_id is not None:
+            q = q.where(Approval.agent_id == agent_id)
+        rows = (await s.scalars(q.order_by(desc(Approval.decided_at)).limit(50))).all()
+    for r in rows:
+        req = r.request or {}
+        if req.get("kind") != "egress" or str(req.get("host") or "").lower() != host:
+            continue
+        if r.task_id is None or r.task_id != task_id:
+            continue
+        return r.id
+    return None
+
+
+async def allow_egress_host(project_id: str, *, host: str, decided_by: str, url: str = "",
+                            reason: str = "", source_approval_id: str | None = None) -> str:
+    """Append the host to the project's `egress_allow`, with an audit row and an event.
+
+    Only a human grant with `always` reaches this function. A private or reserved
+    address is refused here too, so the settings can never name one.
+    """
+    host = (host or "").strip().lower()
+    if not host or is_private_host(host):
+        raise ValueError("a private or reserved address can never be granted")
+    async with session_scope(write_lock=True) as s:
+        p = await s.get(Project, project_id)
+        if p is None:
+            raise KeyError(project_id)
+        st = dict(p.settings or {})
+        allow = [str(h).strip().lower() for h in (st.get("egress_allow") or []) if str(h).strip()]
+        if host not in allow:
+            allow.append(host)
+        st["egress_allow"] = allow[-100:]
+        p.settings = st
+        s.add(p)
+    await audit(actor_kind="user", actor_id=decided_by, action="security.egress.allowed",
+                resource_kind="egress_allow", resource_id=host,
+                reason=(url or reason or host)[:400], project_id=project_id)
+    await ev.emit("security.egress.allow.added", project_id=project_id, severity="notice",
+                  title=f"egress allowed: {host}",
+                  payload={"host": host, "url": url, "approval_id": source_approval_id or ""},
+                  actor=decided_by)
+    return host
 
 
 # ── the "always allow" list (owner's rule) ──────────────────────────────────────────

@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,87 @@ log = logging.getLogger("crew.verify")
 EVIDENCE_RE = re.compile(r"(https?://\S+|[\w./-]+\.(py|md|json|txt|csv|ts|cs|sql)\b|sha256[:=]\s*[0-9a-f]{8,})", re.I)
 STOP = {"the", "and", "for", "with", "that", "this", "from", "each", "must", "should", "are", "was",
         "were", "has", "have", "will", "can", "not", "all", "any", "its", "into", "than", "then"}
+
+# F22: "verified" used to mean only that the producer's narrative was long enough. A task
+# that named test-note.md passed at 0.95 confidence with no test-note.md anywhere. A
+# deliverable field is checkable when it names a file whose extension we recognise; prose
+# (no such file name) stays unchecked, because inventing a file name for it would fail
+# honest work.
+DELIVERABLE_EXTENSIONS: frozenset[str] = frozenset({
+    "md", "markdown", "txt", "rst", "json", "jsonl", "csv", "tsv", "yaml", "yml", "toml",
+    "xml", "html", "htm", "css", "js", "mjs", "ts", "tsx", "jsx", "py", "rs", "go", "java",
+    "cs", "rb", "php", "sh", "bash", "ps1", "sql", "ipynb", "log", "pdf", "docx", "xlsx",
+    "pptx", "png", "jpg", "jpeg", "svg", "gif", "zip", "tar", "gz",
+})
+_TOKEN_SPLIT = re.compile(r"[\s,;]+")
+_FILE_NAME_RE = re.compile(r"^[^\s/\\][\w.\-]*\.([A-Za-z][A-Za-z0-9]{0,9})$")
+
+
+def named_deliverable(deliverable: str) -> str | None:
+    """The file name a task's `deliverable` field names, or None when it is prose.
+
+    The live shape was `test-note.md containing verification results for each check`:
+    a file name with an explanation after it. The first token that looks like a file
+    name with a known extension wins, matched by its base name so the prefix the
+    producer used does not matter. A sentence with no such token is not checkable.
+    """
+    for raw in _TOKEN_SPLIT.split(deliverable or ""):
+        token = raw.strip("`\"'()[]{}<>|:*!?")
+        token = token.rstrip(".")
+        if not token or token in (".", ".."):
+            continue
+        if "/" in token or "\\" in token:
+            token = token.replace("\\", "/").rsplit("/", 1)[-1]
+            if not token:
+                continue
+        match = _FILE_NAME_RE.match(token)
+        if match and match.group(1).lower() in DELIVERABLE_EXTENSIONS:
+            return token
+    return None
+
+
+def _file_named(roots: tuple[Path, ...], name: str, *, max_entries: int = 20_000,
+                max_depth: int = 8) -> bool:
+    """Is there a file with this base name under any authority root? Bounded walk."""
+    target = name.lower()
+    seen = 0
+    for root in roots:
+        try:
+            if not root.is_dir():
+                continue
+            base_depth = len(root.parts)
+        except OSError:
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            if len(Path(dirpath).parts) - base_depth >= max_depth:
+                dirnames[:] = []
+            for filename in filenames:
+                seen += 1
+                if filename.lower() == target:
+                    return True
+            if seen >= max_entries:
+                break
+    return False
+
+
+def deliverable_check(task: Task, artifacts: list[Artifact],
+                      roots: tuple[Path, ...]) -> dict | None:
+    """F22: the named deliverable must exist in the workspace or the artifact store.
+
+    Returns None when the deliverable is prose (nothing to check), else the check row.
+    """
+    name = named_deliverable(task.deliverable or "")
+    if name is None:
+        return None
+    stored = any(Path(str(a.path)).name.lower() == name.lower()
+                 or str((a.meta or {}).get("name") or "").lower() == name.lower()
+                 for a in artifacts)
+    if stored or _file_named(roots, name):
+        return {"name": "deliverable_present", "ok": True,
+                "detail": f"{name} found in the workspace or the artifact store"}
+    return {"name": "deliverable_present", "ok": False,
+            "detail": (f"{name} is named as the deliverable but is missing from both the "
+                       f"workspace and the artifact store")}
 
 
 @dataclass
@@ -311,6 +393,11 @@ class Verifier:
         integrity, evidence_text = await asyncio.to_thread(artifact_checks, task, list(artifacts), roots)
         checks, det_score = deterministic_checks(task, evidence_text, list(artifacts))
         checks.extend(integrity)
+        # F22: a task that names a deliverable file is not verified until that file
+        # exists. The producer's narrative cannot stand in for the named deliverable.
+        named = await asyncio.to_thread(deliverable_check, task, list(artifacts), roots)
+        if named is not None:
+            checks.append(named)
         contract = task.output_contract or {}
         if contract and not settings.offline_llm:
             try:
@@ -340,7 +427,8 @@ class Verifier:
 
         failed = [c for c in checks if not c["ok"]]
         critical_failed = [c for c in failed if c["name"] in (
-            "non_empty", "evidence_present", "artifact_integrity", "artifacts_non_empty", "output_contract", "evaluator_rubric")]
+            "non_empty", "evidence_present", "artifact_integrity", "artifacts_non_empty",
+            "output_contract", "evaluator_rubric", "deliverable_present")]
         if not result_text.strip():
             verdict = Verdict.FAIL
         elif critical_failed:

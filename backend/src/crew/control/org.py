@@ -26,7 +26,7 @@ from crew.core.models import (
     usd_to_micros,
 )
 from crew.core.reward import KNOWLEDGE_ON_HIRE, RewardEngine
-from crew.core.security import audit, budget
+from crew.core.security import EGRESS_PRESETS, audit, budget
 from crew.core.settings import settings
 from crew.domain import soul as soul_mod
 from crew.domain.catalog import ROLE_TEMPLATES, SKILLS_BY_ID, RoleSpec, skills_for_keywords
@@ -49,6 +49,7 @@ DEFAULT_PROJECT_SETTINGS: dict = {
     "reward_weights": {},
     "council_policy": {"impact": "high", "min_panel": 3, "max_rounds": 3},
     "egress_allow": [],
+    "egress_presets": [],
     "tool_policy": {"deny": [], "require_approval": []},
     "model_tiers": {},
     "retention": {"events_days": 0},
@@ -245,6 +246,12 @@ def serialize_project(p: Project) -> dict:
         "spend_ratio": round(p.spend_micros / p.budget_cap_micros, 4) if p.budget_cap_micros else 0.0,
         "reserved_usd": round(p.reserved_micros / 1e6, 6),
         "settings": p.settings or {}, "tags": p.tags or [],
+        # The egress surface the settings dialog needs (docs/11 §6): every preset the
+        # project may switch on, with its hosts, and the ones currently selected.
+        "egress_presets": {
+            "available": {name: list(hosts) for name, hosts in sorted(EGRESS_PRESETS.items())},
+            "selected": list(p.setting("egress_presets", []) or []),
+        },
         "created_at": ev.utc_iso(p.created_at), "archived_at": ev.utc_iso(p.archived_at) if p.archived_at else None,
     }
 

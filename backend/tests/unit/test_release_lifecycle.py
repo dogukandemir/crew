@@ -193,22 +193,32 @@ async def test_approval_continuation_waits_for_prior_wave_instead_of_disappearin
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("unfinished", ["failed", "aborted", "blocked"])
-async def test_partial_delivery_is_failed_and_cannot_start_cadence(project, monkeypatch, unfinished):
+async def test_partial_delivery_completes_but_cannot_start_cadence(project, monkeypatch, unfinished):
+    """F21: one unfinished task no longer erases the work that landed.
+
+    The run reads as completed with `partial: true` and the unfinished task named;
+    cadence still never follows a run that did not deliver everything.
+    """
     async with session_scope() as s:
         p = await s.get(Project, project["id"])
         run = Run(project_id=p.id, goal="All requirements must pass")
         s.add(run)
         await s.flush()
         s.add_all([Task(project_id=p.id, run_id=run.id, title="Delivered", state="completed"),
-                   Task(project_id=p.id, run_id=run.id, title="Missing", state=unfinished)])
+                   Task(project_id=p.id, run_id=run.id, title="Missing", state=unfinished,
+                        escalation_reason="verification fail: non_empty: 0 chars")])
 
     async def forbidden(*args):
-        raise AssertionError("Failed runs must not start cadence")
+        raise AssertionError("A run that did not deliver everything must not start cadence")
 
     monkeypatch.setattr(orchestrator, "_maybe_cadence", forbidden)
     await orchestrator._learn(run, p)
     async with session_scope() as s:
-        assert (await s.get(Run, run.id)).status == "failed"
+        row = await s.get(Run, run.id)
+        assert row.status == "completed", "a run that landed work is not a failed run"
+        assert row.report["partial"] is True
+        assert [f["title"] for f in row.report["failed_tasks"]] == ["Missing"]
+        assert "verification fail" in row.report["failed_tasks"][0]["reason"]
 
 
 @pytest.mark.asyncio

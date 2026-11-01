@@ -90,7 +90,7 @@ function ProjectApprovals({ projectId }: { projectId: string }) {
   );
 }
 
-function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: string }) {
+export function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: string }) {
   const [reason, setReason] = useState('');
   const [openForReason, setOpenForReason] = useState(false);
   const qc = useQueryClient();
@@ -103,12 +103,26 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
   const kind = typeof req.kind === 'string' ? req.kind : 'generic';
   const isCommand = kind === 'command_review';
   const isContent = kind === 'content_review';
-  const isTool = !isCommand && !isContent && typeof req.tool === 'string';
+  // An egress request is a host the proxy refused: host + url are the whole case.
+  const isEgress = kind === 'egress';
+  const isTool = !isCommand && !isContent && !isEgress && typeof req.tool === 'string';
   const cmd = typeof req.cmd === 'string' ? req.cmd : '';
   const url = typeof req.url === 'string' ? req.url : '';
   const preview = typeof req.preview === 'string' ? req.preview : '';
   const note = typeof req.note === 'string' ? req.note : '';
   const reasons = Array.isArray(req.reasons) ? (req.reasons as string[]) : [];
+  // Field names are read defensively: a request that predates the egress card still
+  // renders, an empty host reads as "not reported" instead of a blank title.
+  const host =
+    typeof req.host === 'string' && req.host
+      ? req.host
+      : typeof req.blocked_host === 'string' && req.blocked_host
+        ? req.blocked_host
+        : typeof req.domain === 'string'
+          ? req.domain
+          : '';
+  const egressUrl =
+    url || (typeof req.target_url === 'string' ? req.target_url : '');
 
   const decide = useMutation({
     mutationFn: (action: 'grant' | 'always' | 'deny'): Promise<unknown> =>
@@ -123,9 +137,11 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
           action === 'deny'
             ? 'Approval denied.'
             : action === 'always'
-              ? isTool
-                ? 'Standing approval saved, this agent’s calls skip the gate until revoked (Settings → Tool allowlist).'
-                : 'Always allowed, it will not ask again until revoked (Settings → Command allowlist).'
+              ? isEgress
+                ? `Always allowed, ${host || 'the host'} is now on this project’s egress allowlist.`
+                : isTool
+                  ? 'Standing approval saved, this agent’s calls skip the gate until revoked (Settings → Tool allowlist).'
+                  : 'Always allowed, it will not ask again until revoked (Settings → Command allowlist).'
               : 'Approval granted.',
       });
       setReason('');
@@ -133,6 +149,7 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'approvals'] });
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'command-allows'] });
       void qc.invalidateQueries({ queryKey: ['project', projectId, 'capability-allows'] });
+      void qc.invalidateQueries({ queryKey: ['project', projectId, 'egress'] });
     },
     onError: (err) => setToast({ kind: 'error', message: String(err) }),
   });
@@ -144,11 +161,25 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
           <Badge tone="warning">command review</Badge>
         ) : isContent ? (
           <Badge tone="warning">content review</Badge>
+        ) : isEgress ? (
+          <Badge tone="warning">egress</Badge>
         ) : (
           <Badge tone="warning">{approval.capability}</Badge>
         )}
         <span className="ml-auto text-[10px] text-slate-500">{formatRelativeTime(approval.created_at)}</span>
       </div>
+
+      {isEgress && (
+        <div className="mt-1 break-all font-mono text-[12px] font-medium text-amber-200/90">
+          {host || 'blocked host not reported'}
+        </div>
+      )}
+      {isEgress && (
+        <div className="mt-0.5 break-all font-mono text-[10px] text-slate-400">
+          {egressUrl || 'url not reported'}
+        </div>
+      )}
+
       <div className="mt-1 font-mono text-[10px] text-slate-500">
         {approval.agent_id ? `agent ${approval.agent_id.slice(0, 8)}` : 'agent,'}
         {approval.task_id ? ` · task ${approval.task_id.slice(0, 8)}` : ''}
@@ -175,10 +206,16 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
         </>
       )}
 
-      {!isCommand && !isContent && approval.request && (
+      {!isCommand && !isContent && !isEgress && approval.request && (
         <pre className="mt-1 max-h-20 overflow-auto rounded bg-slate-950/70 p-1 font-mono text-[10px] text-slate-400">
           {JSON.stringify(approval.request, null, 1)}
         </pre>
+      )}
+
+      {isEgress && (
+        <p className="mt-1 text-[10px] leading-snug text-slate-400">
+          Always allow writes {host || 'this host'} into this project’s egress allowlist, it will not ask again.
+        </p>
       )}
 
       {reasons.length > 0 && (
@@ -200,9 +237,9 @@ function ApprovalRow({ approval, projectId }: { approval: Approval; projectId: s
       )}
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <Button size="xs" variant="primary" loading={decide.isPending} onClick={() => decide.mutate('grant')}>
-          {isContent ? 'Release' : 'Grant once'}
+          {isContent ? 'Release' : isEgress ? 'Allow once' : 'Grant once'}
         </Button>
-        {(isCommand || isTool) && (
+        {(isCommand || isTool || isEgress) && (
           <Button size="xs" variant="secondary" loading={decide.isPending} onClick={() => decide.mutate('always')}>
             Always allow
           </Button>

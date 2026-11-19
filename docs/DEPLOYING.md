@@ -4,6 +4,8 @@ This is the guide for putting Crew on a server that other people reach over the 
 
 For local development on your own workstation, use [INSTALLATION.md](INSTALLATION.md) instead. That guide covers the native `uv`/`npm` loop and the loopback-only demo Compose file (`docker-compose.yml`), which stays the local single-workspace distribution. Everything below is about `docker-compose.prod.yml`.
 
+> **One-command install:** [deploy/vps/README.md](../deploy/vps/README.md) automates this guide on a fresh Ubuntu 22.04/24.04 VPS, with a DigitalOcean Droplet as the worked example. It installs Docker Engine and Compose v2, Caddy with automatic HTTPS, UFW, the first admin and a nightly backup. The manual steps below remain the description of what the installer configures and how to operate it.
+
 Read [SECURITY.md](../SECURITY.md) before you expose this to anyone. Crew 0.1 is for one trusted team sharing one workspace. Roles (`viewer`, `operator`, `admin`) are not tenant boundaries.
 
 ## 1. What you are deploying

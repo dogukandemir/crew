@@ -112,6 +112,23 @@ jobs:
       - name: Lint workflow files
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
 
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Parse shell scripts
+        run: bash -n scripts/backup.sh scripts/restore.sh deploy/vps/install.sh deploy/digitalocean/create-droplet.sh
+      - name: Lint shell scripts
+        # shellcheck 0.10.0, pinned by the image digest.
+        run: |
+          docker run --rm -v "$PWD:/mnt:ro" \
+            koalaman/shellcheck@sha256:2097951f02e735b613f4a34de20c40f937a6c8f18ecb170612c88c34517221fb \
+            scripts/backup.sh scripts/restore.sh deploy/vps/install.sh deploy/digitalocean/create-droplet.sh
+
 # The live-marked tests hit a real model provider and stay excluded by default
 # (backend/pyproject.toml: addopts = "-m 'not live'"), which is exactly what makes the
 # rest of the suite safe to run on every push.

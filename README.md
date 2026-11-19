@@ -40,6 +40,8 @@ Open [the control room](http://localhost:5173). The first build downloads the ag
 
 Stop the app with `docker compose stop`. Resume with `docker compose up -d`. Named volumes preserve the database, encrypted vault, and project files. `docker compose down` also keeps volumes; adding `--volumes` deletes them.
 
+To put Crew on a server, use the [VPS deployment guide](deploy/vps/README.md): one command installs the production stack on Ubuntu 24.04 (a DigitalOcean Droplet is the worked example) with Caddy automatic HTTPS, UFW and a nightly backup.
+
 ## What is real?
 
 | Capability | Demo | Live |
@@ -138,6 +140,7 @@ This release supports **one server process and one shared workspace**. Viewer ac
 |---|---|
 | [Installation](docs/INSTALLATION.md) | Local development and evaluation, upgrades, storage, recovery |
 | [Deploying](docs/DEPLOYING.md) | One host that other people reach: token auth, TLS, backups |
+| [VPS deployment](deploy/vps/README.md) | One-command Ubuntu 24.04 install with Caddy, UFW and backups (DigitalOcean walkthrough) |
 | [First project](docs/FIRST-PROJECT.md) | The first small, checkable Live goal |
 | [Support matrix](docs/SUPPORT-MATRIX.md) | What is tested where, and what still needs evidence |
 | [Security](SECURITY.md) | The trust boundary, the sandbox and the Docker socket |

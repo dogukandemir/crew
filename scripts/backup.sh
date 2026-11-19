@@ -307,6 +307,7 @@ WORKSPACE_FILES="$(find "${PARTIAL}/workspaces" -type f 2>/dev/null | wc -l | tr
   if [ -n "$WARNINGS" ]; then printf 'warnings:\n%s' "$WARNINGS"; fi
 } > "${PARTIAL}/MANIFEST.txt"
 
+# shellcheck disable=SC2094  # SHA256SUMS is excluded by find's ! -name
 ( cd "$PARTIAL" && find . -type f ! -name SHA256SUMS ! -name MANIFEST.txt | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(file_sum "$f")" "$f"; done > SHA256SUMS )
 
 mv "$PARTIAL" "$GEN_ABS"

@@ -75,5 +75,16 @@ verification step has passed.
 ## Separate workstream — one-click deploy
 
 - [x] Provider research (separate agent; Cloudflare was one example among many).
-- [ ] User selects the providers to support.
-- [ ] Implementation in a separate agent session, after selection.
+- [x] User selected direct VPS installation, with DigitalOcean as the worked
+  example (the sandbox broker needs the host Docker socket and a named volume,
+  so a hosted PaaS cannot run the real stack).
+- [x] Implementation in a separate agent session:
+  - `deploy/vps/install.sh` — idempotent Ubuntu 22.04/24.04 installer (Docker
+    Engine 26+, Compose, Caddy TLS/CSP, UFW, `.env` merge, backups, first admin).
+  - `deploy/digitalocean/cloud-init.yaml` — Droplet user-data that clones the
+    repo and runs the installer.
+  - `deploy/digitalocean/create-droplet.sh` — `doctl` wrapper with validation,
+    `--dry-run`, and post-create DNS instructions.
+  - `deploy/vps/README.md` plus `docs/DEPLOYING.md` — operation, update,
+    backup/restore, teardown and security caveats.
+  - CI now parses and shellchecks the deploy scripts (`Shell scripts` job).

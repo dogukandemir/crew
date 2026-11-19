@@ -1,0 +1,88 @@
+#cloud-config
+# =============================================================================
+# Crew on a fresh Ubuntu 24.04 Droplet (DigitalOcean) - cloud-init user data.
+#
+# HOW TO USE THIS FILE
+#   1. Set the three values in the /etc/crew/deploy.env block below:
+#      public DNS name, ACME account email, first admin email.
+#      create-droplet.sh substitutes them automatically; if you paste this file
+#      by hand, replace the three ${...} placeholders first.
+#   2. Create an A record for that domain pointing at the Droplet's public IPv4.
+#      Caddy retries certificate issuance, so a record that is still propagating
+#      only delays HTTPS; it does not break the install.
+#   3. Paste the edited file into the Droplet's "User data" field at creation
+#      time. Do not add a password here: the installer generates one on the
+#      Droplet and writes it to /root/crew-admin-password.txt (mode 600).
+#
+# The install runs in non-interactive mode. It clones the repository at
+# CREW_REF, then deploy/vps/install.sh installs Docker, Caddy and UFW, writes
+# .env with the final public origin, builds the stack, creates the first admin,
+# and schedules the nightly backup. Read deploy/vps/README.md for the whole
+# walkthrough and docs/DEPLOYING.md for the security model.
+#
+# The install takes roughly 5-15 minutes on a 2 vCPU / 4 GB Droplet. Progress:
+#   ssh root@<droplet-ip> 'cloud-init status --wait'
+#   ssh root@<droplet-ip> 'tail -n 100 /var/log/crew-install.log'
+# =============================================================================
+
+package_update: true
+
+packages:
+  - git
+  - ca-certificates
+
+write_files:
+  - path: /etc/crew/deploy.env
+    owner: root:root
+    permissions: '0600'
+    content: |
+      # Read by deploy/vps/install.sh in non-interactive mode.
+      CREW_NONINTERACTIVE=1
+      # --- EDIT THESE THREE VALUES BEFORE PASTING THE FILE INTO A DROPLET ---
+      # Public DNS name, no scheme. Caddy issues TLS for exactly this name.
+      CREW_DOMAIN=${CREW_DOMAIN}
+      # Let's Encrypt / ACME account email.
+      CREW_ACME_EMAIL=${CREW_ACME_EMAIL}
+      # Email address for the first Crew admin account.
+      CREW_ADMIN_EMAIL=${CREW_ADMIN_EMAIL}
+      # --- Usually leave the rest alone -------------------------------------
+      CREW_ADMIN_NAME=Owner
+      CREW_REPO_URL=https://github.com/dogukandemir/crew.git
+      CREW_REF=main
+      CREW_DIR=/opt/crew
+
+  # Root-only so an operator without root cannot read installer output.
+  - path: /var/log/crew-install.log
+    owner: root:root
+    permissions: '0600'
+    content: ""
+
+runcmd:
+  # One bash block on purpose: if the placeholder guard fails, the clone and the
+  # installer must not run. cloud-init runs the argument list directly, so this
+  # is bash rather than the POSIX sh that a string-form runcmd would use.
+  - - bash
+    - -c
+    - |
+      set -euo pipefail
+
+      if grep -qF '${' /etc/crew/deploy.env; then
+        echo "crew: /etc/crew/deploy.env still contains a placeholder; edit the three values and re-run, or render deploy/digitalocean/cloud-init.yaml before pasting it" >&2
+        exit 1
+      fi
+
+      set -a
+      . /etc/crew/deploy.env
+      set +a
+
+      mkdir -p "$(dirname "$CREW_DIR")"
+      if [ ! -d "$CREW_DIR/.git" ]; then
+        git clone --depth 1 --branch "$CREW_REF" "$CREW_REPO_URL" "$CREW_DIR"
+      fi
+
+      bash "$CREW_DIR/deploy/vps/install.sh" >> /var/log/crew-install.log 2>&1
+final_message: >-
+  Crew cloud-init finished. Verify with
+  'cloud-init status --wait; tail -n 100 /var/log/crew-install.log' over SSH,
+  then open https://<your-domain>. The generated admin password is in
+  /root/crew-admin-password.txt (mode 600).

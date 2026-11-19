@@ -28,7 +28,7 @@ import {
 import type { FloorPulse } from '../../sim/rooms';
 import { deskInUse, type Target } from '../../sim/targets';
 import type { SpriteMotionRef as SvgMotionRef } from '../sprites/SpriteCharacter';
-import { SPRITE_UNIT, spriteTiles, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
+import { SPRITE_UNIT, scaleForWidth, spriteTiles, spriteCentreOffset, spriteFootprint } from '../sprites/sprites';
 import { Bubble } from './Bubble';
 import { SpriteCharacter } from '../sprites/SpriteCharacter';
 import type { ReactNode } from 'react';
@@ -59,11 +59,11 @@ import { spriteScaleFactor } from '../sprites/viewScale';
 import { routeBetween } from '../../sim/paths';
 import { cn } from '../../lib/cn';
 
-const FLOOR = '#161c27';
-const WALK = '#212a3a';
+const FLOOR = '#1b2536';
+const WALK = '#2b3852';
 /** The kerb along a road: what makes a corridor read as a way, not a gap. */
-const KERB = '#3f4d67';
-const WALL_H = mh(0.72);
+const KERB = '#5b7095';
+const WALL_H = mh(0.98);
 const WALL_T = 7;
 const SLAB = 34;
 /** Air around the building, so the slab reads as a thing sitting in space. */
@@ -170,10 +170,26 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
   const busy = (pulse?.producing ?? 0) > 0;
   const { name, w, h, rows } = signLayout(room, pulse);
 
+  // The board hangs from the wall rather than floating above it. The post is what
+  // gives a plate at that height a reason to be there.
+  const wallTop = project(room.x + room.w / 2, room.y, WALL_H);
   return (
     <g>
+      {/* A soft aura, the board's shadow, and its post. */}
+      <rect
+        x={p.x - w / 2 - 5}
+        y={p.y - h - 5}
+        width={w + 10}
+        height={h + 10}
+        rx={9}
+        fill={room.accent}
+        opacity={0.08}
+      />
+      <line x1={p.x} y1={wallTop.y} x2={p.x} y2={p.y} stroke="#1b2537" strokeWidth={3} />
+      <line x1={p.x - 1} y1={wallTop.y} x2={p.x - 1} y2={p.y} stroke={mix('#3a4a63', room.accent, 0.35)} strokeWidth={1} />
+      <rect x={p.x - w / 2 + 2} y={p.y - h + 3} width={w} height={h} rx={5} fill="#05080d" opacity={0.45} />
       {/* The board. */}
-      <rect x={p.x - w / 2} y={p.y - h} width={w} height={h} rx={5} fill="#101725" opacity={0.96} />
+      <rect x={p.x - w / 2} y={p.y - h} width={w} height={h} rx={5} fill="#101725" opacity={0.97} />
       <rect x={p.x - w / 2} y={p.y - h} width={w} height={3} rx={1.5} fill={room.accent} />
       <rect
         x={p.x - w / 2}
@@ -182,9 +198,13 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
         height={h}
         rx={5}
         fill="none"
-        stroke={mix('#101725', room.accent, 0.5)}
+        stroke={mix('#101725', room.accent, 0.55)}
         strokeWidth={1}
       />
+      {/* A screw in each corner: the plate is mounted, not drawn on the air. */}
+      {[[p.x - w / 2 + 6, p.y - h + 9], [p.x + w / 2 - 6, p.y - h + 9]].map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={1.4} fill={mix('#5b6c88', room.accent, 0.4)} />
+      ))}
       <text x={p.x} y={p.y - h + 17} fontSize={16} fontWeight={700} fill="#eef2f8" textAnchor="middle" stroke="#0b0e14" strokeWidth={3.2} paintOrder="stroke">
         {name}
       </text>
@@ -223,49 +243,387 @@ function Sign({ room, pulse, stagger = 0 }: { room: Room; pulse?: FloorPulse['ro
 
 /* ── One room ─────────────────────────────────────────────────────────────── */
 
-/** The shell: floor and walls. Always behind everything a room contains. */
+/** A quad on a wall running along x (the far/left wall's inner face). */
+function wallX(x0: number, x1: number, y: number, z0: number, z1: number): string {
+  return polyPoints([
+    project(x0, y, z0),
+    project(x1, y, z0),
+    project(x1, y, z1),
+    project(x0, y, z1),
+  ]);
+}
+
+/** A quad on a wall running along y (the far/right wall's inner face). */
+function wallY(x: number, y0: number, y1: number, z0: number, z1: number): string {
+  return polyPoints([
+    project(x, y0, z0),
+    project(x, y1, z0),
+    project(x, y1, z1),
+    project(x, y0, z1),
+  ]);
+}
+
+/**
+ * A window onto the city at night.
+ *
+ * The office had no outside at all: every wall was a coloured panel, and the
+ * floor read as a room in a box. One window with a sky, a moon and a skyline
+ * gives it a world, and the warm windows in the buildings echo the warm lamps
+ * inside. It is drawn on the wall's own face, in metres, not as a floating panel.
+ */
+function CityWindow({ room, x0, x1 }: { room: Room; x0: number; x1: number }) {
+  const y = room.y + WALL_T + 0.4;
+  const z0 = mh(0.32);
+  const z1 = mh(0.86);
+  const inner = { x0: x0 + mh(0.035), x1: x1 - mh(0.035), z0: z0 + mh(0.03), z1: z1 - mh(0.03) };
+  const midX = (inner.x0 + inner.x1) / 2;
+  const midZ = (inner.z0 + inner.z1) / 2;
+  // A deterministic skyline per room: the glass is the same frame, the city is
+  // built from the room's own id, so a rebuild does not shuffle the skyline.
+  const seed = [...room.id].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+  const buildings = Array.from({ length: 9 }, (_, i) => {
+    const w = (inner.x1 - inner.x0) / 9;
+    const x = inner.x0 + i * w;
+    const top = inner.z0 + mh(0.07 + ((seed + i * 13) % 17) / 100);
+    return { x, w, top };
+  });
+  const moonX = inner.x1 - mh(0.12);
+  const moonZ = inner.z1 - mh(0.1);
+  const moon = project(moonX, y, moonZ);
+
+  return (
+    <g>
+      <polygon points={wallX(x0, x1, y, z0, z1)} fill="#0a0f18" />
+      <polygon
+        points={wallX(x0 + 1, x1 - 1, y, z0 + 1, z1 - 1)}
+        fill="#0d1726"
+        stroke={mix('#3d4c63', room.accent, 0.2)}
+        strokeWidth={2}
+      />
+      <polygon points={wallX(inner.x0, inner.x1, y, inner.z0, inner.z1)} fill="url(#office-window)" />
+      {/* A warm haze at the horizon, so the glass reads as sky behind a city and
+          not as a dark monitor on the wall. */}
+      <polygon
+        points={wallX(inner.x0, inner.x1, y, inner.z0, inner.z0 + (inner.z1 - inner.z0) * 0.32)}
+        fill="#c08a55"
+        opacity={0.22}
+      />
+      <circle cx={moon.x} cy={moon.y} r={mh(0.055)} fill="#f4ebd0" opacity={0.95} />
+      <circle cx={moon.x} cy={moon.y} r={mh(0.13)} fill="#f4ebd0" opacity={0.08} />
+      {buildings.map((b, i) => (
+        <g key={i}>
+          <polygon
+            points={wallX(b.x, b.x + b.w * 0.86, y, inner.z0, b.top)}
+            fill={i % 3 === 0 ? '#101b2c' : '#0d1b2e'}
+          />
+          <polygon
+            points={wallX(b.x, b.x + b.w * 0.86, y, b.top - mh(0.012), b.top)}
+            fill="#4f6d8d"
+            opacity={0.5}
+          />
+          {/* Two or three lit windows in a dark tower. */}
+          {Array.from({ length: 2 }, (_, k) => (
+            <polygon
+              key={k}
+              points={wallX(
+                b.x + b.w * (0.16 + k * 0.28),
+                b.x + b.w * (0.16 + k * 0.28) + b.w * 0.12,
+                y,
+                inner.z0 + mh(0.05 + k * 0.1),
+                inner.z0 + mh(0.075 + k * 0.1),
+              )}
+              fill="#d9a75b"
+              opacity={0.55}
+            />
+          ))}
+        </g>
+      ))}
+      {/* Mullions: one vertical, one horizontal, with the frame's own thickness. */}
+      <polygon points={wallX(midX - 2, midX + 2, y, inner.z0, inner.z1)} fill="#0a0f18" opacity={0.9} />
+      <polygon points={wallX(inner.x0, inner.x1, y, midZ - 1.5, midZ + 1.5)} fill="#0a0f18" opacity={0.9} />
+      {/* The sill, and the light it catches from the room. */}
+      <polygon points={wallX(x0 - 2, x1 + 2, y, z0 - mh(0.035), z0)} fill={shade(mix('#3a4964', room.accent, 0.3), 1.15)} />
+      <polygon
+        points={wallX(inner.x0, inner.x1, y, inner.z0, inner.z0 + mh(0.02))}
+        fill={mix('#7fb4d8', '#e8dfc4', 0.35)}
+        opacity={0.25}
+      />
+    </g>
+  );
+}
+
+/** A framed print on the side wall: two bands and a sun, which is enough. */
+function WallArt({ room, x, y0, y1 }: { room: Room; x: number; y0: number; y1: number }) {
+  const z0 = mh(0.44);
+  const z1 = mh(0.84);
+  const inner = { y0: y0 + mh(0.04), y1: y1 - mh(0.04), z0: z0 + mh(0.04), z1: z1 - mh(0.04) };
+  return (
+    <g>
+      <polygon points={wallY(x, y0, y1, z0, z1)} fill="#0a0f17" />
+      <polygon
+        points={wallY(x, inner.y0, inner.y1, inner.z0, inner.z1)}
+        fill={mix('#20334a', room.accent, 0.25)}
+      />
+      {/* A horizon and a low sun, in the accent's own warm complement. */}
+      <polygon
+        points={wallY(x, inner.y0, inner.y1, inner.z0, inner.z0 + (inner.z1 - inner.z0) * 0.36)}
+        fill={mix('#8d5a3c', room.accent, 0.3)}
+      />
+      <polygon
+        points={wallY(
+          x,
+          inner.y0 + (inner.y1 - inner.y0) * 0.1,
+          inner.y1 - (inner.y1 - inner.y0) * 0.35,
+          inner.z0 + (inner.z1 - inner.z0) * 0.3,
+          inner.z0 + (inner.z1 - inner.z0) * 0.7,
+        )}
+        fill="#d9a75b"
+        opacity={0.7}
+      />
+      <polygon points={wallY(x, inner.y0, inner.y1, inner.z0 + 1, inner.z0 + 2)} fill="#e8dfc4" opacity={0.25} />
+    </g>
+  );
+}
+
+/**
+ * A rug.
+ *
+ * The office floor is a hard surface; a rug is what makes a meeting corner read
+ * as a place to sit rather than a rectangle with a table in it. Drawn at floor
+ * level in the room's own coordinates, so furniture stands on it.
+ */
+function Rug({ room }: { room: Room }) {
+  const centre = project(room.x + room.w / 2, room.y + room.h / 2, 1);
+  if (room.kind === 'meeting') {
+    const rx = room.w * 0.34;
+    const ry = rx * 0.5;
+    return (
+      <g opacity={0.95}>
+        <ellipse cx={centre.x} cy={centre.y} rx={rx} ry={ry} fill={mix('#3b2a42', room.accent, 0.25)} />
+        <ellipse cx={centre.x} cy={centre.y} rx={rx - 6} ry={ry - 3} fill="none" stroke="#b98a52" strokeWidth={1.4} opacity={0.7} />
+        <ellipse cx={centre.x} cy={centre.y} rx={rx * 0.7} ry={ry * 0.7} fill="none" stroke="#7e5d38" strokeWidth={1} opacity={0.6} />
+        {/* A woven diamond field, two lines deep. */}
+        {Array.from({ length: 6 }, (_, i) => {
+          const t = (i + 1) / 7;
+          return (
+            <ellipse
+              key={i}
+              cx={centre.x}
+              cy={centre.y}
+              rx={rx * t}
+              ry={ry * t}
+              fill="none"
+              stroke="#8f6c44"
+              strokeWidth={0.8}
+              opacity={0.3}
+            />
+          );
+        })}
+      </g>
+    );
+  }
+  if (room.kind === 'commons' || room.kind === 'break') {
+    const insetX = room.w * 0.16;
+    const insetY = room.h * 0.18;
+    return (
+      <g opacity={0.95}>
+        <polygon
+          points={floorRect(room.x + insetX, room.y + insetY, room.w - insetX * 2, room.h - insetY * 2, 1)}
+          fill={mix('#3b2a42', room.accent, 0.2)}
+        />
+        <polygon
+          points={floorRect(room.x + insetX + 5, room.y + insetY + 4, room.w - insetX * 2 - 10, room.h - insetY * 2 - 8, 1)}
+          fill="none"
+          stroke="#b98a52"
+          strokeWidth={1.2}
+          opacity={0.55}
+        />
+        <polygon
+          points={floorRect(room.x + insetX + 12, room.y + insetY + 9, room.w - insetX * 2 - 24, room.h - insetY * 2 - 18, 1)}
+          fill="none"
+          stroke={mix('#8f6c44', room.accent, 0.4)}
+          strokeWidth={0.8}
+          opacity={0.5}
+        />
+      </g>
+    );
+  }
+  return null;
+}
+
+/** The shell: floor, rug, walls and their dressing. Behind everything a room contains. */
 function RoomShell({ room, focused, newRoom }: { room: Room; focused: boolean; newRoom: boolean }) {
-  const wall = mix('#2a3346', room.accent, 0.3);
-  const accentSoft = mix('#12161f', room.accent, 0.45);
-  const inner = mix('#1e2634', room.accent, 0.16);
+  const wall = mix('#3a4964', room.accent, 0.34);
+  const accentSoft = mix('#12161f', room.accent, 0.55);
+  const inner = mix('#263346', room.accent, 0.17);
+  const yFace = room.y + WALL_T + 0.4;
+  const xFace = room.x + WALL_T + 0.4;
+  const warm = room.kind === 'lab' || room.kind === 'bench' ? 'url(#office-cool)' : 'url(#office-lamp)';
+  const floorCentre = project(room.x + room.w / 2, room.y + room.h / 2, 2);
+
+  // A window on the long wall for the rooms people sit in; a print for the rest.
+  const windowRoom = ['department', 'orchestrator', 'meeting', 'commons', 'lab'].includes(room.kind);
+  const windowX0 = room.x + room.w * 0.5;
+  const windowX1 = room.x + room.w * 0.94;
+  const artY0 = room.y + room.h * 0.3;
+  const artY1 = artY0 + mh(0.9);
+
+  const grid: string[] = [];
+  for (let gx = 52; gx < room.w - 12; gx += 52) {
+    grid.push(polyPoints([project(room.x + gx, room.y + 4, 1), project(room.x + gx, room.y + room.h - 4, 1)]));
+  }
+  for (let gy = 52; gy < room.h - 12; gy += 52) {
+    grid.push(polyPoints([project(room.x + 4, room.y + gy, 1), project(room.x + room.w - 4, room.y + gy, 1)]));
+  }
 
   return (
     <g className={cn('room', focused && 'is-focused', newRoom && 'is-new')}>
-      {/* The room's own floor, lighter than the walkway outside it, so a
-          department reads as a place with edges. */}
+      {/* The room sits a couple of centimetres proud of the corridor, and this is
+          the shadow that says so. A room drawn flush with the floor reads as a
+          colour, not a place. */}
+      <polygon points={floorRect(room.x + 3, room.y + 4, room.w, room.h, 0)} fill="#05080d" opacity={0.7} />
+      {/* The room's own floor, a warm tinted slab under everything. */}
       <polygon points={floorRect(room.x, room.y, room.w, room.h, 0)} fill={inner} />
       <polygon
         points={floorRect(room.x + 5, room.y + 5, room.w - 10, room.h - 10, 1)}
         fill={room.accent}
-        opacity={focused ? 0.24 : 0.17}
+        opacity={focused ? 0.2 : 0.13}
+      />
+      {/* Tile joints: a floor is a surface with seams, not a flat colour. */}
+      {grid.map((points, i) => (
+        <polyline
+          key={`g${i}`}
+          points={points}
+          fill="none"
+          stroke={mix('#9fb0cb', room.accent, 0.35)}
+          strokeWidth={0.7}
+          opacity={0.06}
+        />
+      ))}
+      <Rug room={room} />
+      {/* A lit pool from the room's own ceiling light. It sits OVER the rug and
+          UNDER the furniture, which is what makes the floor feel lit rather than
+          tinted, and stops a dark rug swallowing the room's glow. */}
+      <ellipse
+        cx={floorCentre.x}
+        cy={floorCentre.y}
+        rx={room.w * 0.6}
+        ry={room.h * 0.45}
+        fill={warm}
+        opacity={0.8}
+        style={{ mixBlendMode: 'screen' }}
       />
       <polygon
-        points={floorRect(room.x + 5, room.y + 5, room.w - 10, room.h - 10, 1)}
+        points={floorRect(room.x + 9, room.y + 9, room.w - 18, room.h - 18, 1)}
         fill="none"
         stroke={room.accent}
-        strokeWidth={focused ? 2 : 1}
-        opacity={focused ? 0.85 : 0.55}
+        strokeWidth={focused ? 2.2 : 1.2}
+        opacity={focused ? 0.9 : 0.55}
+      />
+      {/* The doorway: a threshold and the light spilling out of the room. */}
+      <ellipse
+        cx={project(room.door.x, room.y + room.h, 2).x}
+        cy={project(room.door.x, room.y + room.h, 2).y}
+        rx={44}
+        ry={20}
+        fill={warm}
+        opacity={0.4}
+        style={{ mixBlendMode: 'screen' }}
+      />
+      <polygon
+        points={floorRect(room.door.x - 28, room.y + room.h - 9, 56, 18, 2)}
+        fill="#0b1119"
+        stroke={room.accent}
+        strokeWidth={1}
+        opacity={0.85}
+      />
+      <polygon
+        points={floorRect(room.door.x - 23, room.y + room.h - 6, 46, 12, 2)}
+        fill={room.accent}
+        opacity={0.16}
       />
 
       {/* Two partition walls on the far edges, so they never hide the room.
-          Kept light: a dark wall reads as a bar across the floor, not a room. */}
-      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).front} fill={shade(wall, 0.74)} />
-      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).right} fill={shade(wall, 0.88)} />
+          Taller and lighter than before: the wall is a room's edge, not a bar. */}
+      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).front} fill={shade(wall, 0.68)} />
+      <polygon points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).right} fill={shade(wall, 0.84)} />
       <polygon
         points={boxFaces(room.x, room.y, room.w, WALL_T, WALL_H).top}
-        fill={shade(wall, 1.22)}
+        fill={shade(wall, 1.3)}
         stroke={accentSoft}
         strokeWidth={1.5}
       />
-      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).front} fill={shade(wall, 0.72)} />
-      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).right} fill={shade(wall, 0.86)} />
+      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).front} fill={shade(wall, 0.66)} />
+      <polygon points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).right} fill={shade(wall, 0.82)} />
       <polygon
         points={boxFaces(room.x, room.y, WALL_T, room.h, WALL_H).top}
-        fill={shade(wall, 1.22)}
+        fill={shade(wall, 1.3)}
         stroke={accentSoft}
         strokeWidth={1.5}
       />
 
+      {/* Skirting and crown: the two horizontal lines that read as fit-out. */}
+      <polygon points={wallX(room.x, room.x + room.w, yFace, 0, mh(0.07))} fill="#090e16" opacity={0.9} />
+      <polygon
+        points={wallX(room.x, room.x + room.w, yFace, WALL_H - mh(0.055), WALL_H)}
+        fill={mix('#4b5d7c', room.accent, 0.4)}
+        opacity={0.9}
+      />
+      <polygon points={wallY(xFace, room.y, room.y + room.h, 0, mh(0.07))} fill="#090e16" opacity={0.9} />
+      <polygon
+        points={wallY(xFace, room.y, room.y + room.h, WALL_H - mh(0.055), WALL_H)}
+        fill={mix('#4b5d7c', room.accent, 0.4)}
+        opacity={0.9}
+      />
+      {/* Panel joints, at the same pitch as the floor tiles. */}
+      {Array.from({ length: Math.max(1, Math.floor(room.w / 76)) }, (_, i) => {
+        const x = room.x + 38 + i * 76;
+        return (
+          <line
+            key={`sx${i}`}
+            x1={project(x, yFace, mh(0.08)).x}
+            y1={project(x, yFace, mh(0.08)).y}
+            x2={project(x, yFace, WALL_H - mh(0.08)).x}
+            y2={project(x, yFace, WALL_H - mh(0.08)).y}
+            stroke="#0b1119"
+            strokeWidth={1}
+            opacity={0.4}
+          />
+        );
+      })}
+      {Array.from({ length: Math.max(1, Math.floor(room.h / 76)) }, (_, i) => {
+        const y = room.y + 38 + i * 76;
+        return (
+          <line
+            key={`sy${i}`}
+            x1={project(xFace, y, mh(0.08)).x}
+            y1={project(xFace, y, mh(0.08)).y}
+            x2={project(xFace, y, WALL_H - mh(0.08)).x}
+            y2={project(xFace, y, WALL_H - mh(0.08)).y}
+            stroke="#0b1119"
+            strokeWidth={1}
+            opacity={0.4}
+          />
+        );
+      })}
+      <polygon
+        points={wallX(room.x, room.x + room.w, yFace, WALL_H - mh(0.16), WALL_H - mh(0.145))}
+        fill={room.accent}
+        opacity={0.4}
+      />
+      <polygon
+        points={wallY(xFace, room.y, room.y + room.h, WALL_H - mh(0.16), WALL_H - mh(0.145))}
+        fill={room.accent}
+        opacity={0.4}
+      />
+
+      {windowRoom && <CityWindow room={room} x0={windowX0} x1={windowX1} />}
+      {!windowRoom && (
+        <WallArt room={room} x={xFace} y0={artY0} y1={artY1} />
+      )}
+      {room.kind === 'department' || room.kind === 'orchestrator' || room.kind === 'meeting' ? (
+        <WallArt room={room} x={xFace} y0={room.y + room.h * 0.52} y1={room.y + room.h * 0.52 + mh(0.7)} />
+      ) : null}
     </g>
   );
 }
@@ -302,10 +660,10 @@ function Conveyor({ from, to, half = 11, tie = 96 }: { from: { x: number; y: num
   }
   return (
     <g>
-      <polyline points={rail(-half)} fill="none" stroke="#3b4a68" strokeWidth={1.2} />
-      <polyline points={rail(half)} fill="none" stroke="#3b4a68" strokeWidth={1.2} />
+      <polyline points={rail(-half)} fill="none" stroke="#48608a" strokeWidth={1.2} />
+      <polyline points={rail(half)} fill="none" stroke="#48608a" strokeWidth={1.2} />
       {ties.map((points, i) => (
-        <polyline key={i} points={points} fill="none" stroke="#2f3a51" strokeWidth={0.9} />
+        <polyline key={i} points={points} fill="none" stroke="#3b4d70" strokeWidth={0.9} />
       ))}
     </g>
   );
@@ -344,8 +702,6 @@ function roomItems(
   activities: Record<string, Activity>,
   targets: Record<string, Target>,
   motions: Map<string, SvgMotionRef>,
-  pulse: FloorPulse['rooms'][string] | undefined,
-  stagger: number,
 ): Drawable[] {
   const out: Drawable[] = [];
   // Each thing is wrapped in a group that carries its depth: the layer's children
@@ -401,6 +757,36 @@ function roomItems(
     const px = room.x + 16;
     const py = room.y + WALL_T + 14;
     at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
+    // A shelf and a lamp in the header strip. Both are small enough for the band
+    // the plan already reserves, and together they turn the strip from padding
+    // into the wall of a room somebody works in.
+    const bx = room.x + 140;
+    const by = room.y + WALL_T + 2;
+    at(
+      `${room.id}-shelf`,
+      bx,
+      by,
+      <AtlasSprite key={`${room.id}-shelf`} name="prop.bookshelf" x={bx} y={by} scale={scaleForWidth('prop.bookshelf', 100)} />,
+    );
+    const lx = room.x + 50;
+    const ly = room.y + WALL_T + 4;
+    at(
+      `${room.id}-lamp`,
+      lx,
+      ly,
+      <g key={`${room.id}-lamp`}>
+        <ellipse
+          cx={project(lx + 18, ly + 18, 2).x}
+          cy={project(lx + 18, ly + 18, 2).y}
+          rx={72}
+          ry={34}
+          fill="url(#office-lamp)"
+          opacity={0.7}
+          style={{ mixBlendMode: 'screen' }}
+        />
+        <AtlasSprite name="prop.floorlamp" x={lx} y={ly} />
+      </g>,
+    );
   }
 
   if (room.kind === 'lab') {
@@ -475,6 +861,27 @@ function roomItems(
     const bx = room.x + (room.w - bw) / 2;
     at(`${room.id}-board`, bx, room.y + 10, <Whiteboard key={`${room.id}-board`} x={bx} y={room.y + 10} w={bw} />);
     at(`${room.id}-plant`, room.x + 14, room.y + 48, <Plant key={`${room.id}-plant`} x={room.x + 14} y={room.y + 48} />);
+    // A lamp in the corner the chairs leave free: the meeting room reads as a
+    // boardroom at night instead of a table in a box.
+    const lx = room.x + room.w - 22;
+    const ly = room.y + room.h - 26;
+    at(
+      `${room.id}-lamp`,
+      lx,
+      ly,
+      <g key={`${room.id}-lamp`}>
+        <ellipse
+          cx={project(lx + 8, ly + 8, 2).x}
+          cy={project(lx + 8, ly + 8, 2).y}
+          rx={66}
+          ry={32}
+          fill="url(#office-lamp)"
+          opacity={0.65}
+          style={{ mixBlendMode: 'screen' }}
+        />
+        <AtlasSprite name="prop.floorlamp" x={lx} y={ly} />
+      </g>,
+    );
   }
 
   if (room.kind === 'commons') {
@@ -487,6 +894,29 @@ function roomItems(
     const px = room.x + room.w - 26;
     const py = room.y + 30;
     at(`${room.id}-plant`, px, py, <Plant key={`${room.id}-plant`} x={px} y={py} />);
+    // A shelf and a lamp against the left wall, clear of the long table.
+    const sx = room.x + 18;
+    const sy = room.y + WALL_T + 4;
+    at(`${room.id}-shelf`, sx, sy, <AtlasSprite key={`${room.id}-shelf`} name="prop.bookshelf" x={sx} y={sy} scale={scaleForWidth('prop.bookshelf', 90)} />);
+    const lx = room.x + 26;
+    const ly = room.y + 74;
+    at(
+      `${room.id}-lamp`,
+      lx,
+      ly,
+      <g key={`${room.id}-lamp`}>
+        <ellipse
+          cx={project(lx + 10, ly + 10, 2).x}
+          cy={project(lx + 10, ly + 10, 2).y}
+          rx={62}
+          ry={30}
+          fill="url(#office-lamp)"
+          opacity={0.55}
+          style={{ mixBlendMode: 'screen' }}
+        />
+        <AtlasSprite name="prop.floorlamp" x={lx} y={ly} />
+      </g>,
+    );
   }
 
   if (room.kind === 'break') {
@@ -522,6 +952,11 @@ function roomItems(
     const kx = room.x + room.w - 58;
     const ky = room.y + room.h - 52;
     at(`${room.id}-crate`, kx, ky, <Crate key={`${room.id}-crate`} x={kx} y={ky} w={32} h={mh(0.4)} />);
+    // The fridge, between the vending machine and the coffee bar: the three
+    // machines together are what makes a break corner read at a glance.
+    const fx = room.x + room.w * 0.4;
+    const fy = room.y + WALL_T + 2;
+    at(`${room.id}-fridge`, fx, fy, <AtlasSprite key={`${room.id}-fridge`} name="prop.fridge" x={fx} y={fy} />);
   }
 
   if (room.kind === 'bench') {
@@ -529,12 +964,61 @@ function roomItems(
     at(`${room.id}-crate-b`, room.x + 76, room.y + 30, <Crate key={`${room.id}-crate-b`} x={room.x + 76} y={room.y + 30} w={36} h={mh(0.36)} />);
     at(`${room.id}-printer`, room.x + room.w - 76, room.y + 24, <Printer key={`${room.id}-printer`} x={room.x + room.w - 76} y={room.y + 24} />);
     at(`${room.id}-plant`, room.x + 24, room.y + room.h - 28, <Plant key={`${room.id}-plant`} x={room.x + 24} y={room.y + room.h - 28} />);
+    // A rack in the working corner and a lamp by the wall: the bench is where
+    // spare hardware lives, and it should look like it.
+    const rx = room.x + 18;
+    const ry = room.y + room.h - 118;
+    at(
+      `${room.id}-server`,
+      rx,
+      ry,
+      <g key={`${room.id}-server`}>
+        <ellipse
+          cx={project(rx + 20, ry + 16, 2).x}
+          cy={project(rx + 20, ry + 16, 2).y}
+          rx={50}
+          ry={26}
+          fill="url(#office-cool)"
+          opacity={0.55}
+          style={{ mixBlendMode: 'screen' }}
+        />
+        <AtlasSprite name="prop.server" x={rx} y={ry} />
+      </g>,
+    );
   }
 
-  // The nameplate is the room's own label: it sits over the room's furniture but
-  // under anybody standing in front of it.
-  at(`${room.id}-sign`, room.x, room.y + room.h + 1, <Sign key={`${room.id}-sign`} room={room} pulse={pulse} stagger={stagger} />);
   return out;
+}
+
+/**
+ * The room labels, in their own layer above the furniture.
+ *
+ * They used to be drawables, sorted by depth with everything else, which meant a
+ * fridge, a bookshelf or somebody walking past could cover the name of the room
+ * they were standing in. A label is interface, not a physical object: it is drawn
+ * last, in the same world coordinates, so it can never be occluded.
+ */
+function SignLayer({
+  rooms,
+  pulse,
+  staggers,
+}: {
+  rooms: Room[];
+  pulse: FloorPulse;
+  staggers: Record<string, number>;
+}) {
+  return (
+    <g pointerEvents="none">
+      {rooms.map((room) => (
+        <Sign
+          key={room.id}
+          room={room}
+          pulse={pulse.rooms[room.id]}
+          stagger={staggers[room.id] ?? 0}
+        />
+      ))}
+    </g>
+  );
 }
 
 /* ── One character ────────────────────────────────────────────────────────── */
@@ -756,7 +1240,7 @@ export function OfficeScene({
   const drawables = useMemo(() => {
     const out: Drawable[] = [];
     for (const room of rooms) {
-      out.push(...roomItems(room, office, activities, targets, motions, pulse.rooms[room.id], staggers[room.id] ?? 0));
+      out.push(...roomItems(room, office, activities, targets, motions));
     }
     for (const id of people) {
       const agent = office.agentOf[id];
@@ -789,7 +1273,9 @@ export function OfficeScene({
     // same depth must not swap places every time React re-renders.
     out.sort((a, b) => a.depth - b.depth || (a.key < b.key ? -1 : 1));
     return out;
-  }, [rooms, office, activities, pulse, staggers, people, motions, targets, selected, attentionOnly, onSelectAgent, registerSprite]);
+    // Labels are drawn in their own layer now, so a change in pulse or stagger
+    // updates the signs and must not rebuild every desk on the floor.
+  }, [rooms, office, activities, people, motions, targets, selected, attentionOnly, onSelectAgent, registerSprite]);
 
   const aisle = 78;
   const corridors = useMemo(
@@ -820,23 +1306,61 @@ export function OfficeScene({
           <stop offset="100%" stopColor="#000000" stopOpacity="0.55" />
         </radialGradient>
         <radialGradient id="office-lamp" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#ffcf8f" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#ffcf8f" stopOpacity="0" />
+          <stop offset="0%" stopColor="#ffcf8f" stopOpacity="0.3" />
+          <stop offset="55%" stopColor="#ffb45e" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#ffb45e" stopOpacity="0" />
         </radialGradient>
+        <radialGradient id="office-cool" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#9fd4ff" stopOpacity="0.26" />
+          <stop offset="60%" stopColor="#6fa6dd" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="#6fa6dd" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="office-screen-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#b7e0ff" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#6fa6dd" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="#6fa6dd" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="office-ambient" cx="50%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#243654" stopOpacity="0.75" />
+          <stop offset="55%" stopColor="#101827" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#05070c" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="office-window" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#24466e" />
+          <stop offset="48%" stopColor="#3b7194" />
+          <stop offset="72%" stopColor="#2a4b68" />
+          <stop offset="100%" stopColor="#0f2034" />
+        </linearGradient>
+        <linearGradient id="office-slab-side" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0c121c" />
+          <stop offset="100%" stopColor="#05070c" />
+        </linearGradient>
       </defs>
 
+      {/* The room's air: a soft wash behind the building, so the floor sits in a
+          place with light rather than in pure void. */}
+      <rect x={0} y={0} width={viewport.w} height={viewport.h} fill="url(#office-ambient)" pointerEvents="none" />
       <g transform={`translate(${camera.x.toFixed(2)} ${camera.y.toFixed(2)}) scale(${camera.scale.toFixed(3)})`}>
         {/* The ground, as a slab with an edge, the building sits in space. */}
-        <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).front} fill="#080b11" />
-        <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).right} fill="#0b0f16" />
-        <polygon points={floorRect(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB)} fill="#0a0d14" />
+        <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).front} fill="url(#office-slab-side)" />
+        <polygon points={boxFaces(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB).right} fill="#080c13" />
+        <polygon points={floorRect(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -SLAB)} fill="#090c12" />
         <polygon
           points={floorRect(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -1)}
-          fill="#0f141d"
+          fill="#101722"
+        />
+        {/* A rim light along the slab's top edge: the building is lit from outside. */}
+        <polygon
+          points={floorRect(-PAD, -PAD, office.width + PAD * 2, office.height + PAD * 2, -1)}
+          fill="none"
+          stroke="#2b3c58"
+          strokeWidth={1.5}
+          opacity={0.7}
         />
         <polygon points={floorRect(0, 0, office.width, office.height, 0)} fill={FLOOR} />
 
-        {/* Floor boards: long runs along one axis, which is what reads as a floor. */}
+        {/* Floor boards: long runs along one axis, which is what reads as a floor,
+            and short cross-joints on the other so the planks have length. */}
         {Array.from({ length: Math.ceil(office.height / 128) }, (_, i) => (
           <polyline
             key={`b${i}`}
@@ -845,7 +1369,19 @@ export function OfficeScene({
               project(office.width, (i + 1) * 128, 0),
             ])}
             fill="none"
-            stroke="#1d2432"
+            stroke="#263145"
+            strokeWidth={1}
+          />
+        ))}
+        {Array.from({ length: Math.ceil(office.width / 128) }, (_, i) => (
+          <polyline
+            key={`bw${i}`}
+            points={polyPoints([
+              project((i + 1) * 128, 0, 0),
+              project((i + 1) * 128, office.height, 0),
+            ])}
+            fill="none"
+            stroke="#1c2534"
             strokeWidth={1}
           />
         ))}
@@ -858,6 +1394,16 @@ export function OfficeScene({
           stroke={KERB}
           strokeWidth={1.5}
         />
+        <line
+          x1={project(SPINE_W / 2, 4, 2).x}
+          y1={project(SPINE_W / 2, 4, 2).y}
+          x2={project(SPINE_W / 2, office.height - 4, 2).x}
+          y2={project(SPINE_W / 2, office.height - 4, 2).y}
+          stroke="#c79a5d"
+          strokeWidth={1.5}
+          strokeDasharray="16 24"
+          opacity={0.24}
+        />
         <Conveyor from={{ x: SPINE_W / 2, y: -8 }} to={{ x: SPINE_W / 2, y: office.height + 8 }} half={18} />
         {corridors.map((y) => (
           <g key={`c${y}`}>
@@ -866,6 +1412,16 @@ export function OfficeScene({
               fill={WALK}
               stroke={KERB}
               strokeWidth={1.5}
+            />
+            <line
+              x1={project(4, y, 2).x}
+              y1={project(4, y, 2).y}
+              x2={project(office.width - 4, y, 2).x}
+              y2={project(office.width - 4, y, 2).y}
+              stroke="#c79a5d"
+              strokeWidth={1.5}
+              strokeDasharray="16 24"
+              opacity={0.2}
             />
             <Conveyor from={{ x: -8, y }} to={{ x: office.width + 8, y }} half={18} />
           </g>
@@ -891,6 +1447,45 @@ export function OfficeScene({
                 half={13}
                 tie={72}
               />
+            </g>
+          );
+        })}
+
+        {/* The walkway's own lights: pools where the lanes meet the spine, and a
+            low bollard light every few bays. They give the black between rooms a
+            scale, which is what stops a wide floor reading as empty. */}
+        {corridors.map((y) => {
+          const p = project(SPINE_W / 2, y, 1);
+          return (
+            <ellipse
+              key={`pool-${y}`}
+              cx={p.x}
+              cy={p.y}
+              rx={150}
+              ry={64}
+              fill="url(#office-lamp)"
+              opacity={0.3}
+              style={{ mixBlendMode: 'screen' }}
+            />
+          );
+        })}
+        {Array.from({ length: Math.max(1, Math.floor(office.height / 240)) }, (_, i) => {
+          const y = 120 + i * 240;
+          const p = project(12, y, 1);
+          const dot = project(12, y, mh(0.06));
+          return (
+            <g key={`bollard-${i}`}>
+              <ellipse
+                cx={p.x}
+                cy={p.y}
+                rx={54}
+                ry={24}
+                fill="url(#office-lamp)"
+                opacity={0.34}
+                style={{ mixBlendMode: 'screen' }}
+              />
+              <circle cx={dot.x} cy={dot.y} r={3.2} fill="#e8c48d" opacity={0.9} />
+              <circle cx={dot.x} cy={dot.y} r={7} fill="#e8c48d" opacity={0.15} />
             </g>
           );
         })}
@@ -976,6 +1571,7 @@ export function OfficeScene({
         <g ref={registerDepthLayer}>
           {drawables.map((d) => d.node)}
         </g>
+        <SignLayer rooms={rooms} pulse={pulse} staggers={staggers} />
       </g>
 
       <rect x={0} y={0} width={viewport.w} height={viewport.h} fill="url(#office-vignette)" pointerEvents="none" />

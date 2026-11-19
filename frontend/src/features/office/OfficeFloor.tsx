@@ -207,7 +207,7 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
   useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const fit = useCallback(() => {
-    setCam(fitCamera(bounds, size));
+    setCam(fitCamera(bounds, size, { zoom: 1.04 }));
   }, [bounds, size]);
 
   useEffect(() => {
@@ -215,7 +215,11 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     const key = `${projectId}:${size.w}x${size.h}`;
     if (fittedFor.current === key) return;
     fittedFor.current = key;
-    setCam(fitCamera(bounds, size));
+    // A touch closer than a pure fit on first paint. The bounds carry the slab's
+    // margin and the sign headroom; spending all of that on empty space made the
+    // cast forty pixels tall on a wide screen. Fit still exists and returns the
+    // whole building exactly.
+    setCam(fitCamera(bounds, size, { zoom: 1.1 }));
   }, [projectId, size, office.width, bounds]);
 
   // A department the org just opened: say so on the floor for a while.
@@ -688,98 +692,104 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
     <div className={cn('office', calm ? 'is-calm' : 'is-animated')}>
       {tasksQuery.isError && <PanelError error={tasksQuery.error} label="Task status" onRetry={() => void tasksQuery.refetch()} />}
       <div className="office-toolbar">
-        <Button
-          size="xs"
-          variant="ghost"
-          aria-label="Zoom out"
-          onClick={() => setCam((c) => zoomAt(c, 1 / 1.25, size.w / 2, size.h / 2))}
-        >
-          −
-        </Button>
-        <span className="office-stat w-11 text-center">{Math.round(cam.scale * 100)}%</span>
-        <Button
-          size="xs"
-          variant="ghost"
-          aria-label="Zoom in"
-          onClick={() => setCam((c) => zoomAt(c, 1.25, size.w / 2, size.h / 2))}
-        >
-          ＋
-        </Button>
-        <Button size="xs" variant="secondary" onClick={fit} title="Fit the floor (F)">
-          ⤢ Fit
-        </Button>
+        <div className="office-brand">
+          <span className="office-live-dot" />
+          <span>Live floor</span>
+        </div>
 
-        <span className="office-sep" />
+        <div className="office-group">
+          <Button
+            size="xs"
+            variant="ghost"
+            aria-label="Zoom out"
+            onClick={() => setCam((c) => zoomAt(c, 1 / 1.25, size.w / 2, size.h / 2))}
+          >
+            −
+          </Button>
+          <span className="office-stat w-11 text-center">{Math.round(cam.scale * 100)}%</span>
+          <Button
+            size="xs"
+            variant="ghost"
+            aria-label="Zoom in"
+            onClick={() => setCam((c) => zoomAt(c, 1.25, size.w / 2, size.h / 2))}
+          >
+            ＋
+          </Button>
+          <Button size="xs" variant="secondary" onClick={fit} title="Fit the floor (F)">
+            ⤢ Fit
+          </Button>
+        </div>
 
         {/* How big the sprites are drawn. Every option is the same geometry at a
             different size, one factor on both axes, so this is a choice about
             scale, never about shape. */}
-        <Select aria-label="Character size" className="w-32 text-xs" value={spriteScale}
-          onChange={event => setSpriteScale(event.target.value as typeof spriteScale)}>
-          {SPRITE_SCALES.map(scale => <option key={scale.name} value={scale.name}>{scale.label.replace('Sprite · ', '')}</option>)}
-        </Select>
-        <MotionControl />
-        <Select aria-label="Inspect an agent" className="w-44 text-xs" value={selected ?? ''}
-          onChange={event => { if (event.target.value) selectAgent(event.target.value); else setSelected(null); }}>
-          <option value="">Inspect an agent…</option>
-          {visibleIds.map(id => <option key={id} value={id}>{office.agentOf[id]?.name}</option>)}
-        </Select>
+        <div className="office-group office-selects">
+          <Select aria-label="Character size" className="w-32 text-xs" value={spriteScale}
+            onChange={event => setSpriteScale(event.target.value as typeof spriteScale)}>
+            {SPRITE_SCALES.map(scale => <option key={scale.name} value={scale.name}>{scale.label.replace('Sprite · ', '')}</option>)}
+          </Select>
+          <MotionControl />
+          <Select aria-label="Inspect an agent" className="w-44 text-xs" value={selected ?? ''}
+            onChange={event => { if (event.target.value) selectAgent(event.target.value); else setSelected(null); }}>
+            <option value="">Inspect an agent…</option>
+            {visibleIds.map(id => <option key={id} value={id}>{office.agentOf[id]?.name}</option>)}
+          </Select>
+          <Select aria-label="Focus a room" className="w-44 text-xs" value={focusRoomId ?? ''}
+            onChange={event => {
+              const room = office.rooms.find(room => room.id === event.target.value);
+              if (room) focusRoom(room); else { setFocusRoomId(null); fit(); }
+            }}>
+            <option value="">Whole office</option>
+            {office.rooms.filter(room => room.kind !== 'bench').map(room => <option key={room.id} value={room.id}>
+              {room.name}{(pulse.rooms[room.id]?.producing ?? 0) > 0 ? ' · working' : ''}
+            </option>)}
+          </Select>
+        </div>
 
-        <span className="office-sep" />
+        <div className="office-group office-filters">
+          <Chip tone="muted" selected={showArchived} onClick={() => setShowArchived((v) => !v)}>
+            archived
+          </Chip>
+          <Chip
+            tone={attentionOnly ? 'danger' : 'muted'}
+            selected={attentionOnly}
+            onClick={() => setAttentionOnly((v) => !v)}
+          >
+            needs attention
+          </Chip>
+          <Chip tone={follow ? 'success' : 'muted'} selected={follow} onClick={() => setFollow((v) => !v)}>
+            follow live
+          </Chip>
+        </div>
 
-        <Select aria-label="Focus a room" className="w-44 text-xs" value={focusRoomId ?? ''}
-          onChange={event => {
-            const room = office.rooms.find(room => room.id === event.target.value);
-            if (room) focusRoom(room); else { setFocusRoomId(null); fit(); }
-          }}>
-          <option value="">Whole office</option>
-          {office.rooms.filter(room => room.kind !== 'bench').map(room => <option key={room.id} value={room.id}>
-            {room.name}{(pulse.rooms[room.id]?.producing ?? 0) > 0 ? ' · working' : ''}
-          </option>)}
-        </Select>
-
-        <span className="office-sep" />
-
-        <Chip tone="muted" selected={showArchived} onClick={() => setShowArchived((v) => !v)}>
-          archived
-        </Chip>
-        <Chip
-          tone={attentionOnly ? 'danger' : 'muted'}
-          selected={attentionOnly}
-          onClick={() => setAttentionOnly((v) => !v)}
-        >
-          needs attention
-        </Chip>
-        <Chip tone={follow ? 'success' : 'muted'} selected={follow} onClick={() => setFollow((v) => !v)}>
-          follow live
-        </Chip>
-
-        <span className="office-stat">
-          <b>{counts.agents}</b> seats · <b>{counts.working}</b> working · <b>{counts.thinking}</b> thinking
-          {shipped > 0 && (
-            <>
-              {' · '}
-              <b className="text-emerald-300">{shipped}</b> shipped
-            </>
-          )}
-          {counts.attention > 0 && (
-            <>
-              {' · '}
-              <b className="text-rose-300">{counts.attention}</b> need you
-            </>
-          )}
-        </span>
-
-        <div className="office-legend">
-          <span>
-            <i className="inline-block h-1.5 w-1.5 rounded-full bg-sky-400" /> working
+        <div className="office-statusbar">
+          <span className="office-stat office-summary">
+            <b>{counts.agents}</b> seats · <b>{counts.working}</b> working · <b>{counts.thinking}</b> thinking
+            {shipped > 0 && (
+              <>
+                {' · '}
+                <b className="text-emerald-300">{shipped}</b> shipped
+              </>
+            )}
+            {counts.attention > 0 && (
+              <>
+                {' · '}
+                <b className="text-rose-300">{counts.attention}</b> need you
+              </>
+            )}
           </span>
-          <span>
-            <i className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> done
-          </span>
-          <span>
-            <i className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400" /> needs you
-          </span>
+
+          <div className="office-legend">
+            <span>
+              <i className="inline-block h-1.5 w-1.5 rounded-full bg-sky-400" /> working
+            </span>
+            <span>
+              <i className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" /> done
+            </span>
+            <span>
+              <i className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400" /> needs you
+            </span>
+          </div>
         </div>
       </div>
 
@@ -827,8 +837,8 @@ export function OfficeFloor({ projectId }: { projectId: string; tabId: string })
           {MOCK_BEHIND && (
             <button
               type="button"
-              style={{ position: 'absolute', right: 12, bottom: 12, zIndex: 5, pointerEvents: 'auto', cursor: 'pointer' }}
-              className="office-hint"
+              style={{ position: 'absolute', left: 'auto', right: 12, top: 12, bottom: 'auto', zIndex: 5, pointerEvents: 'auto', cursor: 'pointer' }}
+              className="office-hint office-reset"
               title="Restart the mock's hiring clock and reload"
               onClick={() => {
                 void fetch(`${API_BASE}/api/dev/reset`, { method: 'POST' }).then(() => window.location.reload());

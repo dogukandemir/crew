@@ -201,13 +201,40 @@ export function Workstation({
   // from the art's DECLARED half-footprint while the art was drawn at two thirds of
   // it, so every desk sat 30 cm up and to the left of the bay it belonged to, and
   // the chair, which came from the bay, was no longer under it.
+  // A working monitor is the only light source on the floor besides the lamps.
+  // The pool under the desk and the halo at screen height are what make a typing
+  // agent read across the room without anybody labelling them.
+  const halo = project(x + DESK_W / 2, y + DESK_TOP_D / 2, mh(1.02));
+  const pool = project(x + DESK_W / 2, y + DESK_TOP_D / 2, 2);
   return (
     <g>
       <GroundShadow cx={x + DESK_W / 2} cy={y + DESK_TOP_D} r={DESK_W * 0.42} />
+      {busy && (
+        <ellipse
+          cx={pool.x}
+          cy={pool.y}
+          rx={86}
+          ry={42}
+          fill="url(#office-screen-glow)"
+          opacity={0.5}
+          style={{ mixBlendMode: 'screen' }}
+        />
+      )}
       {/* The chair's own sprite: the sim seats a body on it, so it has to be
           placeable on its own. It faces the desk, like every chair at a desk. */}
       <Chair at={seat} turned />
       <Sprite name={screen && busy ? 'prop.desk.busy' : 'prop.desk'} x={x} y={y} />
+      {busy && (
+        <ellipse
+          cx={halo.x}
+          cy={halo.y}
+          rx={54}
+          ry={30}
+          fill="url(#office-screen-glow)"
+          opacity={0.55}
+          style={{ mixBlendMode: 'screen' }}
+        />
+      )}
     </g>
   );
 }

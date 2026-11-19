@@ -11,9 +11,11 @@ import { MotionControl } from '../../app/MotionControl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as RPointerEvent, WheelEvent as RWheelEvent } from 'react';
 import type { Hq } from '../../api/types';
-import { fitCamera, floorRect, isoBounds, mh, project, type Camera } from '../office/iso';
-import { Box, MeetingTable, Plant, Workstation } from '../office/props';
+import { fitCamera, floorRect, isoBounds, mh, polyPoints, project, type Camera } from '../office/iso';
+import { Box, MeetingTable, Plant, Workstation, mix } from '../office/props';
 import { SpriteCharacter, type SpriteMotionRef } from '../sprites/SpriteCharacter';
+import { Sprite as AtlasSprite } from '../sprites/Sprite';
+import { scaleForWidth } from '../sprites/sprites';
 import { DESK_W } from '../../sim/floorplan';
 import {
   BOARD_TABLE,
@@ -22,6 +24,7 @@ import {
   buildHqWorld,
   type HqPerson,
   type HqPoint,
+  type HqRoom,
   type HqWorld,
 } from './hqScene';
 
@@ -70,7 +73,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
       const w = el.clientWidth || 900;
       const h = el.clientHeight || 560;
       setSize({ w, h });
-      const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), { w, h });
+      const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), { w, h }, { zoom: 1.12 });
       fitScaleRef.current = c.scale;
       const key = `${hq.company.id}:${w}:${h}`;
       if (fittedViewport.current !== key) {
@@ -84,7 +87,7 @@ export function HqFloor({ hq }: { hq: Hq }) {
   }, [world.w, world.h, hq.company.id]);
 
   const fitView = useCallback(() => {
-    const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), size);
+    const c = fitCamera(isoBounds(world.w, world.h, HEADROOM, 46), size, { zoom: 1.12 });
     fitScaleRef.current = c.scale;
     setCam(c);
     setZoomPct(100);
@@ -247,7 +250,10 @@ export function HqFloor({ hq }: { hq: Hq }) {
   //  14 screen px ÷ the camera zoom.)
   const boardTagDy = useMemo(() => {
     const dy = new Map<string, number>();
-    const step = 14 / cam.scale;
+    // 18 screen px per row clears a 10 pt tag at the label scale, and the stack
+    // goes UP (see Person), so the names sit above the board rather than across
+    // the table they are describing.
+    const step = 18 / cam.scale;
     world.people
       .filter((p) => p.kind === 'board')
       .sort((a, b) => a.home.x - b.home.x)
@@ -310,19 +316,43 @@ export function HqFloor({ hq }: { hq: Hq }) {
     >
       <svg width={size.w} height={size.h} viewBox={`0 0 ${size.w} ${size.h}`} role="img"
            aria-label={`${hq.company.name} headquarters`}>
+        <defs>
+          <radialGradient id="hq-warm" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#ffcf8f" stopOpacity="0.3" />
+            <stop offset="55%" stopColor="#ffb45e" stopOpacity="0.11" />
+            <stop offset="100%" stopColor="#ffb45e" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="hq-cool" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#9fd4ff" stopOpacity="0.26" />
+            <stop offset="60%" stopColor="#6fa6dd" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="#6fa6dd" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="hq-ambient" cx="50%" cy="26%" r="72%">
+            <stop offset="0%" stopColor="#243654" stopOpacity="0.8" />
+            <stop offset="55%" stopColor="#101827" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#05070c" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="hq-window" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#24466e" />
+            <stop offset="50%" stopColor="#3b7194" />
+            <stop offset="72%" stopColor="#2a4b68" />
+            <stop offset="100%" stopColor="#0f2034" />
+          </linearGradient>
+        </defs>
+        <rect x={0} y={0} width={size.w} height={size.h} fill="url(#hq-ambient)" pointerEvents="none" />
         <g ref={sceneRef} transform={`translate(${cam.x.toFixed(2)} ${cam.y.toFixed(2)}) scale(${cam.scale.toFixed(4)})`}>
-          <polygon points={floorRect(-260, -260, world.w + 520, world.h + 520)} fill="#0b0e14"
-                    stroke="#1b2130" strokeWidth={2} />
+          <polygon points={floorRect(-260, -260, world.w + 520, world.h + 520)} fill="#090d15"
+                    stroke="#25344c" strokeWidth={2} />
+          <polygon
+            points={floorRect(-260, -260, world.w + 520, world.h + 520)}
+            fill="none"
+            stroke="#324764"
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
 
           {world.rooms.map((r) => (
-            <g key={r.id}>
-              <Box x={r.x} y={r.y} w={r.w} d={r.d} h={mh(0.055)} color="#161d29" top="#1d2532" />
-              <polygon points={floorRect(r.x, r.y, r.w, r.d, mh(0.056))} fill="none"
-                       stroke={r.accent} strokeOpacity={0.85} strokeWidth={1.6} />
-              {r.kind !== 'board' && <Plant x={r.x + r.w - 22} y={r.y + r.d - 16} />}
-              <Plate at={{ x: r.x + r.w / 2, y: r.y + r.d + 4 }} w={r.kind === 'pod' ? 190 : 150}
-                     label={r.label} sub={r.sub} accent={r.accent} scale={labelScale} />
-            </g>
+            <HqRoomShell key={r.id} room={r} />
           ))}
 
           {/* the board table: the very chairs the model seats the board on */}
@@ -353,23 +383,271 @@ export function HqFloor({ hq }: { hq: Hq }) {
             />
           ))}
           </g>
+
+          {/* Room plates above the furniture and the cast: a label that a chair can
+              cover is not a label. Notes stay on their person. */}
+          <g pointerEvents="none">
+            {world.rooms.map((r) => (
+              <Plate
+                key={`plate-${r.id}`}
+                at={{ x: r.x + r.w / 2, y: r.y + r.d + 4 }}
+                w={r.kind === 'pod' ? 178 : r.kind === 'exec' ? 132 : 150}
+                label={r.label}
+                sub={r.sub}
+                accent={r.accent}
+                scale={labelScale}
+              />
+            ))}
+          </g>
         </g>
       </svg>
 
       {world.banner && (
-        <div className="pointer-events-none absolute left-3 top-3 max-w-[420px] rounded-md border border-slate-700 bg-slate-950/85 px-2.5 py-1.5 text-[11px] text-slate-200">
-          {world.banner}
+        <div className="pointer-events-none absolute left-3 top-3 flex max-w-[440px] items-start gap-2 rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2 text-[11px] leading-snug text-slate-200 shadow-lg backdrop-blur">
+          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+          <span>{world.banner}</span>
         </div>
       )}
 
-      <div className="absolute bottom-16 right-3 flex items-center gap-1 text-xs text-slate-400">
+      <div className="absolute bottom-16 right-3 flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 px-1.5 py-1 text-xs text-slate-400 shadow-lg backdrop-blur">
         <MotionControl />
-        <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1 / 1.25, size.w / 2, size.h / 2)} aria-label="Zoom out">−</button>
+        <button className="rounded border border-white/5 px-2 py-0.5 text-[11px] text-slate-300 hover:border-white/20 hover:bg-white/5" onClick={() => zoomAt(1 / 1.25, size.w / 2, size.h / 2)} aria-label="Zoom out">−</button>
         <span className="w-10 text-center tabular-nums">{zoomPct}%</span>
-        <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={() => zoomAt(1.25, size.w / 2, size.h / 2)} aria-label="Zoom in">＋</button>
-        <button className="rounded border border-slate-700 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500" onClick={fitView}>Fit</button>
+        <button className="rounded border border-white/5 px-2 py-0.5 text-[11px] text-slate-300 hover:border-white/20 hover:bg-white/5" onClick={() => zoomAt(1.25, size.w / 2, size.h / 2)} aria-label="Zoom in">＋</button>
+        <button className="rounded border border-white/5 px-2 py-0.5 text-[11px] text-slate-300 hover:border-white/20 hover:bg-white/5" onClick={fitView}>Fit</button>
       </div>
     </div>
+  );
+}
+
+/* ── Room dressing ─────────────────────────────────────────────────────────── */
+
+const HQ_WALL_T = 8;
+const HQ_WALL_H = mh(0.82);
+
+function hqWallX(x0: number, x1: number, y: number, z0: number, z1: number): string {
+  return polyPoints([
+    project(x0, y, z0),
+    project(x1, y, z0),
+    project(x1, y, z1),
+    project(x0, y, z1),
+  ]);
+}
+
+function hqWallY(x: number, y0: number, y1: number, z0: number, z1: number): string {
+  return polyPoints([
+    project(x, y0, z0),
+    project(x, y1, z0),
+    project(x, y1, z1),
+    project(x, y0, z1),
+  ]);
+}
+
+/** A window on the room's long wall, with a city at night behind it. */
+function HqWindow({ room }: { room: HqRoom }) {
+  const y = room.y + HQ_WALL_T + 0.4;
+  const x0 = room.x + room.w * 0.58;
+  const x1 = room.x + room.w * 0.93;
+  const z0 = mh(0.27);
+  const z1 = mh(0.7);
+  const inner = { x0: x0 + mh(0.03), x1: x1 - mh(0.03), z0: z0 + mh(0.025), z1: z1 - mh(0.025) };
+  const midX = (inner.x0 + inner.x1) / 2;
+  const midZ = (inner.z0 + inner.z1) / 2;
+  const moon = project(inner.x1 - mh(0.1), y, inner.z1 - mh(0.08));
+  return (
+    <g>
+      <polygon points={hqWallX(x0, x1, y, z0, z1)} fill="#0a0f18" />
+      <polygon points={hqWallX(inner.x0, inner.x1, y, inner.z0, inner.z1)} fill="url(#hq-window)" />
+      <circle cx={moon.x} cy={moon.y} r={mh(0.045)} fill="#f4ebd0" opacity={0.9} />
+      <polygon
+        points={hqWallX(midX - 1.5, midX + 1.5, y, inner.z0, inner.z1)}
+        fill="#0a0f18"
+        opacity={0.85}
+      />
+      <polygon
+        points={hqWallX(inner.x0, inner.x1, y, midZ - 1.2, midZ + 1.2)}
+        fill="#0a0f18"
+        opacity={0.85}
+      />
+      <polygon
+        points={hqWallX(x0 - 2, x1 + 2, y, z0 - mh(0.03), z0)}
+        fill={mix('#3a4964', room.accent, 0.35)}
+      />
+    </g>
+  );
+}
+
+/** A print on the room's side wall. */
+function HqArt({ room }: { room: HqRoom }) {
+  const x = room.x + HQ_WALL_T + 0.4;
+  const y0 = room.y + room.d * 0.42;
+  const y1 = y0 + mh(0.72);
+  const z0 = mh(0.38);
+  const z1 = mh(0.68);
+  return (
+    <g>
+      <polygon points={hqWallY(x, y0, y1, z0, z1)} fill="#0a0f17" />
+      <polygon
+        points={hqWallY(x, y0 + mh(0.03), y1 - mh(0.03), z0 + mh(0.03), z1 - mh(0.03))}
+        fill={mix('#20334a', room.accent, 0.3)}
+      />
+      <polygon
+        points={hqWallY(x, y0 + mh(0.03), y1 - mh(0.03), z0 + mh(0.03), z0 + (z1 - z0) * 0.45)}
+        fill={mix('#8d5a3c', room.accent, 0.3)}
+      />
+    </g>
+  );
+}
+
+/** A rug, sized to the room, in the room's own accent. */
+function HqRug({ room }: { room: HqRoom }) {
+  const centre = project(room.x + room.w / 2, room.y + room.d / 2, mh(0.06));
+  if (room.kind === 'board') {
+    return (
+      <g>
+        <ellipse cx={centre.x} cy={centre.y} rx={room.w * 0.34} ry={room.w * 0.17} fill={mix('#3b2a42', room.accent, 0.35)} />
+        <ellipse cx={centre.x} cy={centre.y} rx={room.w * 0.3} ry={room.w * 0.15} fill="none" stroke="#b98a52" strokeWidth={1.4} opacity={0.6} />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <polygon
+        points={floorRect(room.x + room.w * 0.18, room.y + room.d * 0.2, room.w * 0.64, room.d * 0.56, mh(0.06))}
+        fill={mix('#1e2839', room.accent, 0.38)}
+        opacity={0.75}
+      />
+      <polygon
+        points={floorRect(room.x + room.w * 0.19, room.y + room.d * 0.22, room.w * 0.62, room.d * 0.52, mh(0.06))}
+        fill="none"
+        stroke={room.accent}
+        strokeWidth={1.1}
+        opacity={0.55}
+      />
+    </g>
+  );
+}
+
+/**
+ * One room on the HQ plate.
+ *
+ * The floor is the same idea as the office: a tinted slab, a lit pool, a low wall
+ * with a window, and enough furniture that an executive office reads as a place
+ * and a pod reads as a pod rather than a rectangle with a desk.
+ */
+function HqRoomShell({ room }: { room: HqRoom }) {
+  const wall = mix('#3a4964', room.accent, 0.34);
+  const centre = project(room.x + room.w / 2, room.y + room.d / 2, mh(0.08));
+  const warm = 'url(#hq-warm)';
+  const door = { x: room.x + room.w / 2, y: room.y + room.d };
+  const isPod = room.kind === 'pod';
+  const isExec = room.kind === 'exec';
+
+  return (
+    <g>
+      {/* The raised floor slab, its light pool and its rug. */}
+      <Box x={room.x} y={room.y} w={room.w} d={room.d} h={mh(0.055)} color="#1a2331" top={mix('#202c3e', room.accent, 0.16)} />
+      <polygon
+        points={floorRect(room.x + 4, room.y + 4, room.w - 8, room.d - 8, mh(0.058))}
+        fill={room.accent}
+        opacity={0.1}
+      />
+      <ellipse
+        cx={centre.x}
+        cy={centre.y}
+        rx={room.w * 0.55}
+        ry={room.d * 0.42}
+        fill={warm}
+        opacity={0.8}
+        style={{ mixBlendMode: 'screen' }}
+      />
+      <HqRug room={room} />
+      <polygon
+        points={floorRect(room.x + 5, room.y + 5, room.w - 10, room.d - 10, mh(0.059))}
+        fill="none"
+        stroke={room.accent}
+        strokeOpacity={0.7}
+        strokeWidth={1.4}
+      />
+
+      {/* Low walls on the far edges, with a window and a print. */}
+      <Box x={room.x} y={room.y} w={room.w} d={HQ_WALL_T} h={HQ_WALL_H} color={mix('#243146', wall, 0.4)} top={mix('#4a5d7a', room.accent, 0.3)} />
+      <Box x={room.x} y={room.y} w={HQ_WALL_T} d={room.d} h={HQ_WALL_H} color={mix('#1e2a3e', wall, 0.4)} top={mix('#41546f', room.accent, 0.3)} />
+      <polygon
+        points={hqWallX(room.x, room.x + room.w, room.y + HQ_WALL_T + 0.4, 0, mh(0.06))}
+        fill="#090e16"
+        opacity={0.85}
+      />
+      <polygon
+        points={hqWallY(room.x + HQ_WALL_T + 0.4, room.y, room.y + room.d, 0, mh(0.06))}
+        fill="#090e16"
+        opacity={0.85}
+      />
+      <HqWindow room={room} />
+      <HqArt room={room} />
+
+      {/* The door threshold and its light. */}
+      <polygon
+        points={floorRect(door.x - 26, door.y - 8, 52, 16, mh(0.06))}
+        fill="#0b1119"
+        stroke={room.accent}
+        strokeWidth={1}
+        opacity={0.9}
+      />
+      <ellipse
+        cx={project(door.x, door.y, mh(0.06)).x}
+        cy={project(door.x, door.y, mh(0.06)).y}
+        rx={40}
+        ry={18}
+        fill={warm}
+        opacity={0.5}
+        style={{ mixBlendMode: 'screen' }}
+      />
+
+      {/* Dressing. One plant stays on the corner; the shelf and lamp are what make
+          the office read as owned rather than assigned. */}
+      {room.kind !== 'board' && <Plant x={room.x + room.w - 22} y={room.y + room.d - 16} />}
+      <AtlasSprite
+        name="prop.bookshelf"
+        x={room.x + 26}
+        y={room.y + HQ_WALL_T + 2}
+        scale={scaleForWidth('prop.bookshelf', isPod ? 100 : 82)}
+      />
+      <g>
+        <ellipse
+          cx={project(room.x + 30, room.y + room.d - 30, 2).x}
+          cy={project(room.x + 30, room.y + room.d - 30, 2).y}
+          rx={62}
+          ry={30}
+          fill={warm}
+          opacity={0.55}
+          style={{ mixBlendMode: 'screen' }}
+        />
+        <AtlasSprite name="prop.floorlamp" x={room.x + 30} y={room.y + room.d - 30} />
+      </g>
+      {isPod && (
+        <g>
+          <AtlasSprite
+            name="prop.sofa"
+            x={room.x + room.w - 185}
+            y={room.y + HQ_WALL_T + 2}
+          />
+          <AtlasSprite
+            name="prop.coffeetable"
+            x={room.x + room.w - 160}
+            y={room.y + HQ_WALL_T + 92}
+          />
+        </g>
+      )}
+      {isExec && (
+        <AtlasSprite
+          name="prop.cabinet"
+          x={room.x + room.w - 74}
+          y={room.y + HQ_WALL_T + 2}
+          scale={scaleForWidth('prop.cabinet', 62)}
+        />
+      )}
+    </g>
   );
 }
 
@@ -410,11 +688,14 @@ function Person({
                          motion={walker.motion} faded={offFloor} />
       </g>
       {showTag && (
-        <g transform={`translate(0 ${-62 + tagDy}) scale(${scale.toFixed(3)})`}>
+        <g transform={`translate(0 ${-62 - tagDy}) scale(${scale.toFixed(3)})`}>
           <text y={0} textAnchor="middle" fontSize={10} fill="#9db0c8">{person.name}</text>
         </g>
       )}
-      {staged && note && (
+      {/* A note rides on a WALKER, which is what the scene's contract says it is.
+          Sitting board members carried the same sentence each, so six identical
+          bubbles stacked over the board table and hid the room they were about. */}
+      {staged && note && walker.moving && (
         <g transform={`translate(0 -84) scale(${scale.toFixed(3)})`} pointerEvents="none">
           <rect x={-noteWidth(note) / 2} y={-12} width={noteWidth(note)} height={17} rx={5}
                 fill="#0d1119" stroke="#2c3547" strokeOpacity={0.9} />
@@ -441,13 +722,13 @@ function Plate({
   scale: number;
 }) {
   const p = project(at.x, at.y);
-  const h = 32;
+  const h = 28;
   return (
     <g transform={`translate(${(p.x - w / 2).toFixed(1)} ${(p.y - h).toFixed(1)}) scale(${scale.toFixed(3)})`}>
-      <rect width={w} height={h} rx={4} fill="#10141c" stroke="#2e3849" />
-      <rect width={5} height={h} rx={2} fill={accent} />
-      <text x={12} y={13} fontSize={10.5} fill="#dbe4ef">{clip(label, 28)}</text>
-      <text x={12} y={26} fontSize={9} fill="#8296ae">{clip(sub, 44)}</text>
+      <rect width={w} height={h} rx={4} fill="#0e131c" stroke="#2e3849" />
+      <rect width={4} height={h} rx={2} fill={accent} />
+      <text x={10} y={11.5} fontSize={10} fill="#dbe4ef">{clip(label, 24)}</text>
+      <text x={10} y={22.5} fontSize={8.5} fill="#8296ae">{clip(sub, 38)}</text>
     </g>
   );
 }

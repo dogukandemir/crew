@@ -46,6 +46,19 @@ const USED = [
   'prop.centrifuge',
   'prop.stool',
   'prop.bottleshelf',
+  // The room dressing the office and the HQ floor both draw: without these in the
+  // list, a regenerated atlas could drop a sofa or a lamp and every renderer would
+  // silently draw nothing there.
+  'prop.bookshelf',
+  'prop.floorlamp',
+  'prop.fridge',
+  'prop.server',
+  'prop.sofa',
+  'prop.coffeetable',
+  'prop.plant.tall',
+  'prop.rug.warm',
+  'prop.rug.cool',
+  'prop.rug.round',
 ];
 
 describe('the sprite atlas', () => {

@@ -31,16 +31,56 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--office-line);
-  background: linear-gradient(180deg, #191e27, #141821);
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 70%),
+    linear-gradient(180deg, #1a202b, #12161e);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 .office-toolbar button.office-toolbar select { min-height: 32px; }
 @media (max-width: 639px) {
-  .office-toolbar { gap: 4px; padding: 6px; }
-  .office-toolbar .office-sep.office-legend.office-hint { display: none; }
-  .office-toolbar .office-stat { font-size: 12px; }
+  .office-toolbar { gap: 6px; padding: 6px; }
+  .office-brand,
+  .office-legend { display: none; }
+  .office-stat { font-size: 12px; }
+  .office-group { padding: 2px 4px; }
+}
+.office-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #aebbd0;
+  white-space: nowrap;
+}
+.office-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 9px rgba(52, 211, 153, 0.85);
+  animation: live-pulse 2.6s ease-in-out infinite;
+}
+.office-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.022);
+}
+.office-selects { gap: 5px; }
+.office-toolbar .office-selects select {
+  width: auto;
+  min-width: 116px;
+  max-width: 220px;
 }
 .office-sep {
   width: 1px;
@@ -48,6 +88,17 @@
   margin: 0 4px;
   background: var(--office-line);
 }
+.office-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-basis: 100%;
+  min-height: 18px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+.office-statusbar .office-summary { margin-left: 0; }
+.office-statusbar .office-legend { margin-left: auto; }
 .office-stat {
   font-size: 11px;
   color: var(--office-muted);
@@ -57,18 +108,29 @@
   color: var(--office-ink);
   font-weight: 600;
 }
+.office-summary {
+  margin-left: auto;
+  white-space: nowrap;
+}
 .office-legend {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-left: auto;
+  gap: 6px;
   font-size: 10px;
   color: var(--office-muted);
 }
 .office-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 /* ── Canvas ──────────────────────────────────────────────────────────────── */
@@ -79,7 +141,9 @@
   min-height: 0;
   overflow: hidden;
   cursor: grab;
-  background: radial-gradient(120% 100% at 50% 0%, #131924 0%, var(--office-void) 68%);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #22314c 0%, #111a28 42%, #080b12 78%, #05070b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   outline: none;
   touch-action: none;
 }
@@ -125,11 +189,11 @@
    the fitted zoom, the tag is drawn in world units, so it shrinks with the floor. */
 .office-scene .sprite-tag {
   fill: #eef2f8;
-  font-size: 16px;
+  font-size: 13.5px;
   font-weight: 700;
   paint-order: stroke;
   stroke: rgba(6, 9, 14, 0.92);
-  stroke-width: 3.5px;
+  stroke-width: 3px;
   stroke-linejoin: round;
   pointer-events: none;
 }
@@ -189,22 +253,37 @@
 
 /* ── Overlays ────────────────────────────────────────────────────────────── */
 
+.office-reset {
+  font: inherit;
+  color: #a9b8cf;
+  cursor: pointer;
+}
+.office-reset:hover {
+  background: rgba(25, 36, 54, 0.9);
+  border-color: rgba(255, 255, 255, 0.16);
+}
 .office-hint {
   position: absolute;
-  left: 10px;
-  bottom: 8px;
-  font-size: 10px;
-  color: var(--office-muted);
-  background: rgba(10, 13, 19, 0.86);
-  border: 1px solid var(--office-line);
-  border-radius: 6px;
-  padding: 3px 7px;
+  left: 12px;
+  bottom: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  color: #9aa9c0;
+  background: rgba(8, 12, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  padding: 5px 9px;
+  backdrop-filter: blur(6px);
   pointer-events: none;
 }
 .office-hint kbd {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--office-ink);
+  color: #e8eef8;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0 3px;
 }
 
 .office-overlay {

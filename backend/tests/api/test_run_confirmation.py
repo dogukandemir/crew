@@ -24,7 +24,7 @@ async def client():
         yield c
 
 
-async def _wait_status(client, run_id: str, statuses: set[str], turns: int = 80) -> str:
+async def _wait_status(client, run_id: str, statuses: set[str], turns: int = 240) -> str:
     status = ""
     for _ in range(turns):
         await asyncio.sleep(0.25)
@@ -34,18 +34,32 @@ async def _wait_status(client, run_id: str, statuses: set[str], turns: int = 80)
     return status
 
 
-async def _project_with_confirmation(client, name: str) -> str:
-    r = await client.post("/api/projects", json={"name": name, "goal": "confirm the gate", "budget_usd": 3.0})
+@pytest.fixture
+async def confirmation_project(client):
+    """A project waiting at the confirmation gate, cleaned up even on failure.
+
+    Windows is slow enough that the old 20-second poll timed out and left a
+    running run behind, which then interfered with unrelated lifecycle tests.
+    The teardown is the guarantee, not the timeout.
+    """
+    r = await client.post("/api/projects",
+                          json={"name": "Confirmation project", "goal": "confirm the gate", "budget_usd": 3.0})
     assert r.status_code == 201, r.text
     project_id = r.json()["id"]
     r = await client.patch(f"/api/projects/{project_id}",
                            json={"settings": {"require_goal_confirmation": True}})
     assert r.status_code == 200, r.text
-    return project_id
+    try:
+        yield project_id
+    finally:
+        runs = (await client.get(f"/api/projects/{project_id}/runs")).json()["items"]
+        for run in runs:
+            if run["status"] not in ("completed", "failed", "aborted"):
+                await client.post(f"/api/runs/{run['id']}/cancel")
 
 
-async def test_confirmation_is_asked_once_and_the_run_continues(client):
-    project_id = await _project_with_confirmation(client, "Confirmation continues")
+async def test_confirmation_is_asked_once_and_the_run_continues(client, confirmation_project):
+    project_id = confirmation_project
     r = await client.post(f"/api/projects/{project_id}/runs",
                           json={"goal": "confirm the gate", "mode": "autonomous"})
     assert r.status_code == 202, r.text
@@ -71,8 +85,8 @@ async def test_confirmation_is_asked_once_and_the_run_continues(client):
     assert "run.confirmation.answered" in types
 
 
-async def test_rejecting_the_confirmation_aborts_the_run(client):
-    project_id = await _project_with_confirmation(client, "Confirmation rejected")
+async def test_rejecting_the_confirmation_aborts_the_run(client, confirmation_project):
+    project_id = confirmation_project
     r = await client.post(f"/api/projects/{project_id}/runs",
                           json={"goal": "reject the gate", "mode": "autonomous"})
     assert r.status_code == 202, r.text

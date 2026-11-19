@@ -49,9 +49,10 @@ jobs:
         uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ${{ matrix.language }}
-          # security-and-quality is the broader query suite: correctness and
-          # maintainability findings as well as the default security set.
-          queries: security-and-quality
+          # Security queries only. ruff and tsc already own style and correctness;
+          # the quality suite (cyclic imports, unused variables, empty excepts)
+          # filled the security tab without finding anything the linters miss.
+          queries: security-extended
       - name: Analyze
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:

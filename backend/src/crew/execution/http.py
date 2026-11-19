@@ -27,7 +27,11 @@ class PinnedConnection(http.client.HTTPConnection):
         # Do not resolve the hostname a second time between validation and connection.
         self.sock = socket.create_connection((self.address, self.port), self.timeout)
         if self.secure:
-            self.sock = ssl.create_default_context().wrap_socket(self.sock, server_hostname=self.host)
+            # create_default_context() already starts at TLS 1.2 on Python 3.13;
+            # state the floor explicitly so a later edit cannot quietly lower it.
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            self.sock = context.wrap_socket(self.sock, server_hostname=self.host)
 
 
 def fetch_public(url: str, project=None, *, form: dict[str, str] | None = None,

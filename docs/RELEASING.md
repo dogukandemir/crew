@@ -46,15 +46,21 @@ One version number lives in three places and must agree everywhere:
 ## The first public release (one-time flip)
 
 These steps only work after the repository is public; private repositories answer 404 for the
-three security settings and skip the Pages workflow.
+security settings and skip the Pages, CodeQL and Scorecard workflows.
 
 ```sh
 gh repo edit dogukandemir/crew --visibility public --accept-visibility-change-consequences
-gh workflow run pages.yml
 gh api -X PUT repos/dogukandemir/crew/private-vulnerability-reporting
-gh api -X PATCH repos/dogukandemir/crew/code-scanning/default-setup -f state=configured
 gh api -X PUT repos/dogukandemir/crew/automated-security-fixes
+gh workflow run codeql.yml
+gh workflow run scorecard.yml
+gh workflow run pages.yml
 ```
+
+Code scanning uses the committed `codeql.yml` workflow (advanced setup). Do **not**
+enable GitHub's default setup as well: GitHub refuses both at once. Secret scanning
+and push protection are repository settings rather than files; turn them on under
+Settings → Code security (or `PATCH security_and_analysis`).
 
 Then, still outside the API:
 

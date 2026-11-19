@@ -1,4 +1,4 @@
-FROM node:26-slim AS build
+FROM node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -6,7 +6,7 @@ COPY . .
 ARG VITE_API_BASE=http://127.0.0.1:8787
 ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
-FROM nginx:1.30-alpine
+FROM nginx:1.30-alpine@sha256:3bc3836dc0be3b811f238210360bf8e7ca8a2d0effdae46160bf1f3578710051
 # Non-root at runtime with the same numeric identity the other Crew images use.
 # nginx needs a writable pid and temp paths, so the main config moves them under
 # /tmp; the server block in conf.d is unchanged and listens on 5173.

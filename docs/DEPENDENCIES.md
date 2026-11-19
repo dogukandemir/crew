@@ -43,6 +43,28 @@ A routine bump cannot fix it: the lock resolves CrewAI 1.15.27, which declares `
 
 **Reviewed exception (recorded 16 October 2026; same mechanism as the Chroma exception, maintainer sign-off requested on the record).** The dependency workflow excepts the advisory by ID (`--ignore-vuln CVE-2026-59951`) in the gated audit step, which still fails on every other finding, and the guard step fails the job the moment the locked inventory no longer pins `mcp==1.28.1`, so the exception cannot outlive the version it was reviewed against. The raw, unfiltered scan still preserves the finding (`pip-audit-raw.json` beside `pip-audit.json`). Resolution: check CrewAI's `mcp` cap on every upgrade; when it admits `>=1.30.0`, adopt it and delete this exception together with the ignore flag and the guard line.
 
+## Full refresh (19 November 2026)
+
+Every declared dependency was updated to its current release and the tree was
+re-verified. Backend: fastapi 0.165.0, starlette 1.10.0, sqlalchemy 2.1.9,
+pydantic-settings 2.16.3, pytest 9.2.0, pytest-asyncio 1.5.0, ruff 0.17.5,
+python-dateutil 4.0.0 (transitive, major), while crewai stays 1.15.43 (the
+newest release) and the mcp/pillow/certifi versions resolved in the previous
+refresh stand. Frontend: @xyflow/react 13.0.2, jsdom 31.0.1, react/react-dom
+19.3.1, vite 8.3.8, vitest 5.1.1, recharts 3.11.0, zustand 5.1.0, tailwindcss
+4.3.5, @tanstack/react-query 5.108.0, @vitejs/plugin-react 6.3.0. Docker: the
+uv tool image moves to 0.13.9; the python, docker, node and nginx base-image
+digests were re-resolved and are current.
+
+Two API changes needed code or attention: CrewAI 1.15.43 removed chromadb from
+the runtime inventory and lifted its mcp cap (recorded above), and
+@xyflow/react 13 removed the `colorMode` prop. The org chart no longer passes
+it; `src/index.css` already themes the React Flow controls, so the rendered
+chrome is unchanged. Verified with the full gates: backend 433 passed, 1
+skipped, live deselected, ruff clean; frontend 360 tests, `tsc --noEmit` and
+`vite build` clean; `pip-audit` and `npm audit --audit-level=high` report zero
+findings.
+
 ## Repeatable checks
 
 Frontend: `npm ci` then `npm audit --audit-level=high`.

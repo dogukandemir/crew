@@ -112,7 +112,6 @@ export function OrgPanel({ projectId, tabId }: { projectId: string; tabId: strin
           onNodeClick={onNodeClick}
           fitView
           minZoom={0.15}
-          colorMode="dark"
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}

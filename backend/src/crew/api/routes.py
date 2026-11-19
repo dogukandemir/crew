@@ -1002,7 +1002,7 @@ async def _drive(project_id: str, run_id: str) -> None:
     except Exception as e:  # a run failure must be visible, not silent
         import logging
 
-        logging.getLogger("crew.api").exception("run %s failed", run_id)
+        logging.getLogger("crew.api").exception("run %r failed", run_id)
         await orchestrator._set_run(run_id, status="failed", stage="DONE", error=str(e)[:500])
         await ev.emit("run.failed", project_id=project_id, run_id=run_id, severity="error",
                       title="run failed with an internal error", summary=str(e)[:300],

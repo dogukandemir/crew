@@ -190,7 +190,7 @@ async def save_provider_key(provider: str, key: str, actor: str = "user") -> dic
         os.environ[env_var] = key          # CrewAI / LiteLLM read the env at call time
         setattr(settings, field, key)      # and our own routing sees it immediately
         tiers = apply_presets(provider)
-    log.info("provider configured and active: %s", provider)
+    log.info("provider configured and active: %r", provider)
     return {"provider": provider, "verified": ok, "detail": detail, "tiers": tiers}
 
 

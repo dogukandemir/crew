@@ -165,7 +165,8 @@ async def project_socket(websocket: WebSocket, project_id: str) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as e:  # pragma: no cover - socket robustness
-        log.warning("socket error for %s: %s", project_id, e)
+        # %r escapes newlines, so a crafted project id cannot forge a log line.
+        log.warning("socket error for %r: %s", project_id, e)
     finally:
         await ev.bus.unsubscribe(project_id, queue)
         with contextlib.suppress(Exception):

@@ -3,6 +3,8 @@
 Give a company a goal. Watch its agents organize, use tools, produce files, and ask for approvals in an animated office.
 
 [![CI](https://github.com/dogukandemir/crew/actions/workflows/ci.yml/badge.svg)](https://github.com/dogukandemir/crew/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/dogukandemir/crew/actions/workflows/codeql.yml/badge.svg)](https://github.com/dogukandemir/crew/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/dogukandemir/crew/badge)](https://securityscorecards.dev/viewer/?uri=github.com/dogukandemir/crew)
 [![License: MIT](https://img.shields.io/badge/License-MIT-3da639.svg)](LICENSE)
 
 **Experimental, local-first software.** Crew combines a game-like interface with a real [CrewAI](https://github.com/crewAIInc/crewAI) execution harness. It is for developers and builders exploring supervised agent companies. Agent output still needs human review. It is not a hosted multi-tenant service or a guarantee of autonomous business success.

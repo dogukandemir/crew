@@ -1,0 +1,130 @@
+name: Release
+
+# A tag is a promise: the tree it points at passed the same gates as main and the
+# three version sources agree with its name. Nothing is published otherwise.
+#
+#   git tag -a vX.Y.Z -m "Crew vX.Y.Z"
+#   git push origin vX.Y.Z
+#
+# The notes come from the matching `## vX.Y.Z` section of CHANGELOG.md, so the
+# changelog and the release page carry the same facts.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the tagged tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: The tag and the three version sources agree
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, pathlib, re, sys
+          tag = os.environ["TAG"].removeprefix("v")
+          pyproject = __import__("tomllib").loads(
+              pathlib.Path("backend/pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          init = pathlib.Path("backend/src/crew/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'__version__\s*=\s*"([^"]+)"', init)
+          if not match:
+              sys.exit("backend/src/crew/__init__.py has no __version__")
+          frontend = json.loads(pathlib.Path("frontend/package.json").read_text(encoding="utf-8"))["version"]
+          sources = {"pyproject.toml": pyproject, "__init__.py": match.group(1), "package.json": frontend}
+          wrong = {name: value for name, value in sources.items() if value != tag}
+          if wrong:
+              sys.exit(f"tag v{tag} disagrees with {wrong}")
+          print(f"v{tag} matches {', '.join(sources)}")
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend gate
+        working-directory: frontend
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+          npm run build
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: '0.13.0'
+          enable-cache: true
+
+      - name: Backend gate
+        working-directory: backend
+        run: |
+          uv python install 3.13
+          uv sync --frozen --python 3.13
+          uv run ruff check .
+          uv run pytest
+
+      - name: The Compose files render
+        run: |
+          docker compose config --quiet
+          CREW_JWT_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(48))") \
+          CREW_CORS_ORIGINS=https://crew.example.com \
+          CREW_PUBLIC_ORIGIN=https://crew.example.com \
+          docker compose -f docker-compose.prod.yml config --quiet
+
+  publish:
+    name: Publish the release
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Extract the changelog section for this tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, re, sys
+          tag = os.environ["TAG"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          heading = re.search(rf"^##\s+{re.escape(tag)}(?:\s|$)", text, re.MULTILINE)
+          if not heading:
+              sys.exit(f"CHANGELOG.md has no '## {tag}' section; add it before tagging")
+          rest = text[heading.end():]
+          following = re.search(r"^##\s+", rest, re.MULTILINE)
+          body = rest[:following.start()] if following else rest
+          pathlib.Path("release-notes.md").write_text(body.strip() + "\n", encoding="utf-8")
+          PY
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md

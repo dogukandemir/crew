@@ -31,9 +31,12 @@ One version number lives in three places and must agree everywhere:
    ```sh
    git tag -a vX.Y.Z -m "Crew vX.Y.Z"
    git push origin vX.Y.Z
-   gh release create vX.Y.Z --title "vX.Y.Z — <one line>" --notes-file <notes>
    ```
-   Take the notes from the CHANGELOG section; they are the same facts in two places on purpose.
+   The `Release` workflow verifies that the tag matches all three version sources, reruns
+   both gates and the Compose render, extracts the matching CHANGELOG section and creates
+   the GitHub Release with it. Do not run `gh release create` by hand: a release the
+   workflow did not verify is a claim without evidence. If verification fails, fix the
+   cause, delete the pushed tag (`git push origin :vX.Y.Z`), and tag the corrected commit.
    Re-derive the counts quoted in SUPPORT-MATRIX and README from the suite itself
    (`uv run pytest --collect-only`, `npx vitest run`) — a number is true for one commit only.
 6. **Post-release:** the Pages site under `site/` deploys on the next push that touches it. If the

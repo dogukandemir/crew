@@ -21,13 +21,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 26
       # setup-uv stopped publishing floating major tags after v5 (only exact x.y.z since
-      # v6), `@v10` does not resolve on a runner. Pin the exact release.
-      - uses: astral-sh/setup-uv@v10.3.0
+      # v6), `@v10` does not resolve on a runner. The action is pinned by commit SHA;
+      # the tool version it installs is pinned separately.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: '0.13.0'
       - name: Frontend audit
@@ -37,42 +40,23 @@ jobs:
         if: always()
         working-directory: backend
         run: uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file requirements-audit.txt
-      # Reviewed, version-bounded exception (docs/DEPENDENCIES.md §Outstanding Chroma
-      # advisories). CrewAI imports Chroma eagerly, `crewai.agent.core` →
-      # `rag.embeddings.providers.openai.openai_provider` → `chromadb.utils…`, so the
-      # package cannot be removed, and all four advisories are still unpatched upstream.
-      # They are excepted BY ID, on the record: anything else still fails this gate, and
-      # the guard below expires the exception the moment the pinned Chroma moves.
-      # A second reviewed, version-bounded exception covers CVE-2026-59951 in mcp
-      # (docs/DEPENDENCIES.md §Outstanding mcp advisory): CrewAI pins `mcp~=1.28.1`
-      # (still true on 1.15.28, checked 16 October 2026), the fixed line starts at
-      # 1.30.0, and no app code imports or serves mcp, the advisory needs an MCP
-      # streamable-HTTP server reachable by untrusted callers, which Crew never starts.
-      - name: Known-advisory exception is still current
-        if: always()
-        working-directory: backend
-        run: |
-          grep -q '^chromadb==1.5.9' requirements-audit.txt || {
-            echo "::error::chromadb is no longer pinned at 1.5.9, re-review the four Chroma advisories in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
-          grep -q '^mcp==1.28.1' requirements-audit.txt || {
-            echo "::error::mcp is no longer pinned at 1.28.1, re-review CVE-2026-59951 in docs/DEPENDENCIES.md, then update or delete this exception"; exit 1; }
+      # No advisory exceptions are applied. CrewAI 1.15.43 removed the chromadb
+      # dependency and lifted its mcp cap to >=1.30.0, so the exported inventory no
+      # longer contains either previously excepted package. The history and the
+      # 19 November 2026 re-scan are recorded in docs/DEPENDENCIES.md; a new finding
+      # fails this gate and is reviewed on its merits rather than ignored.
       - name: Backend audit, raw record (evidence; never fails the gate)
         if: always()
         continue-on-error: true
         working-directory: backend
         run: uvx pip-audit==2.10.1 --disable-pip --require-hashes -r requirements-audit.txt --format json --output pip-audit-raw.json
-      - name: Backend audit (four Chroma and one mcp advisories excepted, listed by ID)
+      - name: Backend audit (fails on any finding)
         if: always()
         working-directory: backend
-        run: >
-          uvx pip-audit==2.10.1 --disable-pip --require-hashes -r requirements-audit.txt
-          --format json --output pip-audit.json
-          --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813
-          --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
-          --ignore-vuln CVE-2026-59951
+        run: uvx pip-audit==2.10.1 --disable-pip --require-hashes -r requirements-audit.txt --format json --output pip-audit.json
       - name: Preserve audit evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dependency-security-reports
           path: |

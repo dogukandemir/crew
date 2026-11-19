@@ -5,25 +5,28 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # Routine bumps arrive as one reviewable PR; a major version still gets its
+      # own, because that is where behaviour changes.
+      frontend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
   - package-ecosystem: uv
     directory: /backend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    ignore:
-      # Two advisories cannot be fixed today and are documented as exceptions, with their
-      # CVE IDs, in docs/DEPENDENCIES.md and enforced by a pin check in
-      # .github/workflows/security.yml. Verified 17 October 2026: chromadb 1.5.9 is the
-      # newest release on PyPI, so no fixed version exists for its four code-injection
-      # advisories; and Dependabot's own resolution for mcp fails because crewai caps it
-      # below 1.29 while the advisory range sits inside that cap. Remove the relevant ignore
-      # the day a compatible fixed release exists, together with the CI exception.
-      - dependency-name: chromadb
-      - dependency-name: mcp
+    groups:
+      backend-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directories: [/backend, /frontend]
     schedule:

@@ -1,0 +1,58 @@
+name: CodeQL
+
+# Static analysis for the two languages the application ships: Python (backend,
+# sandbox broker) and TypeScript/JavaScript (React control room, site scripts).
+#
+# Code scanning is free for public repositories and needs GitHub Advanced Security
+# on a private one. The job is therefore gated on visibility, the same way Pages
+# is: while this repository is private the workflow reports skipped and pushes stay
+# green, and the first push after it goes public scans the tree.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # A weekly baseline catches a newly published query even in a quiet week.
+    - cron: '41 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    if: github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality is the broader query suite: correctness and
+          # maintainability findings as well as the default security set.
+          queries: security-and-quality
+      - name: Analyze
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

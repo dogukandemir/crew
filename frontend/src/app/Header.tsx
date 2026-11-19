@@ -56,7 +56,7 @@ function ConnectionIndicator() {
       </Badge>
       {!scenario && <ProviderStatus state={onboarding.data} unavailable={onboarding.isError} />}
       {total > 0 && (
-        <span className="text-slate-500" title="open project tabs with a live stream">
+        <span className="text-slate-400" title="open project tabs with a live stream">
           {live}/{total}
         </span>
       )}
@@ -89,8 +89,8 @@ function GlobalBudgetMeter() {
         />
       </div>
       <span className="text-[11px] tabular-nums text-slate-400">
-        <span className="text-slate-600">all projects · </span>
-        {formatMicros(spend)} <span className="text-slate-600">/ {formatMicros(cap)}</span> · {formatPercent(fraction)}
+        <span className="text-slate-400">all projects · </span>
+        {formatMicros(spend)} <span className="text-slate-400">/ {formatMicros(cap)}</span> · {formatPercent(fraction)}
       </span>
     </div>
   );
@@ -200,7 +200,7 @@ export function Header() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/60 bg-slate-950/80 px-3 py-1.5">
       <div className="flex items-center gap-3">
-        <button type="button" onClick={goHome} aria-label="Home, companies and projects" title="Home: companies and projects"
+        <button type="button" onClick={goHome} aria-label="Crew home, companies and projects" title="Home: companies and projects"
           className="rounded px-1 py-1 text-sm font-semibold tracking-tight text-slate-100 hover:bg-slate-800">
           <span className="mr-1 text-emerald-400">◈</span>Crew
         </button>

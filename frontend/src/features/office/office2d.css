@@ -286,6 +286,26 @@
   padding: 0 3px;
 }
 
+/* Phone: the grouped selects are wider than the viewport. Let them wrap instead
+   of clipping the right-hand controls, and keep the hint out of the approvals bar. */
+@media (max-width: 639px) {
+  .office-toolbar .office-selects {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .office-toolbar .office-selects select {
+    flex: 1 1 140px;
+    min-width: 0;
+    max-width: none;
+  }
+  .office-toolbar .office-statusbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .office-toolbar .office-summary { white-space: normal; }
+  .office-hint { display: none; }
+}
+
 .office-overlay {
   position: absolute;
   inset: 0;

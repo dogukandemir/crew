@@ -68,7 +68,7 @@ from crew.core.security import (
 )
 from crew.core.settings import settings
 from crew.domain.catalog import ALWAYS_APPROVAL, ROLE_TEMPLATES, SKILLS, RoleSpec
-from crew.domain.enums import Capability, Grade, Role
+from crew.domain.enums import Capability, Grade, Role, RunStage, RunStatus
 from crew.execution.models import router
 from crew.execution.runner import select_runner
 from crew.execution.tools import TOOLS, tools_for_agent
@@ -1033,20 +1033,40 @@ async def answer_run(run_id: str, body: AnswerBody, user: dict = Depends(require
         r = await s.get(Run, run_id)
         if r is None:
             raise _problem(404, "run not found", run_id)
-        r.goal_brief = {**(r.goal_brief or {}), "answers": body.answers}
+        was_confirmation = r.status == RunStatus.PENDING_CONFIRMATION.value
+        was_clarification = r.status == RunStatus.PENDING_CLARIFICATION.value
+        brief = dict(r.goal_brief or {})
+        brief["answers"] = body.answers
+        if was_confirmation:
+            brief["confirmed"] = bool(body.confirm)
+        if was_clarification:
+            brief["clarified"] = True
+        r.goal_brief = brief
         questions = list(r.pending_questions or [])
         r.pending_questions = []
-        r.status = "running"
-        if body.answers and questions:
-            r.goal = r.goal + "\n\nClarifications: " + "; ".join(
-                f"{q} → {a}" for q, a in zip(questions, body.answers, strict=False))
+        rejected = was_confirmation and not body.confirm
+        if rejected:
+            r.status = RunStatus.ABORTED.value
+            r.stage = RunStage.DONE.value
+            r.ended_at = datetime.now(UTC)
+        else:
+            r.status = RunStatus.RUNNING.value
+            if body.answers and questions:
+                r.goal = r.goal + "\n\nClarifications: " + "; ".join(
+                    f"{q} → {a}" for q, a in zip(questions, body.answers, strict=False))
         s.add(r)
         project_id = r.project_id
-    await ev.emit("run.clarification.answered", project_id=project_id, run_id=run_id, severity="notice",
-                  title="clarifications received", payload={"run_id": run_id, "answers": body.answers},
-                  actor=user["id"])
+    if rejected:
+        await ev.emit("run.confirmation.rejected", project_id=project_id, run_id=run_id,
+                      severity="notice", title="goal confirmation rejected",
+                      payload={"run_id": run_id}, actor=user["id"])
+        return {"run_id": run_id, "status": RunStatus.ABORTED.value}
+    event_type = "run.confirmation.answered" if was_confirmation else "run.clarification.answered"
+    await ev.emit(event_type, project_id=project_id, run_id=run_id, severity="notice",
+                  title="goal confirmed" if was_confirmation else "clarifications received",
+                  payload={"run_id": run_id, "answers": body.answers}, actor=user["id"])
     asyncio.create_task(_drive(project_id, run_id))
-    return {"run_id": run_id, "status": "running"}
+    return {"run_id": run_id, "status": RunStatus.RUNNING.value}
 
 
 @api.post("/runs/{run_id}/steer")

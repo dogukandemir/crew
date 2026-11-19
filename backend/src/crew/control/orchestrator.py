@@ -191,6 +191,7 @@ class Orchestrator:
 
     # ── stages ─────────────────────────────────────────────────────────────────
     async def _intake(self, run: Run, project: Project) -> RunStage:
+        existing = dict(run.goal_brief or {})
         brief = {
             "goal": run.goal,
             "interpretation": run.goal.strip(),
@@ -200,7 +201,12 @@ class Orchestrator:
                                  "Evidence is cited for factual claims"],
             "questions": [],
         }
-        if not project.setting("autonomous_intake", True):
+        # The answer route records these flags. Rebuilding the brief must not erase
+        # them, or the next advance asks the same gate forever (19 November QA).
+        for key in ("answers", "confirmed", "clarified"):
+            if key in existing:
+                brief[key] = existing[key]
+        if not project.setting("autonomous_intake", True) and not existing.get("clarified"):
             brief["questions"] = [
                 "What does 'done' look like for this goal?",
                 "Any hard constraints (budget, deadline, tools to avoid)?",
@@ -219,7 +225,7 @@ class Orchestrator:
             r = await s.get(Run, run.id)
             r.goal_brief = brief
             s.add(r)
-        if project.setting("require_goal_confirmation", False):
+        if project.setting("require_goal_confirmation", False) and not existing.get("confirmed"):
             await self._set_run(run.id, status=RunStatus.PENDING_CONFIRMATION.value)
             await ev.emit("run.confirmation.requested", project_id=project.id, run_id=run.id,
                           severity="notice", title="goal confirmation required",

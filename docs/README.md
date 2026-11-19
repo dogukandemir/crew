@@ -72,7 +72,7 @@ Decisions that were expensive to make and would be expensive to reverse:
 - **[SUPPORT-MATRIX](SUPPORT-MATRIX.md)** — what is tested where, and what still needs evidence.
 - **[DEPENDENCIES](DEPENDENCIES.md)** — the version and advisory ledger.
 - **[SECURITY](../SECURITY.md)** — the trust boundary, the sandbox and the Docker socket.
-- **[Reviews](reviews/)** — the dated audit rounds (2026-10-10, 2026-10-13).
+- **[Reviews](reviews/)** — the dated audit rounds (2026-10-10, 2026-10-13, 2026-11-19 [QA fixes](reviews/2026-11-19/QA-FIXES.md)).
 - **[Releasing](RELEASING.md)** — version sources, gates, tag/release and the public-flip checklist.
 
 ## Conventions

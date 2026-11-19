@@ -12,6 +12,7 @@ import { useProject } from '../../app/hooks';
 import { WorkspaceNavigation } from './WorkspaceNavigation';
 import { Skeleton } from '../../components/ui/EmptyState';
 import { ProjectHeader } from './ProjectHeader';
+import { RunGate } from './RunGate';
 import { RunSummary } from './RunSummary';
 const Overview = lazy(() => import('../overview/Overview').then(m => ({ default: m.Overview })));
 const OrgPanel = lazy(() => import('../org/OrgPanel').then(m => ({ default: m.OrgPanel })));
@@ -97,6 +98,7 @@ export function ProjectWorkspace({ tab }: { tab: ProjectTab }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ProjectHeader projectId={tab.projectId} />
+      <RunGate projectId={tab.projectId} />
       {project.data && project.data.kind !== 'company' && <RunSummary project={project.data} navigate={goto} />}
       <div className="flex items-center justify-between border-b border-slate-800/70 px-2">
         {project.data ? (

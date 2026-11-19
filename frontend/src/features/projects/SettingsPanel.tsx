@@ -190,7 +190,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
       >
         <div className="grid gap-2 sm:grid-cols-2">
           <Field label="Project budget cap (USD)">
-            <Input type="number" min="0" step="0.5" value={budgetUsd} onChange={(e) => { edited.current = true; setBudgetUsd(e.target.value); }} />
+            <Input type="number" min="1" max="100000" step="0.5" value={budgetUsd} onChange={(e) => { edited.current = true; setBudgetUsd(e.target.value); }} />
           </Field>
           <Field label="Warning threshold (fraction of cap)" hint="Raises a budget.warning event above this level.">
             <Input
@@ -270,6 +270,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
               <Input
                 type="number"
                 min="1"
+                max="24"
                 value={settings.max_agents}
                 onChange={(e) => update((s) => ({ ...s, max_agents: Number.parseInt(e.target.value, 10) || 0 }))}
               />
@@ -278,6 +279,7 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
               <Input
                 type="number"
                 min="1"
+                max="6"
                 value={settings.max_departments}
                 onChange={(e) =>
                   update((s) => ({ ...s, max_departments: Number.parseInt(e.target.value, 10) || 0 }))
@@ -307,7 +309,8 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             <Field label="Layoff after idle days">
               <Input
                 type="number"
-                min="0"
+                min="1"
+                max="3650"
                 value={settings.layoff_idle_days}
                 onChange={(e) =>
                   update((s) => ({ ...s, layoff_idle_days: Number.parseInt(e.target.value, 10) || 0 }))

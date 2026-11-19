@@ -1,0 +1,4 @@
+# The control room is an application shell, not a public content site.
+# Keep crawlers out of the API; the marketing page has its own robots.txt.
+User-agent: *
+Disallow: /api/

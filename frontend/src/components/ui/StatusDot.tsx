@@ -33,6 +33,7 @@ export function StatusDot({
 }) {
   return (
     <span
+      role="img"
       className={cn('inline-flex items-center gap-1.5', className)}
       title={label ?? LABELS[state]}
       aria-label={label ?? LABELS[state]}

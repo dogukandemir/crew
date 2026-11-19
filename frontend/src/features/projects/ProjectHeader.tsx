@@ -46,7 +46,7 @@ function StageStepper({ stage }: { stage: Stage }) {
                   ? 'border-emerald-400/70 bg-emerald-950/60 text-emerald-300'
                   : done
                     ? 'border-slate-600/60 bg-slate-800/60 text-slate-300'
-                    : 'border-slate-700/50 text-slate-500',
+                    : 'border-slate-700/50 text-slate-400',
               )}
               aria-current={active ? 'step' : undefined}
             >
@@ -106,7 +106,7 @@ function GoalEditor({ project }: { project: Project }) {
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="shrink-0 whitespace-nowrap text-[10px] text-slate-500 underline decoration-dotted hover:text-emerald-300"
+            className="inline-flex min-h-6 shrink-0 items-center whitespace-nowrap px-1.5 py-1 text-[10px] text-slate-400 underline decoration-dotted hover:text-emerald-300"
           >
             Edit goal
           </button>
@@ -213,12 +213,13 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
             >
               ⌂ {p.company_name ?? 'Company'}
             </button>
-            <span className="text-slate-600">›</span>
+            <span className="text-slate-400">›</span>
           </>
         )}
         <h1 className="text-sm font-semibold text-slate-100">{p.name}</h1>
         <Badge tone={p.run_status === 'failed' ? 'danger' : p.run_status === 'completed' ? 'success'
-          : p.status === 'paused' || p.run_status?.startsWith('paused') ? 'warning' : 'muted'}>
+          : p.status === 'paused' || p.run_status?.startsWith('paused')
+            || p.run_status === 'pending_confirmation' || p.run_status === 'pending_clarification' ? 'warning' : 'muted'}>
           {isCompany ? p.status : runLabel(p)}
         </Badge>
         {isCompany && <Badge tone="info">company</Badge>}
@@ -233,7 +234,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
           </div>
           <span className="text-[11px] tabular-nums text-slate-400">
             {formatMicros(p.spend_micros)}
-            <span className="text-slate-600"> / {formatMicros(p.budget_cap_micros)}</span> ·{' '}
+            <span className="text-slate-400"> / {formatMicros(p.budget_cap_micros)}</span> ·{' '}
             {formatPercent(fraction)}
           </span>
           {targets.length > 0 && (
@@ -247,7 +248,7 @@ export function ProjectHeader({ projectId }: { projectId: string }) {
                   label: (
                     <>
                       <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                      {t.status && <span className="text-[10px] text-slate-500">{t.status}</span>}
+                      {t.status && <span className="text-[10px] text-slate-400">{t.status}</span>}
                       {t.current && <span className="text-[10px] text-emerald-400">current</span>}
                     </>
                   ),

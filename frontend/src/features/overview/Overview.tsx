@@ -14,6 +14,7 @@ import { formatClockUtc, formatMicros, formatPercent, formatRelativeTime } from 
 import { useNow } from '../../lib/useNow';
 import {
   useApprovals,
+  useOnboardingState,
   useOrg,
   useProject,
   useProjectMetrics,
@@ -41,10 +42,13 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
   const units = useMemo(() => flattenOrg(org.data?.root), [org.data]);
   const counts = useMemo(() => orgCounts(units), [units]);
 
+  const runs = useRuns(projectId);
+  const gate = runs.data?.find((run) =>
+    run.status === 'pending_confirmation' || run.status === 'pending_clarification');
   const taskItems = latestRunTasks(tasks.data?.items ?? [], project.data);
   const done = taskItems.filter((t) => t.state === 'completed').length;
   const total = taskItems.length;
-  const pending = approvals.data?.items.length ?? project.data?.pending_approvals ?? 0;
+  const pending = (approvals.data?.items.length ?? project.data?.pending_approvals ?? 0) + (gate ? 1 : 0);
 
   // Never a fabricated 0%: with no finished task history the rate is unknown, not zero
   // (review 2026-10-14, the API reports 0.0 for an empty denominator).
@@ -95,10 +99,10 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
           tone={successRate !== undefined && successRate >= 0.8 ? 'success' : 'neutral'}
         />
         <StatCard
-          label="Pending approvals"
+          label="Waiting on you"
           value={pending}
           tone={pending > 0 ? 'warning' : 'neutral'}
-          hint={pending > 0 ? 'need you' : 'nothing waiting'}
+          hint={pending > 0 ? 'approvals or confirmations' : 'nothing waiting'}
         />
       </div>
 
@@ -113,7 +117,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
 
         <Card title="Budget burn" subtitle="Cumulative cost by event seq (live)" className="lg:col-span-2">
           {burn.length < 2 ? (
-            <p className="py-6 text-center text-xs text-slate-500">
+            <p className="py-6 text-center text-xs text-slate-400">
               No spend events yet, the chart fills as the org works.
             </p>
           ) : (
@@ -155,7 +159,7 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
         title="Activity"
         subtitle={`${recent.length} recent events, click a row to jump to its unit`}
         actions={
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] text-slate-400">
             stream {log.maxSeq > 0 ? `@ seq ${log.maxSeq}` : 'idle'}
           </span>
         }
@@ -181,21 +185,21 @@ export function Overview({ projectId, tabId }: { projectId: string; tabId: strin
                       on every row, and the age beside it stays this machine's
                       "how long ago". */}
                   <span
-                    className="shrink-0 whitespace-nowrap font-mono text-[10px] tabular-nums text-slate-500"
+                    className="shrink-0 whitespace-nowrap font-mono text-[10px] tabular-nums text-slate-400"
                     title={`${e.ts} recorded in UTC`}
                   >
                     {formatClockUtc(e.ts)}
-                    <span className="ml-0.5 text-[9px] uppercase tracking-wide text-slate-600">UTC</span>
+                    <span className="ml-0.5 text-[9px] uppercase tracking-wide text-slate-400">UTC</span>
                   </span>
                   <Badge tone={severityTone(e.severity)}>{e.type}</Badge>
                   <span className="min-w-0 flex-1 truncate text-slate-300">{e.title}</span>
-                  {e.actor && <span className="shrink-0 text-[10px] text-slate-500">{e.actor}</span>}
+                  {e.actor && <span className="shrink-0 text-[10px] text-slate-400">{e.actor}</span>}
                   {typeof e.cost_micros === 'number' && e.cost_micros > 0 && (
-                    <span className="shrink-0 tabular-nums text-[10px] text-slate-500">
+                    <span className="shrink-0 tabular-nums text-[10px] text-slate-400">
                       {formatMicros(e.cost_micros)}
                     </span>
                   )}
-                  <span className="shrink-0 text-[10px] text-slate-600">{formatRelativeTime(e.ts, now)}</span>
+                  <span className="shrink-0 text-[10px] text-slate-400">{formatRelativeTime(e.ts, now)}</span>
                 </button>
               </li>
             ))}
@@ -230,6 +234,7 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
   const qc = useQueryClient();
   const setToast = useUi((s) => s.setToast);
   const project = useProject(projectId);
+  const onboarding = useOnboardingState();
   const tasks = useTasks(projectId);
   const items = latestRunTasks(tasks.data?.items ?? [], project.data);
   const done = items.filter((t) => t.state === 'completed').length;
@@ -278,6 +283,11 @@ function StartRunForm({ projectId, defaultGoal }: { projectId: string; defaultGo
           </Select>
         </Field>
         {runActive && <p className="text-xs text-amber-200" role="status">A run is already in progress. Review or resume it before starting another.</p>}
+        {onboarding.data?.offline_llm && (
+          <p className="text-[11px] text-slate-400">
+            Demo runs use a fixed simulated plan: the goal is recorded, but it does not change the plan.
+          </p>
+        )}
         <Button type="submit" variant="primary" loading={start.isPending} disabled={runActive || !(goal.trim() || defaultGoal)}>
           ▶ Start run
         </Button>
@@ -341,7 +351,7 @@ function ProgressHint({ projectId }: { projectId: string }) {
   const done = items.filter((t) => t.state === 'completed').length;
   return (
     <div className="pt-1">
-      <div className="mb-1 text-[11px] text-slate-500">
+      <div className="mb-1 text-[11px] text-slate-400">
         previous run: {done}/{total} tasks · stage {project.data?.stage ?? 'n/a'}
       </div>
     </div>

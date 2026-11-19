@@ -14,6 +14,9 @@ function tabDot(project: Project | undefined, socketState: string | undefined): 
   if (project.status === 'paused') return 'idle';
   if (project.status === 'failed') return 'danger';
   if (project.status === 'archived') return 'offline';
+  if (project.run_status === 'pending_confirmation' || project.run_status === 'pending_clarification') return 'warning';
+  if (project.run_status === 'failed') return 'danger';
+  if (project.run_status === 'running') return 'busy';
   if ((project.pending_approvals ?? 0) > 0) return 'warning';
   if (project.stage === 'DONE') return 'ok';
   return dotForState(project.stage === 'EXECUTING' ? 'running' : project.stage.toLowerCase());
@@ -51,18 +54,17 @@ function Tab({
     >
       <button
         type="button"
-        role="tab"
-        aria-selected={active}
+        aria-current={active ? 'page' : undefined}
         tabIndex={active ? 0 : -1}
         data-tab-id={tab.id}
         onClick={() => setActive(tab.id)}
         onKeyDown={(event) => {
-          // Roving focus within the tablist (pattern: components/ui/Tabs.tsx).
+          // Roving focus within the project strip.
           if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
           event.preventDefault();
-          const list = event.currentTarget.closest('[role="tablist"]');
+          const list = event.currentTarget.closest('[aria-label="Project tabs"]');
           const buttons = list
-            ? Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+            ? Array.from(list.querySelectorAll<HTMLButtonElement>('button[data-tab-id]'))
             : [];
           const index = buttons.indexOf(event.currentTarget);
           if (index < 0) return;
@@ -84,11 +86,11 @@ function Tab({
       >
         <StatusDot state={tabDot(project, socketState)} pulse={active && socketState === 'connected'} />
         {/* A member tab shows its company one breadcrumb up (ADR 0015). */}
-        {parentName && <span className="shrink-0 text-[10px] text-slate-600">⌂</span>}
+        {parentName && <span className="shrink-0 text-[10px] text-slate-400">⌂</span>}
         <span className="truncate">{name}</span>
-        {tab.viewKey !== 'main' && <span className="text-[10px] text-slate-500">{tab.viewKey}</span>}
+        {tab.viewKey !== 'main' && <span className="text-[10px] text-slate-400">{tab.viewKey}</span>}
         {project && (
-          <span className="shrink-0 tabular-nums text-[10px] text-slate-500">
+          <span className="shrink-0 tabular-nums text-[10px] text-slate-400">
             {formatMicros(project.spend_micros)}
           </span>
         )}
@@ -142,29 +144,32 @@ export function TabStrip() {
   const ordered = groupTabs(tabs, groupKeyOf);
 
   return (
-    <div
-      role="tablist"
-      aria-label="Project tabs"
-      className="flex items-end gap-0.5 overflow-x-auto border-b border-slate-700/60 bg-slate-950/60 px-2 pt-1"
-    >
-      {tabs.length === 0 && (
-        <span className="px-2 py-1 text-xs text-slate-500">No project tabs open</span>
-      )}
-      {ordered.map((tab) => {
-        const project = byId.get(tab.projectId);
-        const name = project?.name ?? names[tab.projectId] ?? tab.projectId.slice(0, 8);
-        const companyId = project?.company_id ?? null;
-        const parentName = companyId
-          ? byId.get(companyId)?.name ?? names[companyId]
-          : undefined;
-        return <Tab key={tab.id} tab={tab} name={name} parentName={parentName} project={project} />;
-      })}
+    <div className="flex items-end gap-0.5 border-b border-slate-700/60 bg-slate-950/60 px-2 pt-1">
+      {/* A tablist may contain only tabs; the new-project control lives beside it. */}
+      <div
+        role="group"
+        aria-label="Project tabs"
+        className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto"
+      >
+        {tabs.length === 0 && (
+          <span className="px-2 py-1 text-xs text-slate-400">No project tabs open</span>
+        )}
+        {ordered.map((tab) => {
+          const project = byId.get(tab.projectId);
+          const name = project?.name ?? names[tab.projectId] ?? tab.projectId.slice(0, 8);
+          const companyId = project?.company_id ?? null;
+          const parentName = companyId
+            ? byId.get(companyId)?.name ?? names[companyId]
+            : undefined;
+          return <Tab key={tab.id} tab={tab} name={name} parentName={parentName} project={project} />;
+        })}
+      </div>
       <button
         type="button"
         onClick={() => setNewProjectOpen(true)}
         title="New project"
         aria-label="New project"
-        className="mb-0.5 ml-1 rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-800/60 hover:text-slate-200"
+        className="mb-0.5 ml-1 shrink-0 rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
       >
         ＋
       </button>

@@ -386,7 +386,15 @@ export interface ProjectSettings {
   cadence_max_runs?: number;
 }
 
-export type RunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'aborted';
+export type RunStatus =
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'aborted'
+  | 'pending_confirmation'
+  | 'pending_clarification'
+  | 'paused_budget';
 
 export interface Run {
   id: string;
@@ -394,6 +402,7 @@ export interface Run {
   goal: string;
   goal_brief?: Record<string, unknown>;
   plan?: Record<string, unknown>;
+  pending_questions?: string[];
   stage: Stage;
   status: RunStatus;
   started_at: string;

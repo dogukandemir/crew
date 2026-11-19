@@ -203,6 +203,24 @@ Notes that come from the code, not from taste:
 - If you need a second hostname, list every origin in `CREW_CORS_ORIGINS` (comma separated) and be aware the UI is built for one origin only.
 - Forwarded headers are not used for security decisions in this release. Run the proxy on the same host and keep the container ports on loopback.
 
+### Security headers the proxy owns
+
+The static frontend already sends `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. Two headers belong at
+the TLS proxy, because only it knows the public origin:
+
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header Content-Security-Policy "default-src 'self'; connect-src 'self' https://crew.example.com wss://crew.example.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:" always;
+```
+
+`connect-src` must name the API and WebSocket origin the browser uses. The frontend's
+API base is compiled into the bundle from `CREW_PUBLIC_ORIGIN`, so a CSP that omits
+that origin (or a build made for a different origin) lets the office shell load and
+then blocks every API call and the event stream. HSTS belongs here, not in the
+container: the nginx container serves plain HTTP and must stay reachable on loopback
+for the proxy.
+
 ## 7. Allowed hosts: what enforces what
 
 `CREW_CORS_ORIGINS` is enforced twice in the application: by the CORS middleware and by a per-request guard that rejects a request whose `Origin` header is not listed. That guard is also the CSRF boundary, because it applies to `POST`/`PUT`/`DELETE` from a browser.

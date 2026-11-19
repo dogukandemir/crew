@@ -53,7 +53,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <label className="block">Email<input className="mt-1 block w-full rounded bg-slate-800 p-2" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
       <label className="block">Password<input className="mt-1 block w-full rounded bg-slate-800 p-2" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
       {error && <p role="alert">{error}</p>}
-      <button className="rounded bg-emerald-700 px-4 py-2" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button className="rounded bg-emerald-500 px-4 py-2 font-medium text-emerald-950" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
     </form>
   </main>;
 }
